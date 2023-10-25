@@ -13,7 +13,9 @@ COPY . .
 
 RUN GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kriten -ldflags "-X main.GitBranch=$GIT_BRANCH"
+# RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kriten -ldflags "-X main.GitBranch=$GIT_BRANCH"
+# Temporary hardcoded value
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kriten -ldflags "-X main.GitBranch=community"
 
 # Use distroless as minimal base image to package the kriten binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
