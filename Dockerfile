@@ -13,16 +13,16 @@ COPY . .
 
 RUN GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kriten-core -ldflags "-X config.GitBranch=$GIT_BRANCH"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kriten -ldflags "-X main.GitBranch=$GIT_BRANCH"
 
-# Use distroless as minimal base image to package the kriten-core binary
+# Use distroless as minimal base image to package the kriten binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/kriten-core .
+COPY --from=builder /workspace/kriten .
 COPY --from=builder /workspace/.env .
 USER 65532:65532
 
 EXPOSE 8080
 
-ENTRYPOINT ["/kriten-core"]
+ENTRYPOINT ["/kriten"]
