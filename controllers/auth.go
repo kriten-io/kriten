@@ -53,7 +53,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
-	if !slices.Contains(ac.providers, credentials.Provider) && credentials.Username != "root" {
+	if !slices.Contains(ac.providers, credentials.Provider) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": ac.providers})
 		return
 	}
