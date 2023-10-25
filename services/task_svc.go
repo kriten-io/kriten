@@ -123,6 +123,11 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 		return nil, nil, err
 	}
 
+	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
+	if err != nil || runner.Data["image"] == "" {
+		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner.", task.Runner)
+	}
+
 	// Parsing a models.Task into a map
 	b, _ := json.Marshal(task)
 	var data map[string]string
