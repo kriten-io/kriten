@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"kriten-core/config"
+	"kriten/config"
 	"log"
 
 	batchv1 "k8s.io/api/batch/v1"

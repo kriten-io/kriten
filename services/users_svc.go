@@ -2,8 +2,8 @@ package services
 
 import (
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/models"
+	"kriten/config"
+	"kriten/models"
 
 	"golang.org/x/exp/slices"
 

@@ -3,10 +3,10 @@ package controllers
 import (
 	"fmt"
 	"io"
-	"kriten-core/config"
-	"kriten-core/helpers"
-	"kriten-core/middlewares"
-	"kriten-core/services"
+	"kriten/config"
+	"kriten/helpers"
+	"kriten/middlewares"
+	"kriten/services"
 	"net/http"
 	"time"
 

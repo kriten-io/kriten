@@ -3,9 +3,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/helpers"
-	"kriten-core/models"
+	"kriten/config"
+	"kriten/helpers"
+	"kriten/models"
 	"time"
 
 	"golang.org/x/exp/slices"

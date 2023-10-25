@@ -2,8 +2,8 @@ package helpers
 
 import (
 	"errors"
-	"kriten-core/config"
-	"kriten-core/models"
+	"kriten/config"
+	"kriten/models"
 	"log"
 	"time"
 

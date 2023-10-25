@@ -1,10 +1,10 @@
 package middlewares
 
 import (
-	"kriten-core/config"
-	"kriten-core/helpers"
-	"kriten-core/models"
-	"kriten-core/services"
+	"kriten/config"
+	"kriten/helpers"
+	"kriten/models"
+	"kriten/services"
 	"log"
 	"net/http"
 	"strings"

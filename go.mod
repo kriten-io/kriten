@@ -1,4 +1,4 @@
-module kriten-core
+module kriten
 
 go 1.19
 

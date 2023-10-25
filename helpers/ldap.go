@@ -2,7 +2,7 @@ package helpers
 
 import (
 	"fmt"
-	"kriten-core/config"
+	"kriten/config"
 	"log"
 	"strings"
 

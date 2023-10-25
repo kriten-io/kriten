@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"kriten-core/helpers"
-	"kriten-core/models"
-	"kriten-core/services"
+	"kriten/helpers"
+	"kriten/models"
+	"kriten/services"
 	"net/http"
 	"time"
 

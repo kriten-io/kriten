@@ -2,11 +2,11 @@ package controllers
 
 import (
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/helpers"
-	"kriten-core/middlewares"
-	"kriten-core/models"
-	"kriten-core/services"
+	"kriten/config"
+	"kriten/helpers"
+	"kriten/middlewares"
+	"kriten/models"
+	"kriten/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

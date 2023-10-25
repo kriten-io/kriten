@@ -3,8 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/models"
+	"kriten/config"
+	"kriten/models"
 	"log"
 
 	uuid "github.com/satori/go.uuid"

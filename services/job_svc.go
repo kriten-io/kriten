@@ -2,9 +2,9 @@ package services
 
 import (
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/helpers"
-	"kriten-core/models"
+	"kriten/config"
+	"kriten/helpers"
+	"kriten/models"
 	"time"
 
 	"strings"

@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	"kriten-core/config"
-	"kriten-core/controllers"
-	"kriten-core/helpers"
-	"kriten-core/services"
+	"kriten/config"
+	"kriten/controllers"
+	"kriten/helpers"
+	"kriten/services"
 	"log"
 	"path/filepath"
 
-	docs "kriten-core/docs"
+	docs "kriten/docs"
 
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"

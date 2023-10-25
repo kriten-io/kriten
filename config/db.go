@@ -1,7 +1,7 @@
 package config
 
 import (
-	"kriten-core/models"
+	"kriten/models"
 	"log"
 
 	"github.com/lib/pq"
