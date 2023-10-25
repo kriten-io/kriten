@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_REGISTRY: hub.docker.com
-      DOCKER_REPOSITORY: kriten
+      DOCKER_REPOSITORY: kriten-community
       DOCKER_PLATFORM: linux/amd64
     steps:
       - name: Check out the repo
