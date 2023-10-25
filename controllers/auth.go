@@ -1,0 +1,105 @@
+package controllers
+
+import (
+	"kriten-core/helpers"
+	"kriten-core/models"
+	"kriten-core/services"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"golang.org/x/exp/slices"
+)
+
+type AuthController struct {
+	AuthService   services.AuthService
+	ElasticSearch helpers.ElasticSearch
+	providers     []string
+}
+
+func NewAuthController(authservice services.AuthService, es helpers.ElasticSearch, p []string) AuthController {
+	return AuthController{
+		AuthService:   authservice,
+		ElasticSearch: es,
+		providers:     p,
+	}
+}
+
+func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
+	rg.POST("/login", ac.Login)
+	rg.GET("/refresh", ac.Refresh)
+}
+
+// Login godoc
+//
+//	@Summary		Authenticate users
+//	@Description	authenticate and generates a JWT token
+//	@Tags			authenticate
+//	@Accept			json
+//	@Produce		json
+//	@Param			credentials	body		models.Credentials	true	"Your credentials"
+//	@Success		200			{object}	string
+//	@Failure		400			{object}	helpers.HTTPError
+//	@Failure		401			{object}	helpers.HTTPError
+//	@Failure		404			{object}	helpers.HTTPError
+//	@Failure		500			{object}	helpers.HTTPError
+//	@Router			/login [post]
+func (ac *AuthController) Login(ctx *gin.Context) {
+	timestamp := time.Now().UTC()
+	var credentials models.Credentials
+
+	if err := ctx.ShouldBindJSON(&credentials); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !slices.Contains(ac.providers, credentials.Provider) && credentials.Username != "root" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": ac.providers})
+		return
+	}
+
+	token, expiry, err := ac.AuthService.Login(&credentials)
+	if err != nil {
+		helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "failure")
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
+		return
+	}
+
+	helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "success")
+	ctx.SetSameSite(http.SameSiteNoneMode)
+	ctx.SetCookie("token", token, expiry, "", "", false, true)
+	ctx.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+// Refresh godoc
+//
+//	@Summary		Auth admin
+//	@Description	Refresh time limit of a JWT token
+//	@Tags			authenticate
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	header		string	false	"JWT Token can be provided as Cookie"
+//	@Success		200		{object}	string
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		401		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/refresh [get]
+//	@Security		Bearer
+func (ac *AuthController) Refresh(ctx *gin.Context) {
+	token, err := ctx.Request.Cookie("token")
+	if err == http.ErrNoCookie {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "please authenticate."})
+		return
+	}
+
+	newToken, expiry, err := ac.AuthService.Refresh(token.Value)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
+		return
+	}
+
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetCookie("token", newToken, expiry, "", "", false, true)
+	ctx.JSON(http.StatusOK, gin.H{"token": newToken})
+}

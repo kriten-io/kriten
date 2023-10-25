@@ -1,0 +1,1202 @@
+basePath: /api/v1
+definitions:
+  helpers.HTTPError:
+    properties:
+      code:
+        example: 400
+        type: integer
+      message:
+        example: status bad request
+        type: string
+    type: object
+  models.Credentials:
+    properties:
+      password:
+        type: string
+      provider:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - provider
+    - username
+    type: object
+  models.Role:
+    properties:
+      access:
+        type: string
+      created_at:
+        type: string
+      name:
+        type: string
+      resource:
+        type: string
+      resources_ids:
+        items:
+          type: string
+        type: array
+        uniqueItems: true
+      role_id:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - access
+    - name
+    - resource
+    - resources_ids
+    type: object
+  models.RoleBinding:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      role_binding_id:
+        type: string
+      role_id:
+        type: string
+      role_name:
+        type: string
+      subject_id:
+        type: string
+      subject_kind:
+        type: string
+      subject_name:
+        type: string
+      subject_provider:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - name
+    - role_name
+    - subject_kind
+    - subject_name
+    - subject_provider
+    type: object
+  models.Runner:
+    properties:
+      gitURL:
+        type: string
+      image:
+        type: string
+      name:
+        type: string
+      token:
+        type: string
+    required:
+    - gitURL
+    - image
+    - name
+    type: object
+  models.Task:
+    properties:
+      command:
+        type: string
+      name:
+        type: string
+      runner:
+        type: string
+      secret:
+        additionalProperties:
+          type: string
+        type: object
+      synchronous:
+        type: boolean
+    required:
+    - command
+    - name
+    - runner
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      password:
+        type: string
+      provider:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - provider
+    - username
+    type: object
+info:
+  contact:
+    email: info@evolvere-tech.co.uk
+    name: Evolvere Support
+    url: https://www.evolvere-tech.co.uk/contact
+  description: API Gateway for your kubernetes services.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Swagger Kriten
+  version: v0.3
+paths:
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: List all jobs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all jobs
+      tags:
+      - jobs
+    post:
+      consumes:
+      - application/json
+      description: Add a job to the cluster
+      parameters:
+      - description: Extra vars
+        in: body
+        name: evars
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new job
+      tags:
+      - jobs
+  /jobs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific job
+      parameters:
+      - description: Job  id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a job
+      tags:
+      - jobs
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: authenticate and generates a JWT token
+      parameters:
+      - description: Your credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/models.Credentials'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      summary: Authenticate users
+      tags:
+      - authenticate
+  /refresh:
+    get:
+      consumes:
+      - application/json
+      description: Refresh time limit of a JWT token
+      parameters:
+      - description: JWT Token can be provided as Cookie
+        in: header
+        name: token
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Auth admin
+      tags:
+      - authenticate
+  /role_bindings:
+    get:
+      consumes:
+      - application/json
+      description: List all roles bindings available on the cluster
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RoleBinding'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all role bindings
+      tags:
+      - rolebindings
+    post:
+      consumes:
+      - application/json
+      description: Add a role binding to the cluster
+      parameters:
+      - description: New role binding
+        in: body
+        name: roleBinding
+        required: true
+        schema:
+          $ref: '#/definitions/models.RoleBinding'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleBinding'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new role binding
+      tags:
+      - rolebindings
+  /role_bindings/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by role binding ID
+      parameters:
+      - description: RoleBinding ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            $ref: '#/definitions/models.RoleBinding'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a role binding
+      tags:
+      - rolebindings
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific role binding
+      parameters:
+      - description: RoleBinding ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleBinding'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a role binding
+      tags:
+      - rolebindings
+    patch:
+      consumes:
+      - application/json
+      description: Update a role binding in the cluster
+      parameters:
+      - description: RoleBinding ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update role
+        in: body
+        name: role
+        required: true
+        schema:
+          $ref: '#/definitions/models.RoleBinding'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleBinding'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a role binding
+      tags:
+      - rolebindings
+  /roles:
+    get:
+      consumes:
+      - application/json
+      description: List all roles available on the cluster
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Role'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all roles
+      tags:
+      - roles
+    post:
+      consumes:
+      - application/json
+      description: Add a role to the cluster
+      parameters:
+      - description: New role
+        in: body
+        name: role
+        required: true
+        schema:
+          $ref: '#/definitions/models.Role'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new role
+      tags:
+      - roles
+  /roles/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by role ID
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            $ref: '#/definitions/models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a role
+      tags:
+      - roles
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific role
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a role
+      tags:
+      - roles
+    patch:
+      consumes:
+      - application/json
+      description: Update a role in the cluster
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update role
+        in: body
+        name: role
+        required: true
+        schema:
+          $ref: '#/definitions/models.Role'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a role
+      tags:
+      - roles
+  /runners:
+    get:
+      consumes:
+      - application/json
+      description: List all runners available on the cluster
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Runner'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all runners
+      tags:
+      - runners
+    post:
+      consumes:
+      - application/json
+      description: Add a runner to the cluster
+      parameters:
+      - description: New runner
+        in: body
+        name: runner
+        required: true
+        schema:
+          $ref: '#/definitions/models.Runner'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Runner'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new runner
+      tags:
+      - runners
+  /runners/{rname}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by runner name
+      parameters:
+      - description: Runner name
+        in: path
+        name: rname
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            $ref: '#/definitions/models.Runner'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a runner
+      tags:
+      - runners
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific runner
+      parameters:
+      - description: Runner name
+        in: path
+        name: rname
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Runner'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a runner
+      tags:
+      - runners
+    patch:
+      consumes:
+      - application/json
+      description: Update a runner in the cluster
+      parameters:
+      - description: Runner name
+        in: path
+        name: rname
+        required: true
+        type: string
+      - description: Update runner
+        in: body
+        name: runner
+        required: true
+        schema:
+          $ref: '#/definitions/models.Runner'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Runner'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a runner
+      tags:
+      - runners
+  /tasks:
+    get:
+      consumes:
+      - application/json
+      description: List all tasks available on the cluster
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Task'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all tasks
+      tags:
+      - tasks
+    post:
+      consumes:
+      - application/json
+      description: Add a task to the cluster
+      parameters:
+      - description: New task
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new task
+      tags:
+      - tasks
+  /tasks/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by task name
+      parameters:
+      - description: Task name
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a task
+      tags:
+      - tasks
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific task
+      parameters:
+      - description: Task name
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a task
+      tags:
+      - tasks
+    patch:
+      consumes:
+      - application/json
+      description: Update a task in the cluster
+      parameters:
+      - description: Task name
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update task
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a task
+      tags:
+      - tasks
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: List all users available on the cluster
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List all users
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: Add a user to the cluster
+      parameters:
+      - description: New user
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new user
+      tags:
+      - users
+  /users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a user
+      tags:
+      - users
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a user
+      tags:
+      - users
+    patch:
+      consumes:
+      - application/json
+      description: Update a user in the cluster
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update user
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a user
+      tags:
+      - users
+securityDefinitions:
+  Bearer:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
