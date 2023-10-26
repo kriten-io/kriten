@@ -8,6 +8,7 @@ import (
 	"kriten/services"
 	"log"
 	"path/filepath"
+	"time"
 
 	docs "kriten/docs"
 
@@ -93,15 +94,23 @@ func init() {
 		conf.DB.Port,
 		conf.DB.SSL,
 	)
-	db, err = gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true, // disables implicit prepared statement usage
-	}), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		log.Println("Error while connecting to Postgres")
-		log.Println(err)
+
+	connected := false
+	for !connected {
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			DSN:                  dsn,
+			PreferSimpleProtocol: true, // disables implicit prepared statement usage
+		}), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		if err != nil {
+			log.Println("Error while connecting to Postgres")
+			log.Println(err)
+			log.Println("Retrying in 30 seconds..")
+			time.Sleep(30 * time.Second)
+		} else {
+			connected = true
+		}
 	}
 	config.InitDB(db)
 
