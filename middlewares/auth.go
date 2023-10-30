@@ -52,6 +52,12 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 			resourceID = "*"
 		}
 
+		// trimming last 6 chars for jobs read because
+		// jobs include random caracters at the end
+		if resource == "jobs" && access == "read" {
+			resourceID = resourceID[:len(resourceID)-6]
+		}
+
 		isAuthorised, err := as.IsAutorised(
 			&models.Authorization{
 				UserID:     userID,
