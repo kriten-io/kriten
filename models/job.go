@@ -7,4 +7,5 @@ type Job struct {
 	CompletionTime string `json:"completionTime,omitempty"`
 	Failed         int32  `json:"failed"`
 	Completed      int32  `json:"completed"`
+	Stdout         string `json:"stdout"`
 }

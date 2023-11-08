@@ -7,6 +7,7 @@ import (
 	"kriten/models"
 	"time"
 
+	"encoding/json"
 	"strings"
 
 	"github.com/go-errors/errors"
@@ -16,7 +17,8 @@ import (
 
 type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
-	GetJob(string, string) (string, error)
+	GetJob(string, string) (models.Job, error)
+	GetJobData(string, string) (map[string]interface{}, error)
 	CreateJob(string, string, string) (string, string, error)
 	GetTaskConfigMap(string) (map[string]string, error)
 }
@@ -29,6 +31,37 @@ func NewJobService(config config.Config) JobService {
 	return &JobServiceImpl{
 		config: config,
 	}
+}
+
+func findDelimitedString(str string) ([]byte, error) {
+	delimiter := "^JSON"
+	var match []byte
+	index := strings.Index(str, delimiter)
+
+	if index == -1 {
+		return match, nil
+	}
+
+	index += len(delimiter)
+
+	for {
+		char := str[index]
+
+		if strings.HasPrefix(str[index:index+len(delimiter)], delimiter) {
+			break
+		}
+
+		match = append(match, char)
+		index++
+
+		if index+len(delimiter) >= len(str) {
+			match = nil
+			break
+		}
+
+	}
+
+	return match, nil
 }
 
 func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
@@ -70,19 +103,68 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 	return jobsList, nil
 }
 
-func (j *JobServiceImpl) GetJob(username string, taskID string) (string, error) {
-	labelSelector := "job-name=" + taskID
+func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
+	var jobStatus models.Job
+	labelSelector := "job-name=" + jobID
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
 	}
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
-		return "", err
+		return jobStatus, err
 	}
 
 	if len(pods.Items) == 0 {
-		return "", errors.New("no pods found - check job ID")
+		return jobStatus, errors.New("no pods found - check job ID")
+	}
+
+	job, err := helpers.GetJob(j.config.Kube, jobID)
+
+	if err != nil {
+		return jobStatus, err
+	}
+
+	jobStatus.ID = job.Name
+	jobStatus.Owner = job.Labels["owner"]
+	jobStatus.StartTime = job.Status.StartTime.Format(time.UnixDate)
+	if job.Status.CompletionTime != nil {
+		jobStatus.CompletionTime = job.Status.CompletionTime.Format(time.UnixDate)
+	}
+	jobStatus.Failed = job.Status.Failed
+	jobStatus.Completed = job.Status.Succeeded
+
+	var logs string
+	for _, pod := range pods.Items {
+		// TODO: this will only retrieve logs for now, can be extended if needed
+		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
+		if err != nil {
+			return jobStatus, err
+		}
+		logs = logs + log
+
+	}
+
+	jobStatus.Stdout = logs
+
+	return jobStatus, nil
+}
+
+func (j *JobServiceImpl) GetJobData(username string, jobID string) (map[string]interface{}, error) {
+	var json_data map[string]interface{}
+
+	labelSelector := "job-name=" + jobID
+	if username != "" {
+		labelSelector = labelSelector + ",owner=" + username
+	}
+
+	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pods.Items) == 0 {
+		return nil, errors.New("no pods found - check job ID")
 	}
 
 	var logs string
@@ -90,12 +172,26 @@ func (j *JobServiceImpl) GetJob(username string, taskID string) (string, error) 
 		// TODO: this will only retrieve logs for now, can be extended if needed
 		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		logs = logs + log
+
 	}
 
-	return logs, nil
+	json_byte, _ := findDelimitedString(logs)
+
+	if json_byte == nil {
+		return nil, errors.New("No ^JSON delimited text found in the log")
+	}
+
+	replacer := strings.NewReplacer("\n", "", "\\", "")
+	json_string := replacer.Replace(string(json_byte))
+
+	if err := json.Unmarshal([]byte(json_string), &json_data); err != nil {
+		return nil, errors.New("Failed to decode JSON")
+	}
+
+	return json_data, nil
 }
 
 func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (string, string, error) {
@@ -148,7 +244,8 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		})
 
 		ret, err := j.GetJob(username, jobID)
-		return jobID, ret, err
+		//ret_str := ret.Stdout
+		return jobID, ret.Stdout, err
 	}
 
 	return jobID, "", nil
