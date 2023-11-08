@@ -9,7 +9,7 @@ import (
 )
 
 func InitDB(db *gorm.DB) {
-	err := db.AutoMigrate(&models.User{}, &models.Role{}, &models.RoleBinding{})
+	err := db.AutoMigrate(&models.User{}, &models.Group{}, &models.Role{}, &models.RoleBinding{})
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")
 		log.Println(err)

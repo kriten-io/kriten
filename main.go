@@ -36,6 +36,7 @@ var (
 	ts         services.TaskService
 	js         services.JobService
 	us         services.UserService
+	gs         services.GroupService
 	rls        services.RoleService
 	rbs        services.RoleBindingService
 	ac         controllers.AuthController
@@ -43,6 +44,7 @@ var (
 	tc         controllers.TaskController
 	jc         controllers.JobController
 	uc         controllers.UserController
+	gc         controllers.GroupController
 	rlc        controllers.RoleController
 	rbc        controllers.RoleBindingController
 	conf       config.Config
@@ -134,6 +136,7 @@ func init() {
 func init() {
 	// Services
 	us = services.NewUserService(db, conf)
+	gs = services.NewGroupService(db, conf)
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, us)
 	as = services.NewAuthService(conf, us, rls, rbs)
@@ -149,6 +152,7 @@ func init() {
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, es, authProviders)
+	gc = controllers.NewGroupController(gs, as, es, authProviders)
 	rlc = controllers.NewRoleController(rls, as, es)
 	rbc = controllers.NewRoleBindingController(rbs, as, es, authProviders)
 	ac = controllers.NewAuthController(as, es, authProviders)
@@ -199,6 +203,7 @@ func main() {
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
 		users := basepath.Group("/users")
+		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
 		roleBindings := basepath.Group("/role_bindings")
 		{
@@ -206,6 +211,7 @@ func main() {
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)
 			uc.SetUserRoutes(users, conf)
+			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 			rbc.SetRoleBindingRoutes(roleBindings, conf)
 		}
