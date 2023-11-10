@@ -244,7 +244,6 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		})
 
 		ret, err := j.GetJob(username, jobID)
-		//ret_str := ret.Stdout
 		return jobID, ret.Stdout, err
 	}
 
