@@ -109,7 +109,7 @@ func (r *RoleBindingServiceImpl) DeleteRoleBinding(id string) error {
 	}
 
 	if roleBinding.Buitin {
-		return errors.New("Cannot delete builtin resource")
+		return errors.New("cannot delete builtin resource")
 	}
 
 	return r.db.Unscoped().Delete(&roleBinding).Error

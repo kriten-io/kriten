@@ -114,7 +114,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 	}
 
 	if role.Buitin {
-		return errors.New("Cannot delete builtin resource")
+		return errors.New("cannot delete builtin resource")
 	}
 
 	return r.db.Unscoped().Delete(&role).Error
