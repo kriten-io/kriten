@@ -200,8 +200,8 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 }
 
 // TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string) (string, error) {
-	job := JobObject(name, kube, runnerImage, owner, extraVars, command, gitURL)
+func CreateJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
+	job := JobObject(name, kube, runnerImage, owner, extraVars, command, gitURL, gitBranch)
 
 	job, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Create(
@@ -251,7 +251,7 @@ func GetLogs(kube config.KubeConfig, podName string) (string, error) {
 	return buf.String(), nil
 }
 
-func JobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string) *batchv1.Job {
+func JobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *batchv1.Job {
 	var ttlSeconds int32 = int32(kube.JobsTTL)
 	var backoffLimit int32 = 1
 
@@ -336,6 +336,8 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 							},
 							Args: []string{
 								"clone",
+								"-b",
+								gitBranch,
 								gitURL,
 								".",
 							},

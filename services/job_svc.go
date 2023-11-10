@@ -207,6 +207,11 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	}
 	runnerImage := runner.Data["image"]
 	gitURL := runner.Data["gitURL"]
+	gitBranch := runner.Data["branch"]
+
+	if gitBranch == "" {
+		gitBranch = "main"
+	}
 
 	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
 	if err != nil {
@@ -220,7 +225,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL)
+	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
 
 	if err != nil {
 		return "", "", err

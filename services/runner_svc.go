@@ -91,6 +91,10 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*v1.ConfigMap, e
 	_ = json.Unmarshal(b, &data)
 	delete(data, "token")
 
+	if data["branch"] == "" {
+		data["branch"] = "main"
+	}
+
 	configMap, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
 
 	if runner.Token != "" {
