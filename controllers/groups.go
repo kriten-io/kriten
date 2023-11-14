@@ -45,6 +45,9 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 		r.PATCH("/:id", uc.UpdateGroup)
 		r.PUT("/:id", uc.UpdateGroup)
 		r.DELETE("/:id", uc.DeleteGroup)
+
+		r.PATCH("/:id/add-users", uc.AddUserToGroup)
+		r.PATCH("/:id/remove-user", uc.RemoveUserFromGroup)
 	}
 }
 
@@ -212,4 +215,53 @@ func (rc *GroupController) DeleteGroup(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"msg": "group deleted successfully"})
+}
+
+func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
+	groupName := ctx.Param("id")
+	var users []string
+	var err error
+
+	if err := ctx.ShouldBindJSON(&users); err != nil {
+		log.Println(err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	group, err := uc.GroupService.AddUsers(groupName, users)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, group)
+}
+
+func (uc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
+	groupID := ctx.Param("id")
+	var group models.Group
+	var err error
+
+	if err := ctx.ShouldBindJSON(&group); err != nil {
+		log.Println(err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !slices.Contains(uc.providers, group.Provider) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
+		return
+	}
+
+	group.ID, err = uuid.FromString(groupID)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	group, err = uc.GroupService.UpdateGroup(group)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, group)
 }

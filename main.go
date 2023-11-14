@@ -136,7 +136,7 @@ func init() {
 func init() {
 	// Services
 	us = services.NewUserService(db, conf)
-	gs = services.NewGroupService(db, conf)
+	gs = services.NewGroupService(db, us, conf)
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, us)
 	as = services.NewAuthService(conf, us, rls, rbs)

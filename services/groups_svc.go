@@ -15,19 +15,22 @@ type GroupService interface {
 	GetGroup(string) (models.Group, error)
 	CreateGroup(models.Group) (models.Group, error)
 	UpdateGroup(models.Group) (models.Group, error)
+	AddUsers(string, []string) (models.Group, error)
 	DeleteGroup(string) error
 	GetGroupRoles(string, string) ([]models.Role, error)
 }
 
 type GroupServiceImpl struct {
-	db     *gorm.DB
-	config config.Config
+	db          *gorm.DB
+	UserService UserService
+	config      config.Config
 }
 
-func NewGroupService(database *gorm.DB, config config.Config) GroupService {
+func NewGroupService(database *gorm.DB, us UserService, config config.Config) GroupService {
 	return &GroupServiceImpl{
-		db:     database,
-		config: config,
+		db:          database,
+		UserService: us,
+		config:      config,
 	}
 }
 
@@ -53,7 +56,7 @@ func (g *GroupServiceImpl) ListGroups(authList []string) ([]models.Group, error)
 
 func (g *GroupServiceImpl) GetGroup(name string) (models.Group, error) {
 	var group models.Group
-	res := g.db.Where("group_id = ?", name).Find(&group)
+	res := g.db.Where("name = ?", name).Find(&group)
 	if res.Error != nil {
 		return models.Group{}, res.Error
 	}
@@ -77,10 +80,39 @@ func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error)
 		return models.Group{}, res.Error
 	}
 
-	newGroup, err := g.GetGroup(group.ID.String())
+	newGroup, err := g.GetGroup(group.Name)
 	if err != nil {
 		return models.Group{}, err
 	}
+	return newGroup, nil
+}
+
+func (g *GroupServiceImpl) AddUsers(groupName string, users []string) (models.Group, error) {
+	group, err := g.GetGroup(groupName)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	// Checking if users uuid are correct
+	for _, id := range users {
+		user, err := g.UserService.GetUser(id)
+		if err != nil {
+			return models.Group{}, err
+		}
+
+		_, err = g.UserService.AddGroup(user, group.ID.String())
+		if err != nil {
+			return models.Group{}, err
+		}
+	}
+
+	group.Users = RemoveDuplicates(append(group.Users, users...))
+
+	newGroup, err := g.UpdateGroup(group)
+	if err != nil {
+		return models.Group{}, err
+	}
+
 	return newGroup, nil
 }
 
@@ -108,4 +140,16 @@ func (g *GroupServiceImpl) GetGroupRoles(subjectID string, provider string) ([]m
 	}
 
 	return roles, nil
+}
+
+func RemoveDuplicates(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	list := []string{}
+	for _, item := range strSlice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
 }

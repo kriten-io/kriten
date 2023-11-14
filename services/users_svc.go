@@ -8,6 +8,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/go-errors/errors"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -19,6 +20,7 @@ type UserService interface {
 	UpdateUser(models.User) (models.User, error)
 	DeleteUser(string) error
 	GetByUsernameAndProvider(string, string) (models.User, error)
+	AddGroup(models.User, string) (models.User, error)
 	GetUserRoles(string, string) ([]models.Role, error)
 }
 
@@ -118,6 +120,21 @@ func (u *UserServiceImpl) GetByUsernameAndProvider(username string, provider str
 
 	if user.Username == "" {
 		return models.User{}, errors.New("user not found")
+	}
+
+	return user, nil
+}
+
+func (u *UserServiceImpl) AddGroup(user models.User, newGroup string) (models.User, error) {
+	if user.Groups == nil || len(user.Groups) == 0 {
+		user.Groups = pq.StringArray{newGroup}
+	} else if !slices.Contains(user.Groups, newGroup) {
+		user.Groups = append(user.Groups, newGroup)
+	}
+
+	res := u.db.Updates(user)
+	if res.Error != nil {
+		return models.User{}, res.Error
 	}
 
 	return user, nil
