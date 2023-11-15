@@ -17,8 +17,8 @@ import (
 
 type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
-	GetJob(string, string) (models.Job, map[string]interface{}, error)
-	CreateJob(string, string, string) (string, models.Job, map[string]interface{}, error)
+	GetJob(string, string) (models.Job, error)
+	CreateJob(string, string, string) (models.Job, error)
 	GetTaskConfigMap(string) (map[string]string, error)
 }
 
@@ -102,9 +102,8 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 	return jobsList, nil
 }
 
-func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, map[string]interface{}, error) {
+func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
 	var jobStatus models.Job
-	var json_data map[string]interface{}
 
 	labelSelector := "job-name=" + jobID
 	if username != "" {
@@ -113,17 +112,17 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, map[
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
-		return jobStatus, json_data, err
+		return jobStatus, err
 	}
 
 	if len(pods.Items) == 0 {
-		return jobStatus, json_data, errors.New("no pods found - check job ID")
+		return jobStatus, errors.New("no pods found - check job ID")
 	}
 
 	job, err := helpers.GetJob(j.config.Kube, jobID)
 
 	if err != nil {
-		return jobStatus, json_data, err
+		return jobStatus, err
 	}
 
 	jobStatus.ID = job.Name
@@ -140,7 +139,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, map[
 		// TODO: this will only retrieve logs for now, can be extended if needed
 		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
 		if err != nil {
-			return jobStatus, json_data, err
+			return jobStatus, err
 		}
 		logs = logs + log
 
@@ -157,28 +156,28 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, map[
 			replacer := strings.NewReplacer("\n", "", "\\", "")
 			json_string := replacer.Replace(string(json_byte))
 
-			if err := json.Unmarshal([]byte(json_string), &json_data); err != nil {
-				return jobStatus, json_data, errors.New("failed to decode JSON")
+			if err := json.Unmarshal([]byte(json_string), &jobStatus.JsonData); err != nil {
+				jobStatus.JsonData = map[string]interface{}{"error": "failed to parse JSON"}
+				return jobStatus, nil
 			}
 		}
 	}
 
-	return jobStatus, json_data, nil
+	return jobStatus, nil
 }
 
-func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (string, models.Job, map[string]interface{}, error) {
+func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (models.Job, error) {
 	var jobStatus models.Job
-	var jsonData map[string]interface{}
 
 	task, err := helpers.GetConfigMap(j.config.Kube, taskName)
 	if err != nil {
-		return "", jobStatus, jsonData, err
+		return jobStatus, err
 	}
 	runnerName := task.Data["runner"]
 
 	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
 	if err != nil {
-		return "", jobStatus, jsonData, err
+		return jobStatus, err
 	}
 	runnerImage := runner.Data["image"]
 	gitURL := runner.Data["gitURL"]
@@ -191,7 +190,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
-			return "", jobStatus, jsonData, err
+			return jobStatus, err
 		}
 	} else {
 		gitToken := string(secret.Data["token"])
@@ -202,8 +201,10 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 
 	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
 
+	jobStatus.ID = jobID
+
 	if err != nil {
-		return "", jobStatus, jsonData, err
+		return jobStatus, err
 	}
 
 	if task.Data["synchronous"] == "true" {
@@ -223,11 +224,11 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 			return false, nil
 		})
 
-		ret, jsonData, err := j.GetJob(username, jobID)
-		return jobID, ret, jsonData, err
+		ret, err := j.GetJob(username, jobID)
+		return ret, err
 	}
 
-	return jobID, jobStatus, jsonData, nil
+	return jobStatus, nil
 }
 
 func (j *JobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error) {

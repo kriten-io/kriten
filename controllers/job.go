@@ -6,7 +6,6 @@ import (
 	"kriten/config"
 	"kriten/helpers"
 	"kriten/middlewares"
-	"kriten/models"
 	"kriten/services"
 	"net/http"
 	"time"
@@ -97,21 +96,14 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 func (jc *JobController) GetJob(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	job, jsonData, err := jc.JobService.GetJob(username, jobName)
+	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"id":             job.ID,
-		"startTime":      job.StartTime,
-		"completionTime": job.CompletionTime,
-		"failed":         job.Failed,
-		"completed":      job.Completed,
-		"stdout":         job.Stdout,
-		"json_data":      jsonData})
+	ctx.JSON(http.StatusOK, job)
 
 }
 
@@ -132,7 +124,7 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	job, _, err := jc.JobService.GetJob(username, jobName)
+	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -171,7 +163,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 		return
 	}
 
-	jobID, sync, jsonData, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
+	job, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
 
 	if err != nil {
 		helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", taskID, "failure")
@@ -179,12 +171,12 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 		return
 	}
 
-	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", jobID, "success")
-	if sync != (models.Job{}) {
+	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", job.ID, "success")
+	if (job.ID != "") && (job.Completed != 0) {
 		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
-		ctx.JSON(http.StatusOK, gin.H{"id": jobID, "startTime": sync.StartTime, "completionTime": sync.CompletionTime, "failed": sync.Failed, "json_data": jsonData})
+		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job executed successfully", "id": jobID})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
 }
