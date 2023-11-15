@@ -17,9 +17,8 @@ import (
 
 type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
-	GetJob(string, string) (models.Job, error)
-	GetJobData(string, string) (map[string]interface{}, error)
-	CreateJob(string, string, string) (string, string, error)
+	GetJob(string, string) (models.Job, map[string]interface{}, error)
+	CreateJob(string, string, string) (string, models.Job, map[string]interface{}, error)
 	GetTaskConfigMap(string) (map[string]string, error)
 }
 
@@ -103,8 +102,10 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 	return jobsList, nil
 }
 
-func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
+func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, map[string]interface{}, error) {
 	var jobStatus models.Job
+	var json_data map[string]interface{}
+
 	labelSelector := "job-name=" + jobID
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
@@ -112,17 +113,17 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
-		return jobStatus, err
+		return jobStatus, json_data, err
 	}
 
 	if len(pods.Items) == 0 {
-		return jobStatus, errors.New("no pods found - check job ID")
+		return jobStatus, json_data, errors.New("no pods found - check job ID")
 	}
 
 	job, err := helpers.GetJob(j.config.Kube, jobID)
 
 	if err != nil {
-		return jobStatus, err
+		return jobStatus, json_data, err
 	}
 
 	jobStatus.ID = job.Name
@@ -139,7 +140,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 		// TODO: this will only retrieve logs for now, can be extended if needed
 		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
 		if err != nil {
-			return jobStatus, err
+			return jobStatus, json_data, err
 		}
 		logs = logs + log
 
@@ -147,63 +148,37 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 
 	jobStatus.Stdout = logs
 
-	return jobStatus, nil
-}
+	if jobStatus.Stdout != "" {
+		json_byte, _ := findDelimitedString(jobStatus.Stdout)
 
-func (j *JobServiceImpl) GetJobData(username string, jobID string) (map[string]interface{}, error) {
-	var json_data map[string]interface{}
+		if json_byte != nil {
+			// ^JSON delimited text found in the log
 
-	labelSelector := "job-name=" + jobID
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
+			replacer := strings.NewReplacer("\n", "", "\\", "")
+			json_string := replacer.Replace(string(json_byte))
 
-	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(pods.Items) == 0 {
-		return nil, errors.New("no pods found - check job ID")
-	}
-
-	var logs string
-	for _, pod := range pods.Items {
-		// TODO: this will only retrieve logs for now, can be extended if needed
-		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
-		if err != nil {
-			return nil, err
+			if err := json.Unmarshal([]byte(json_string), &json_data); err != nil {
+				return jobStatus, json_data, errors.New("failed to decode JSON")
+			}
 		}
-		logs = logs + log
-
 	}
 
-	json_byte, _ := findDelimitedString(logs)
-
-	if json_byte == nil {
-		return nil, errors.New("No ^JSON delimited text found in the log")
-	}
-
-	replacer := strings.NewReplacer("\n", "", "\\", "")
-	json_string := replacer.Replace(string(json_byte))
-
-	if err := json.Unmarshal([]byte(json_string), &json_data); err != nil {
-		return nil, errors.New("Failed to decode JSON")
-	}
-
-	return json_data, nil
+	return jobStatus, json_data, nil
 }
 
-func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (string, string, error) {
+func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (string, models.Job, map[string]interface{}, error) {
+	var jobStatus models.Job
+	var jsonData map[string]interface{}
+
 	task, err := helpers.GetConfigMap(j.config.Kube, taskName)
 	if err != nil {
-		return "", "", err
+		return "", jobStatus, jsonData, err
 	}
 	runnerName := task.Data["runner"]
 
 	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
 	if err != nil {
-		return "", "", err
+		return "", jobStatus, jsonData, err
 	}
 	runnerImage := runner.Data["image"]
 	gitURL := runner.Data["gitURL"]
@@ -216,7 +191,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
-			return "", "", err
+			return "", jobStatus, jsonData, err
 		}
 	} else {
 		gitToken := string(secret.Data["token"])
@@ -228,7 +203,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
 
 	if err != nil {
-		return "", "", err
+		return "", jobStatus, jsonData, err
 	}
 
 	if task.Data["synchronous"] == "true" {
@@ -248,11 +223,11 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 			return false, nil
 		})
 
-		ret, err := j.GetJob(username, jobID)
-		return jobID, ret.Stdout, err
+		ret, jsonData, err := j.GetJob(username, jobID)
+		return jobID, ret, jsonData, err
 	}
 
-	return jobID, "", nil
+	return jobID, jobStatus, jsonData, nil
 }
 
 func (j *JobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error) {

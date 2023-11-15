@@ -6,9 +6,9 @@ import (
 	"kriten/config"
 	"kriten/helpers"
 	"kriten/middlewares"
+	"kriten/models"
 	"kriten/services"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +35,6 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
 	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
-	r.GET("/:id/data", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobData)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "write"))
 	{
@@ -98,14 +97,21 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 func (jc *JobController) GetJob(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	job, err := jc.JobService.GetJob(username, jobName)
+	job, jsonData, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, job)
+	ctx.JSON(http.StatusOK, gin.H{
+		"id":             job.ID,
+		"startTime":      job.StartTime,
+		"completionTime": job.CompletionTime,
+		"failed":         job.Failed,
+		"completed":      job.Completed,
+		"stdout":         job.Stdout,
+		"json_data":      jsonData})
 
 }
 
@@ -126,7 +132,7 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	job, err := jc.JobService.GetJob(username, jobName)
+	job, _, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -136,37 +142,6 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	log := job.Stdout
 
 	ctx.Data(http.StatusOK, "text/plain", []byte(log))
-}
-
-// GetJobLog godoc
-//
-//	@Summary		Get a job json data
-//	@Description	Get a job json data if present
-//	@Tags			jobs
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		string	true	"Job  id"
-//	@Success		200	{object}	models.Task
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
-//	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id}/data [get]
-//	@Security		Bearer
-func (jc *JobController) GetJobData(ctx *gin.Context) {
-	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("id")
-	job, err := jc.JobService.GetJobData(username, jobName)
-
-	if err != nil {
-		if strings.Contains(err.Error(), "JSON") {
-			ctx.JSON(http.StatusOK, gin.H{"json_data": "", "error": err.Error()})
-		} else {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{"json_data": job})
 }
 
 // CreateJob godoc
@@ -196,7 +171,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 		return
 	}
 
-	jobID, sync, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
+	jobID, sync, jsonData, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
 
 	if err != nil {
 		helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", taskID, "failure")
@@ -205,10 +180,11 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 	}
 
 	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", jobID, "success")
-	if sync != "" {
-		ctx.JSON(http.StatusOK, gin.H{"logs": sync})
+	if sync != (models.Job{}) {
+		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
+		ctx.JSON(http.StatusOK, gin.H{"id": jobID, "startTime": sync.StartTime, "completionTime": sync.CompletionTime, "failed": sync.Failed, "json_data": jsonData})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job executed successfully", "value": jobID})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job executed successfully", "id": jobID})
 }
