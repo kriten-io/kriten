@@ -21,6 +21,7 @@ type UserService interface {
 	DeleteUser(string) error
 	GetByUsernameAndProvider(string, string) (models.User, error)
 	AddGroup(models.User, string) (models.User, error)
+	RemoveGroup(models.User, string) (models.User, error)
 	GetUserRoles(string, string) ([]models.Role, error)
 }
 
@@ -135,6 +136,27 @@ func (u *UserServiceImpl) AddGroup(user models.User, newGroup string) (models.Us
 	res := u.db.Updates(user)
 	if res.Error != nil {
 		return models.User{}, res.Error
+	}
+
+	return user, nil
+}
+
+func (u *UserServiceImpl) RemoveGroup(user models.User, group string) (models.User, error) {
+	found := false
+
+	for key, value := range user.Groups {
+		if value == group {
+			user.Groups = append(user.Groups[:key], user.Groups[key+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if found {
+		res := u.db.Updates(user)
+		if res.Error != nil {
+			return models.User{}, res.Error
+		}
 	}
 
 	return user, nil

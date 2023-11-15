@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kriten/config"
 	"kriten/models"
+	"strings"
 
 	"golang.org/x/exp/slices"
 
@@ -16,6 +17,7 @@ type GroupService interface {
 	CreateGroup(models.Group) (models.Group, error)
 	UpdateGroup(models.Group) (models.Group, error)
 	AddUsers(string, []string) (models.Group, error)
+	RemoveUsers(string, []string) (models.Group, error)
 	DeleteGroup(string) error
 	GetGroupRoles(string, string) ([]models.Role, error)
 }
@@ -116,6 +118,38 @@ func (g *GroupServiceImpl) AddUsers(groupName string, users []string) (models.Gr
 	return newGroup, nil
 }
 
+func (g *GroupServiceImpl) RemoveUsers(groupName string, users []string) (models.Group, error) {
+	group, err := g.GetGroup(groupName)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	for _, id := range users {
+		user, err := g.UserService.GetUser(id)
+		if err != nil {
+			// no need to update user if not found
+			if strings.Contains(err.Error(), "not found") {
+				break
+			}
+			return models.Group{}, err
+		}
+
+		_, err = g.UserService.RemoveGroup(user, group.ID.String())
+		if err != nil {
+			return models.Group{}, err
+		}
+	}
+
+	group.Users = RemoveFromSlice(group.Users, users)
+
+	newGroup, err := g.UpdateGroup(group)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	return newGroup, nil
+}
+
 func (g *GroupServiceImpl) DeleteGroup(id string) error {
 	group, err := g.GetGroup(id)
 	if err != nil {
@@ -152,4 +186,13 @@ func RemoveDuplicates(strSlice []string) []string {
 		}
 	}
 	return list
+}
+
+func RemoveFromSlice(groupUsers []string, users []string) []string {
+	for key, value := range groupUsers {
+		if slices.Contains(users, value) {
+			groupUsers = append(groupUsers[:key], groupUsers[key+1:]...)
+		}
+	}
+	return groupUsers
 }
