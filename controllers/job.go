@@ -33,6 +33,7 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
+	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "write"))
 	{
@@ -80,7 +81,7 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 
 // GetJob godoc
 //
-//	@Summary		Get a job
+//	@Summary		Get job info
 //	@Description	Get information about a specific job
 //	@Tags			jobs
 //	@Accept			json
@@ -102,9 +103,37 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 		return
 	}
 
-	//ctx.JSON(http.StatusOK, gin.H{"msg": "job retrieved successfully", "value": job})
-	// Changed to returning text/plain for better readability of stdout
-	ctx.Data(http.StatusOK, "text/plain", []byte(job))
+	ctx.JSON(http.StatusOK, job)
+
+}
+
+// GetJobLog godoc
+//
+//	@Summary		Get a job log
+//	@Description	Get a job log as text
+//	@Tags			jobs
+//	@Accept			json
+//	@Produce		string
+//	@Param			id	path		string	true	"Job  id"
+//	@Success		200	{object}	models.Task
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/jobs/{id}/log [get]
+//	@Security		Bearer
+func (jc *JobController) GetJobLog(ctx *gin.Context) {
+	username := ctx.MustGet("username").(string)
+	jobName := ctx.Param("id")
+	job, err := jc.JobService.GetJob(username, jobName)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log := job.Stdout
+
+	ctx.Data(http.StatusOK, "text/plain", []byte(log))
 }
 
 // CreateJob godoc
@@ -134,7 +163,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 		return
 	}
 
-	jobID, sync, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
+	job, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
 
 	if err != nil {
 		helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", taskID, "failure")
@@ -142,11 +171,12 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 		return
 	}
 
-	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", jobID, "success")
-	if sync != "" {
-		ctx.JSON(http.StatusOK, gin.H{"logs": sync})
+	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", job.ID, "success")
+	if (job.ID != "") && (job.Completed != 0) {
+		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
+		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job executed successfully", "value": jobID})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
 }

@@ -49,7 +49,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 			return "", -1, err
 		}
 		if credentials.Password != rootPassword {
-			err := errors.New("Passowrd is incorrect")
+			err := errors.New("password is incorrect")
 			return "", -1, err
 		}
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)

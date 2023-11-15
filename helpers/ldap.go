@@ -49,7 +49,7 @@ func BindAndSearch(config config.LDAPConfig, user string, password string) error
 
 	result, err := l.Search(searchReq)
 	if err != nil {
-		return fmt.Errorf("Search Error: %s", err)
+		return fmt.Errorf("search Error: %s", err)
 	}
 
 	if len(result.Entries) == 0 {
