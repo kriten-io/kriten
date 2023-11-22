@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"kriten/config"
 	"kriten/models"
-	"strings"
 
 	"golang.org/x/exp/slices"
 
@@ -16,8 +15,10 @@ type GroupService interface {
 	GetGroup(string) (models.Group, error)
 	CreateGroup(models.Group) (models.Group, error)
 	UpdateGroup(models.Group) (models.Group, error)
-	AddUsers(string, []string) (models.Group, error)
-	RemoveUsers(string, []string) (models.Group, error)
+	ListUsersInGroup(string) ([]models.GroupsUser, error)
+	AddUsersToGroup(string, []models.GroupsUser) (models.Group, error)
+	RemoveUsersFromGroup(string, []models.GroupsUser) (models.Group, error)
+	UpdateUsers([]models.GroupsUser, string, string) ([]string, error)
 	DeleteGroup(string) error
 	GetGroupRoles(string, string) ([]models.Role, error)
 }
@@ -89,26 +90,41 @@ func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error)
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) AddUsers(groupName string, users []string) (models.Group, error) {
+func (g *GroupServiceImpl) ListUsersInGroup(groupName string) ([]models.GroupsUser, error) {
+	var users []models.GroupsUser
+
+	group, err := g.GetGroup(groupName)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, userID := range group.Users {
+		user, err := g.UserService.GetUser(userID)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, models.GroupsUser{
+			Name:     user.Username,
+			Provider: user.Provider,
+		})
+
+	}
+
+	return users, nil
+}
+
+func (g *GroupServiceImpl) AddUsersToGroup(groupName string, users []models.GroupsUser) (models.Group, error) {
 	group, err := g.GetGroup(groupName)
 	if err != nil {
 		return models.Group{}, err
 	}
 
-	// Checking if users uuid are correct
-	for _, id := range users {
-		user, err := g.UserService.GetUser(id)
-		if err != nil {
-			return models.Group{}, err
-		}
-
-		_, err = g.UserService.AddGroup(user, group.ID.String())
-		if err != nil {
-			return models.Group{}, err
-		}
+	usersID, err := g.UpdateUsers(users, group.ID.String(), "add")
+	if err != nil {
+		return models.Group{}, err
 	}
 
-	group.Users = RemoveDuplicates(append(group.Users, users...))
+	group.Users = RemoveDuplicates(append(group.Users, usersID...))
 
 	newGroup, err := g.UpdateGroup(group)
 	if err != nil {
@@ -118,29 +134,18 @@ func (g *GroupServiceImpl) AddUsers(groupName string, users []string) (models.Gr
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveUsers(groupName string, users []string) (models.Group, error) {
+func (g *GroupServiceImpl) RemoveUsersFromGroup(groupName string, users []models.GroupsUser) (models.Group, error) {
 	group, err := g.GetGroup(groupName)
 	if err != nil {
 		return models.Group{}, err
 	}
 
-	for _, id := range users {
-		user, err := g.UserService.GetUser(id)
-		if err != nil {
-			// no need to update user if not found
-			if strings.Contains(err.Error(), "not found") {
-				break
-			}
-			return models.Group{}, err
-		}
-
-		_, err = g.UserService.RemoveGroup(user, group.ID.String())
-		if err != nil {
-			return models.Group{}, err
-		}
+	usersID, err := g.UpdateUsers(users, group.ID.String(), "remove")
+	if err != nil {
+		return models.Group{}, err
 	}
 
-	group.Users = RemoveFromSlice(group.Users, users)
+	group.Users = RemoveFromSlice(group.Users, usersID)
 
 	newGroup, err := g.UpdateGroup(group)
 	if err != nil {
@@ -174,6 +179,29 @@ func (g *GroupServiceImpl) GetGroupRoles(subjectID string, provider string) ([]m
 	}
 
 	return roles, nil
+}
+
+func (g *GroupServiceImpl) UpdateUsers(users []models.GroupsUser, groupID string, operation string) ([]string, error) {
+	var usersID []string
+
+	for _, u := range users {
+		user, err := g.UserService.GetByUsernameAndProvider(u.Name, u.Provider)
+		if err != nil {
+			return nil, err
+		}
+		usersID = append(usersID, user.ID.String())
+
+		if operation == "add" {
+			_, err = g.UserService.AddGroup(user, groupID)
+		} else {
+			_, err = g.UserService.RemoveGroup(user, groupID)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return usersID, nil
 }
 
 func RemoveDuplicates(strSlice []string) []string {

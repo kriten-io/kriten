@@ -46,8 +46,12 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 		r.PUT("/:id", uc.UpdateGroup)
 		r.DELETE("/:id", uc.DeleteGroup)
 
-		r.PATCH("/:id/add-users", uc.AddUserToGroup)
-		r.PATCH("/:id/remove-users", uc.RemoveUserFromGroup)
+		{
+			r.GET("/:id/users", uc.ListUsersInGroup)
+			r.POST("/:id/users", uc.AddUserToGroup)
+			r.PUT("/:id/users", uc.AddUserToGroup)
+			r.DELETE("/:id/users", uc.RemoveUserFromGroup)
+		}
 	}
 }
 
@@ -217,9 +221,21 @@ func (rc *GroupController) DeleteGroup(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"msg": "group deleted successfully"})
 }
 
+func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
+	groupName := ctx.Param("id")
+	var err error
+
+	users, err := uc.GroupService.ListUsersInGroup(groupName)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, users)
+}
+
 func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 	groupName := ctx.Param("id")
-	var users []string
+	var users []models.GroupsUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -228,7 +244,7 @@ func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := uc.GroupService.AddUsers(groupName, users)
+	group, err := uc.GroupService.AddUsersToGroup(groupName, users)
 	if err != nil {
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
@@ -238,7 +254,7 @@ func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 
 func (uc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 	groupName := ctx.Param("id")
-	var users []string
+	var users []models.GroupsUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -247,7 +263,7 @@ func (uc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := uc.GroupService.RemoveUsers(groupName, users)
+	group, err := uc.GroupService.RemoveUsersFromGroup(groupName, users)
 	if err != nil {
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
