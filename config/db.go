@@ -15,7 +15,7 @@ func InitDB(db *gorm.DB) {
 		log.Println(err)
 	}
 
-	var root = models.User{Username: "root", Provider: "local", Buitin: true}
+	var root = models.User{Username: "root", Provider: "local", Buitin: true, Groups: pq.StringArray{}}
 	db.FirstOrCreate(&root)
 
 	if err := db.Where(&root).
@@ -29,8 +29,16 @@ func InitDB(db *gorm.DB) {
 	}
 	db.FirstOrCreate(&adminRole)
 
+	var adminGroup = models.Group{
+		Name: "Admin", Provider: "local", Users: pq.StringArray{root.ID.String()}, Buitin: true,
+	}
+	db.Create(&adminGroup)
+
+	root.Groups = pq.StringArray{adminGroup.ID.String()}
+	db.Updates(root)
+
 	var adminRoleBindings = models.RoleBinding{
-		Name: "RootAdminAccess", RoleID: adminRole.ID, RoleName: "Admin", SubjectID: root.ID, SubjectName: "root", SubjectKind: "root", SubjectProvider: "local", Buitin: true,
+		Name: "RootAdminAccess", RoleID: adminRole.ID, RoleName: "Admin", SubjectID: adminGroup.ID, SubjectName: "root", SubjectKind: "root", SubjectProvider: "local", Buitin: true,
 	}
 	db.Create(&adminRoleBindings)
 

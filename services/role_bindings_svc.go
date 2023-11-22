@@ -23,18 +23,18 @@ type RoleBindingService interface {
 }
 
 type RoleBindingServiceImpl struct {
-	db          *gorm.DB
-	config      config.Config
-	RoleService RoleService
-	UserService UserService
+	db           *gorm.DB
+	config       config.Config
+	RoleService  RoleService
+	GroupService GroupService
 }
 
-func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, us UserService) RoleBindingService {
+func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs GroupService) RoleBindingService {
 	return &RoleBindingServiceImpl{
-		db:          db,
-		config:      config,
-		RoleService: rs,
-		UserService: us,
+		db:           db,
+		config:       config,
+		RoleService:  rs,
+		GroupService: gs,
 	}
 }
 
@@ -122,9 +122,9 @@ func (r *RoleBindingServiceImpl) CheckRoleBinding(roleBinding models.RoleBinding
 		return uuid.UUID{}, uuid.UUID{}, err
 	}
 
-	var user models.User
-	if roleBinding.SubjectKind == "users" {
-		user, err = r.UserService.GetByUsernameAndProvider(roleBinding.SubjectName, roleBinding.SubjectProvider)
+	var group models.Group
+	if roleBinding.SubjectKind == "groups" {
+		group, err = r.GroupService.GetGroup(roleBinding.SubjectName)
 		if err != nil {
 			log.Println(err)
 			return uuid.UUID{}, uuid.UUID{}, err
@@ -133,5 +133,5 @@ func (r *RoleBindingServiceImpl) CheckRoleBinding(roleBinding models.RoleBinding
 		return uuid.UUID{}, uuid.UUID{}, fmt.Errorf("subject_kind not valid")
 	}
 
-	return role.ID, user.ID, nil
+	return role.ID, group.ID, nil
 }

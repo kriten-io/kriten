@@ -162,8 +162,15 @@ func (u *UserServiceImpl) RemoveGroup(user models.User, group string) (models.Us
 	return user, nil
 }
 
-func (u *UserServiceImpl) GetUserRoles(subjectID string, provider string) ([]models.Role, error) {
+func (u *UserServiceImpl) GetUserRoles(userID string, provider string) ([]models.Role, error) {
 	var roles []models.Role
+	var groups []string
+
+	user, err := u.GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	groups = user.Groups
 
 	// SELECT *
 	// FROM roles
@@ -172,7 +179,7 @@ func (u *UserServiceImpl) GetUserRoles(subjectID string, provider string) ([]mod
 	// WHERE role_bindings.subject_provider = provider AND role_bindings.subject_id = subjectID;
 	res := u.db.Model(&models.Role{}).Joins(
 		"left join role_bindings on roles.role_id = role_bindings.role_id").Where(
-		"role_bindings.subject_provider = ? AND role_bindings.subject_id = ?", provider, subjectID).Find(&roles)
+		"role_bindings.subject_provider = ? AND role_bindings.subject_id IN ?", provider, groups).Find(&roles)
 	if res.Error != nil {
 		return []models.Role{}, res.Error
 	}

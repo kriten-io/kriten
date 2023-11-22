@@ -15,7 +15,7 @@ import (
 )
 
 // TODO: This is currently hardcoded but needs to be fetched from somewhere else
-var subjectKinds = []string{"users"}
+var subjectKinds = []string{"groups"}
 
 type RoleBindingController struct {
 	RoleBindingService services.RoleBindingService
