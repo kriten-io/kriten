@@ -230,6 +230,14 @@ func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
+	if len(users) == 0 {
+		var arr [0]int
+		ctx.JSON(http.StatusOK, arr)
+		return
+	}
+
 	ctx.JSON(http.StatusOK, users)
 }
 

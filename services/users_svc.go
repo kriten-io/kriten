@@ -109,6 +109,9 @@ func (u *UserServiceImpl) DeleteUser(id string) error {
 	if err != nil {
 		return err
 	}
+	if len(user.Groups) != 0 {
+		return errors.New("cannot delete user who is part of a group")
+	}
 	return u.db.Unscoped().Delete(&user).Error
 }
 

@@ -55,6 +55,8 @@ func InitDB(db *gorm.DB) {
 	// rules to preveng builtin deletion or update
 	db.Exec("CREATE RULE builtin_del_users AS ON DELETE TO users WHERE buitin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_upd_users AS ON UPDATE TO users WHERE old.buitin DO INSTEAD nothing;")
+	db.Exec("CREATE RULE builtin_del_groups AS ON DELETE TO groups WHERE buitin DO INSTEAD nothing;")
+	db.Exec("CREATE RULE builtin_upd_groups AS ON UPDATE TO groups WHERE old.buitin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_roles AS ON DELETE TO roles WHERE buitin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_upd_roles AS ON UPDATE TO roles WHERE old.buitin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_rolebindings AS ON DELETE TO role_bindings WHERE buitin DO INSTEAD nothing;")
