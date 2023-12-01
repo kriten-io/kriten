@@ -8,6 +8,7 @@ import (
 	"kriten/models"
 	"strconv"
 
+	"github.com/go-openapi/spec"
 	"golang.org/x/exp/slices"
 
 	v1 "k8s.io/api/core/v1"
@@ -20,7 +21,6 @@ type TaskService interface {
 	CreateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
 	UpdateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
 	DeleteTask(name string) error
-	GetRunnerGroups(string) (string, error)
 }
 
 type TaskServiceImpl struct {
@@ -76,6 +76,13 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"], _ = strconv.ParseBool(configMap.Data["synchronous"])
 
+	var jsonData map[string]interface{}
+	err = json.Unmarshal([]byte(configMap.Data["scheme"]), &jsonData)
+	if err != nil {
+		return nil, nil, err
+	}
+	data["scheme"] = jsonData
+
 	secret, err := helpers.GetSecret(t.config.Kube, name)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -93,11 +100,22 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
+	jsonData, err := json.Marshal(task.Scheme)
+	if err != nil {
+		return nil, nil, err
+	}
+	schema := new(spec.Schema)
+	err = json.Unmarshal(jsonData, schema)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Parsing a models.Task into a map
 	b, _ := json.Marshal(task)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"] = strconv.FormatBool(task.Synchronous)
+	data["scheme"] = string(jsonData)
 	delete(data, "secret")
 
 	configMap, err := helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
@@ -179,15 +197,4 @@ func (t *TaskServiceImpl) DeleteTask(name string) error {
 	}
 
 	return nil
-}
-
-func (t *TaskServiceImpl) GetRunnerGroups(runnerName string) (string, error) {
-	configMap, err := helpers.GetConfigMap(t.config.Kube, runnerName)
-
-	if err != nil {
-		return "", err
-	}
-
-	accessGroups := configMap.Data["accessGroups"]
-	return string(accessGroups), nil
 }

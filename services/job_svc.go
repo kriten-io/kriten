@@ -11,6 +11,9 @@ import (
 	"strings"
 
 	"github.com/go-errors/errors"
+	"github.com/go-openapi/spec"
+	"github.com/go-openapi/strfmt"
+	"github.com/go-openapi/validate"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -174,6 +177,23 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		return jobStatus, err
 	}
 	runnerName := task.Data["runner"]
+
+	schema := new(spec.Schema)
+	_ = json.Unmarshal([]byte(task.Data["scheme"]), schema)
+
+	input := map[string]interface{}{}
+
+	// JSON data to validate
+	_ = json.Unmarshal([]byte(extraVars), &input)
+
+	// strfmt.Default is the registry of recognized formats
+	err = validate.AgainstSchema(schema, input, strfmt.Default)
+	if err != nil {
+		fmt.Printf("JSON does not validate against schema: %v", err)
+		return jobStatus, err
+	} else {
+		fmt.Printf("OK")
+	}
 
 	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
 	if err != nil {
