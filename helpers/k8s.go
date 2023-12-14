@@ -320,10 +320,20 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 								{
 									Name:      "repo",
 									MountPath: "/mnt/repo",
-									ReadOnly:  true,
+									ReadOnly:  false,
 								},
 							},
 							Env: env,
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: name,
+										},
+										Optional: &optional_secret,
+									},
+								},
+							},
 						},
 					},
 					InitContainers: []corev1.Container{
