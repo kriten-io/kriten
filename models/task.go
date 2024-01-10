@@ -6,5 +6,5 @@ type Task struct {
 	Command     string                 `json:"command" binding:"required"`
 	Synchronous bool                   `json:"synchronous"`
 	Secret      map[string]string      `json:"secret,omitempty"`
-	Scheme      map[string]interface{} `json:"scheme,omitempty"`
+	Schema      map[string]interface{} `json:"schema,omitempty"`
 }

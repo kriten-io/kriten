@@ -5,6 +5,7 @@ import (
 	"kriten/config"
 	"kriten/helpers"
 	"kriten/models"
+	"log"
 	"time"
 
 	"encoding/json"
@@ -178,21 +179,21 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	}
 	runnerName := task.Data["runner"]
 
-	schema := new(spec.Schema)
-	_ = json.Unmarshal([]byte(task.Data["scheme"]), schema)
+	if task.Data["schema"] != "" {
+		schema := new(spec.Schema)
+		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
 
-	input := map[string]interface{}{}
+		input := map[string]interface{}{}
 
-	// JSON data to validate
-	_ = json.Unmarshal([]byte(extraVars), &input)
+		// JSON data to validate
+		_ = json.Unmarshal([]byte(extraVars), &input)
 
-	// strfmt.Default is the registry of recognized formats
-	err = validate.AgainstSchema(schema, input, strfmt.Default)
-	if err != nil {
-		fmt.Printf("JSON does not validate against schema: %v", err)
-		return jobStatus, err
-	} else {
-		fmt.Printf("OK")
+		// strfmt.Default is the registry of recognized formats
+		err = validate.AgainstSchema(schema, input, strfmt.Default)
+		if err != nil {
+			log.Printf("JSON does not validate against schema: %v", err)
+			return models.Job{}, err
+		}
 	}
 
 	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)

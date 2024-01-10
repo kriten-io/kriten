@@ -1,14 +1,21 @@
 package services
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"kriten/config"
 	"kriten/helpers"
 	"kriten/models"
+	"log"
+	"math/rand"
+	"os"
 	"strconv"
 
+	"github.com/go-openapi/loads"
 	"github.com/go-openapi/spec"
+	"github.com/go-openapi/strfmt"
+	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
 
 	v1 "k8s.io/api/core/v1"
@@ -77,11 +84,11 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 	data["synchronous"], _ = strconv.ParseBool(configMap.Data["synchronous"])
 
 	var jsonData map[string]interface{}
-	err = json.Unmarshal([]byte(configMap.Data["scheme"]), &jsonData)
+	err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
 	if err != nil {
 		return nil, nil, err
 	}
-	data["scheme"] = jsonData
+	data["schema"] = jsonData
 
 	secret, err := helpers.GetSecret(t.config.Kube, name)
 	if err != nil {
@@ -100,7 +107,7 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
-	jsonData, err := json.Marshal(task.Scheme)
+	jsonData, err := json.Marshal(task.Schema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -110,12 +117,17 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 		return nil, nil, err
 	}
 
+	err = ValidateSchema(jsonData)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Parsing a models.Task into a map
 	b, _ := json.Marshal(task)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"] = strconv.FormatBool(task.Synchronous)
-	data["scheme"] = string(jsonData)
+	data["schema"] = string(jsonData)
 	delete(data, "secret")
 
 	configMap, err := helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
@@ -193,6 +205,39 @@ func (t *TaskServiceImpl) DeleteTask(name string) error {
 
 	err = helpers.DeleteSecret(t.config.Kube, name)
 	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}
+
+func ValidateSchema(schema []byte) error {
+	input, err := os.ReadFile("spec.json")
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	output := bytes.Replace(input, []byte("\"%schema%\""), schema, -1)
+
+	randomName := "schema-" + fmt.Sprint(rand.Int()) + ".json"
+	if err = os.WriteFile(randomName, output, 0666); err != nil {
+		log.Println(err)
+		return err
+	}
+
+	doc, err := loads.Spec(randomName)
+	os.Remove(randomName)
+	if err != nil {
+		log.Printf("error while loading spec: %v\n", err)
+		return err
+	}
+
+	validate.SetContinueOnErrors(true)       // Set global options
+	err = validate.Spec(doc, strfmt.Default) // Validates spec with default Swagger 2.0 format definitions
+
+	if err != nil {
+		log.Printf("This spec has some validation errors: %v\n", err)
 		return err
 	}
 
