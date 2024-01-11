@@ -43,6 +43,13 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 		r.PATCH("/:id", tc.UpdateTask)
 		r.PUT("/:id", tc.UpdateTask)
 		r.DELETE("/:id", tc.DeleteTask)
+
+		{
+			r.GET("/:id/schema", tc.GetSchema)
+			r.POST("/:id/schema", tc.UpdateSchema)
+			r.PUT("/:id/schema", tc.UpdateSchema)
+			r.DELETE("/:id/schema", tc.DeleteSchema)
+		}
 	}
 
 }
@@ -228,4 +235,52 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 	}
 	helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "tasks", taskName, "success")
 	ctx.JSON(http.StatusOK, gin.H{"msg": "task deleted successfully"})
+}
+
+func (tc *TaskController) GetSchema(ctx *gin.Context) {
+	taskName := ctx.Param("id")
+	schema, err := tc.TaskService.GetSchema(taskName)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if schema == nil {
+		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, schema)
+}
+
+func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
+	taskName := ctx.Param("id")
+	var schema map[string]interface{}
+
+	if err := ctx.BindJSON(&schema); err != nil {
+		log.Println(err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schema, err := tc.TaskService.UpdateSchema(taskName, schema)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, schema)
+}
+
+func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
+	taskName := ctx.Param("id")
+
+	err := tc.TaskService.DeleteSchema(taskName)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"msg": "schema deleted successfully"})
 }

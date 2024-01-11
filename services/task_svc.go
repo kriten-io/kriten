@@ -13,7 +13,6 @@ import (
 	"strconv"
 
 	"github.com/go-openapi/loads"
-	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
@@ -27,7 +26,10 @@ type TaskService interface {
 	GetTask(string) (map[string]interface{}, map[string][]byte, error)
 	CreateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
 	UpdateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
-	DeleteTask(name string) error
+	DeleteTask(string) error
+	GetSchema(string) (map[string]interface{}, error)
+	DeleteSchema(string) error
+	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
 }
 
 type TaskServiceImpl struct {
@@ -83,12 +85,14 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"], _ = strconv.ParseBool(configMap.Data["synchronous"])
 
-	var jsonData map[string]interface{}
-	err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
-	if err != nil {
-		return nil, nil, err
+	if configMap.Data["schema"] != "" {
+		var jsonData map[string]interface{}
+		err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
+		if err != nil {
+			return nil, nil, err
+		}
+		data["schema"] = jsonData
 	}
-	data["schema"] = jsonData
 
 	secret, err := helpers.GetSecret(t.config.Kube, name)
 	if err != nil {
@@ -108,11 +112,6 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 	}
 
 	jsonData, err := json.Marshal(task.Schema)
-	if err != nil {
-		return nil, nil, err
-	}
-	schema := new(spec.Schema)
-	err = json.Unmarshal(jsonData, schema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -238,6 +237,81 @@ func ValidateSchema(schema []byte) error {
 
 	if err != nil {
 		log.Printf("This spec has some validation errors: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
+	var data map[string]interface{}
+
+	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
+	if err != nil {
+		return nil, err
+	}
+	if configMap.Data["runner"] == "" {
+		return nil, fmt.Errorf("task %s not found", name)
+	}
+
+	if configMap.Data["schema"] != "" {
+		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return data, nil
+}
+
+func (t *TaskServiceImpl) UpdateSchema(taskName string, schema map[string]interface{}) (map[string]interface{}, error) {
+	task, err := helpers.GetConfigMap(t.config.Kube, taskName)
+	if err != nil {
+		return nil, err
+	}
+	if task.Data["runner"] == "" {
+		return nil, fmt.Errorf("task %s not found", taskName)
+	}
+
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ValidateSchema(data)
+	if err != nil {
+		return nil, err
+	}
+
+	task.Data["schema"] = string(data)
+	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, task.Data, "update")
+	if err != nil {
+		return nil, err
+	}
+
+	return schema, nil
+}
+
+func (t *TaskServiceImpl) DeleteSchema(name string) error {
+	task, _, err := t.GetTask(name)
+	if err != nil {
+		return err
+	}
+
+	log.Println(task)
+	log.Println(task["schema"])
+	if task["schema"] == "" {
+		return nil
+	}
+
+	// Parsing a models.Task into a map
+	b, _ := json.Marshal(task)
+	var data map[string]string
+	_ = json.Unmarshal(b, &data)
+	delete(data, "schema")
+	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
+	if err != nil {
 		return err
 	}
 
