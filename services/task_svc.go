@@ -8,7 +8,6 @@ import (
 	"kriten/helpers"
 	"kriten/models"
 	"log"
-	"math/rand"
 	"os"
 	"strconv"
 
@@ -210,39 +209,6 @@ func (t *TaskServiceImpl) DeleteTask(name string) error {
 	return nil
 }
 
-func ValidateSchema(schema []byte) error {
-	input, err := os.ReadFile("spec.json")
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	output := bytes.Replace(input, []byte("\"%schema%\""), schema, -1)
-
-	randomName := "schema-" + fmt.Sprint(rand.Int()) + ".json"
-	if err = os.WriteFile(randomName, output, 0666); err != nil {
-		log.Println(err)
-		return err
-	}
-
-	doc, err := loads.Spec(randomName)
-	os.Remove(randomName)
-	if err != nil {
-		log.Printf("error while loading spec: %v\n", err)
-		return err
-	}
-
-	validate.SetContinueOnErrors(true)       // Set global options
-	err = validate.Spec(doc, strfmt.Default) // Validates spec with default Swagger 2.0 format definitions
-
-	if err != nil {
-		log.Printf("This spec has some validation errors: %v\n", err)
-		return err
-	}
-
-	return nil
-}
-
 func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
 	var data map[string]interface{}
 
@@ -312,6 +278,31 @@ func (t *TaskServiceImpl) DeleteSchema(name string) error {
 	delete(data, "schema")
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ValidateSchema(schema []byte) error {
+	input, err := os.ReadFile("spec.json")
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	output := bytes.Replace(input, []byte("\"%schema%\""), schema, -1)
+	doc, err := loads.Analyzed(output, "2.0")
+	if err != nil {
+		log.Printf("error while loading spec: %v\n", err)
+		return err
+	}
+
+	validate.SetContinueOnErrors(true)       // Set global options
+	err = validate.Spec(doc, strfmt.Default) // Validates spec with default Swagger 2.0 format definitions
+
+	if err != nil {
+		log.Printf("This spec has some validation errors: %v\n", err)
 		return err
 	}
 
