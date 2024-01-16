@@ -221,6 +221,20 @@ func (rc *GroupController) DeleteGroup(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"msg": "group deleted successfully"})
 }
 
+// ListUsersInGroup godoc
+//
+//	@Summary		List users
+//	@Description	List all users in given group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Group ID"
+//	@Success		200	{array}		[]models.GroupsUser
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/groups/{id}/users [get]
+//	@Security		Bearer
 func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 	groupName := ctx.Param("id")
 	var err error
@@ -241,6 +255,21 @@ func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, users)
 }
 
+// AddUserToGroup godoc
+//
+//	@Summary		Add users
+//	@Description	Add users to group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			group	body		[]models.GroupsUser	true	"Users to be added"
+//	@Param			id		path		string				true	"Group ID"
+//	@Success		200		{object}	models.Group
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/groups/{id}/users [post]
+//	@Security		Bearer
 func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 	groupName := ctx.Param("id")
 	var users []models.GroupsUser
@@ -260,6 +289,21 @@ func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, group)
 }
 
+// RemoveUserFromGroup godoc
+//
+//	@Summary		Remove users
+//	@Description	Remove users from group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			group	body		[]models.GroupsUser	true	"Users to be removed"
+//	@Param			id		path		string				true	"Group ID"
+//	@Success		200		{object}	models.Group
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/groups/{id}/users [delete]
+//	@Security		Bearer
 func (uc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 	groupName := ctx.Param("id")
 	var users []models.GroupsUser

@@ -237,6 +237,20 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"msg": "task deleted successfully"})
 }
 
+// GetSchema godoc
+//
+//	@Summary		Get schema
+//	@Description	Get validation schema associated to a specific task
+//	@Tags			tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Task name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/tasks/{id}/schema [get]
+//	@Security		Bearer
 func (tc *TaskController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
 	schema, err := tc.TaskService.GetSchema(taskName)
@@ -254,6 +268,21 @@ func (tc *TaskController) GetSchema(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, schema)
 }
 
+// UpdateSchema godoc
+//
+//	@Summary		Update schema
+//	@Description	Add or Update validation schema associated to a specific task
+//	@Tags			tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Task name"
+//	@Param			schema	body	map[string]interface{}	true	"New schema"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/tasks/{id}/schema [post]
+//	@Security		Bearer
 func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
 	var schema map[string]interface{}
@@ -272,6 +301,20 @@ func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, schema)
 }
 
+// DeleteSchema godoc
+//
+//	@Summary		Delete schema
+//	@Description	Remove validation schema associated to a specific task
+//	@Tags			tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Task name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/tasks/{id}/schema [delete]
+//	@Security		Bearer
 func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
 

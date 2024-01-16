@@ -113,7 +113,7 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 //	@Description	Get a job log as text
 //	@Tags			jobs
 //	@Accept			json
-//	@Produce		string
+//	@Produce		json
 //	@Param			id	path		string	true	"Job  id"
 //	@Success		200	{object}	models.Task
 //	@Failure		400	{object}	helpers.HTTPError
