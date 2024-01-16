@@ -105,19 +105,22 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 }
 
 func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secret, error) {
+	var jsonData []byte
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
 		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
-	jsonData, err := json.Marshal(task.Schema)
-	if err != nil {
-		return nil, nil, err
-	}
+	if task.Schema != nil {
+		jsonData, err = json.Marshal(task.Schema)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	err = ValidateSchema(jsonData)
-	if err != nil {
-		return nil, nil, err
+		err = ValidateSchema(jsonData)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Parsing a models.Task into a map
