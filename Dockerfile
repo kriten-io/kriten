@@ -21,6 +21,7 @@ FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/kriten .
 COPY --from=builder /workspace/.env .
+COPY --from=builder /workspace/spec.json .
 USER 65532:65532
 
 EXPOSE 8080
