@@ -9,22 +9,13 @@ import (
 type AuditLog struct {
 	ID uuid.UUID `gorm:"column:auditlog_id;type:uuid;default:gen_random_uuid()"`
 	// Timestamp time.Time  `json:"@timestamp"`
-	User      AuditUser  `json:"user"`
-	Event     AuditEvent `json:"event"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-}
-
-type AuditUser struct {
-	ID       uuid.UUID
-	Name     string `json:"name"`
-	Provider string `json:"provider"`
-	IP       string `json:"ip"`
-}
-
-type AuditEvent struct {
-	Type     string `json:"type"`
-	Category string `json:"category"`
-	Target   string `json:"target"`
-	Status   string `json:"status"`
+	UserID        uuid.UUID `gorm:"column:user_id"`
+	UserName      string    `gorm:"column:user_name"`
+	Provider      string    `gorm:"column:user_provider"`
+	EventType     string    `gorm:"column:event_type"`
+	EventCategory string    `gorm:"column:event_category"`
+	EventTarget   string    `gorm:"column:event_target"`
+	Status        string    `gorm:"column:status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
