@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kriten/config"
 	"kriten/models"
+	"log"
 
 	"golang.org/x/exp/slices"
 
@@ -40,6 +41,8 @@ func NewGroupService(database *gorm.DB, us UserService, config config.Config) Gr
 func (g *GroupServiceImpl) ListGroups(authList []string) ([]models.Group, error) {
 	var groups []models.Group
 	var res *gorm.DB
+
+	log.Println(authList)
 
 	if len(authList) == 0 {
 		return groups, nil
