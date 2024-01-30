@@ -11,7 +11,7 @@ type AuditLog struct {
 	// Timestamp time.Time  `json:"@timestamp"`
 	UserID        uuid.UUID `gorm:"column:user_id"`
 	UserName      string    `gorm:"column:user_name"`
-	Provider      string    `gorm:"column:user_provider"`
+	Provider      string    `gorm:"column:provider"`
 	EventType     string    `gorm:"column:event_type"`
 	EventCategory string    `gorm:"column:event_category"`
 	EventTarget   string    `gorm:"column:event_target"`

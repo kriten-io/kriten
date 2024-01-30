@@ -7,9 +7,7 @@ import (
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
-	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,13 +17,17 @@ type RunnerController struct {
 	RunnerService services.RunnerService
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewRunnerController(rs services.RunnerService, as services.AuthService, es helpers.ElasticSearch) RunnerController {
+func NewRunnerController(rs services.RunnerService, as services.AuthService, es helpers.ElasticSearch, als services.AuditService) RunnerController {
 	return RunnerController{
 		RunnerService: rs,
 		AuthService:   as,
 		ElasticSearch: es,
+		AuditService:  als,
+		AuditCategory: "runners",
 	}
 }
 
@@ -61,22 +63,28 @@ func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.C
 //	@Router			/runners [get]
 //	@Security		Bearer
 func (rc *RunnerController) ListRunners(ctx *gin.Context) {
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory)
 	authList := ctx.MustGet("authList").([]string)
 	runnersList, err := rc.RunnerService.ListRunners(authList)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(runnersList)))
 	if len(runnersList) == 0 {
 		var arr [0]int
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
+	rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, runnersList)
 }
@@ -96,20 +104,27 @@ func (rc *RunnerController) ListRunners(ctx *gin.Context) {
 //	@Router			/runners/{rname} [get]
 //	@Security		Bearer
 func (rc *RunnerController) GetRunner(ctx *gin.Context) {
-	// username := ctx.MustGet("username").(string)
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory)
 	runnerName := ctx.Param("id")
+
+	audit.EventTarget = runnerName
 	runner, err := rc.RunnerService.GetRunner(runnerName)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if runner == nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "runner not found"})
 		return
 	}
 
+	audit.Status = "success"
+
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, runner)
 }
 
@@ -128,28 +143,35 @@ func (rc *RunnerController) GetRunner(ctx *gin.Context) {
 //	@Router			/runners [post]
 //	@Security		Bearer
 func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
+	// timestamp := time.Now().UTC()
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory)
 	var runner models.Runner
 
 	if err := ctx.ShouldBindJSON(&runner); err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.EventTarget = runner.Name
+
 	configMap, err := rc.RunnerService.CreateRunner(runner)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
+			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
+			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner already exists, please use a different name"})
 			return
 		}
-		helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
+		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "success")
+	audit.Status = "success"
+	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "success")
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
 
@@ -169,28 +191,35 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 //	@Router			/runners/{rname} [patch]
 //	@Security		Bearer
 func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
+	// timestamp := time.Now().UTC()
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory)
 	var runner models.Runner
 
 	if err := ctx.ShouldBindJSON(&runner); err != nil {
-		log.Println(err)
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.EventTarget = runner.Name
+
 	configMap, err := rc.RunnerService.UpdateRunner(runner)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
+			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
+			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "runner doesn't exist"})
 			return
 		}
-		helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
+		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "success")
+
+	audit.Status = "success"
+	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "success")
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
 
@@ -209,39 +238,27 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 //	@Router			/runners/{rname} [delete]
 //	@Security		Bearer
 func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory)
+	// timestamp := time.Now().UTC()
 	runnerName := ctx.Param("id")
+	audit.EventTarget = runnerName
 
 	err := rc.RunnerService.DeleteRunner(runnerName)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
+			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
+			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner doesn't exist"})
 			return
 		}
-		helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
+		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "success")
+
+	audit.Status = "success"
+	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "success")
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "runner deleted successfully"})
-}
-
-func (rc *RunnerController) ListAllJobs(ctx *gin.Context) {
-	jobsList, err := rc.RunnerService.ListAllJobs()
-
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
-	if len(jobsList) == 0 {
-		var arr [0]int
-		ctx.JSON(http.StatusOK, arr)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, jobsList)
 }

@@ -5,6 +5,8 @@ import (
 	"kriten/config"
 	"kriten/models"
 
+	"github.com/gin-gonic/gin"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
@@ -13,6 +15,7 @@ type AuditService interface {
 	ListAudits([]string) ([]models.AuditLog, error)
 	GetAudit(string) (models.AuditLog, error)
 	CreateAudit(models.AuditLog) (models.AuditLog, error)
+	InitialiseAuditLog(*gin.Context, string, string) models.AuditLog
 }
 
 type AuditServiceImpl struct {
@@ -65,4 +68,28 @@ func (a *AuditServiceImpl) CreateAudit(log models.AuditLog) (models.AuditLog, er
 	res := a.db.Create(&log)
 
 	return log, res.Error
+}
+
+func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string, category string) models.AuditLog {
+	var userID uuid.UUID
+	var username, provider string
+	uid, _ := ctx.Get("userID")
+	if uid != nil {
+		userID = uid.(uuid.UUID)
+		uname, _ := ctx.Get("username")
+		prov, _ := ctx.Get("provider")
+
+		username = uname.(string)
+		provider = prov.(string)
+	}
+
+	return models.AuditLog{
+		UserID:        userID,
+		UserName:      username,
+		Provider:      provider,
+		EventType:     eventType,
+		EventCategory: category,
+		EventTarget:   "*",
+		Status:        "error", // status will be updated later if successful
+	}
 }

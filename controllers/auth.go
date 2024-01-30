@@ -5,7 +5,6 @@ import (
 	"kriten/models"
 	"kriten/services"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
@@ -15,12 +14,16 @@ type AuthController struct {
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
 	providers     []string
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewAuthController(authservice services.AuthService, es helpers.ElasticSearch, p []string) AuthController {
+func NewAuthController(as services.AuthService, es helpers.ElasticSearch, als services.AuditService, p []string) AuthController {
 	return AuthController{
-		AuthService:   authservice,
+		AuthService:   as,
 		ElasticSearch: es,
+		AuditService:  als,
+		AuditCategory: "authentication",
 		providers:     p,
 	}
 }
@@ -45,27 +48,37 @@ func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
 //	@Failure		500			{object}	helpers.HTTPError
 //	@Router			/login [post]
 func (ac *AuthController) Login(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
+	// timestamp := time.Now().UTC()
 	var credentials models.Credentials
+	audit := ac.AuditService.InitialiseAuditLog(ctx, "login", ac.AuditCategory)
 
 	if err := ctx.ShouldBindJSON(&credentials); err != nil {
+		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.UserName = credentials.Username
+	audit.Provider = credentials.Provider
+
 	if !slices.Contains(ac.providers, credentials.Provider) {
+		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": ac.providers})
 		return
 	}
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
-		helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "failure")
+		// helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "failure")
+		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
 		return
 	}
 
-	helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "success")
+	audit.Status = "success"
+	ac.AuditService.CreateAudit(audit)
+
+	// helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "success")
 	ctx.SetSameSite(http.SameSiteNoneMode)
 	ctx.SetCookie("token", token, expiry, "", "", false, true)
 	ctx.JSON(http.StatusOK, gin.H{"token": token})

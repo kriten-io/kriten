@@ -37,6 +37,7 @@ var (
 	js         services.JobService
 	us         services.UserService
 	gs         services.GroupService
+	als        services.AuditService
 	rls        services.RoleService
 	rbs        services.RoleBindingService
 	ac         controllers.AuthController
@@ -140,6 +141,7 @@ func init() {
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, gs)
 	as = services.NewAuthService(conf, us, rls, rbs)
+	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(conf)
 	ts = services.NewTaskService(conf)
@@ -155,9 +157,9 @@ func init() {
 	gc = controllers.NewGroupController(gs, as, es, authProviders)
 	rlc = controllers.NewRoleController(rls, as, es)
 	rbc = controllers.NewRoleBindingController(rbs, as, es, authProviders)
-	ac = controllers.NewAuthController(as, es, authProviders)
+	ac = controllers.NewAuthController(as, es, als, authProviders)
 
-	rc = controllers.NewRunnerController(rs, as, es)
+	rc = controllers.NewRunnerController(rs, as, es, als)
 	tc = controllers.NewTaskController(ts, as, es)
 	jc = controllers.NewJobController(js, as, es)
 }
