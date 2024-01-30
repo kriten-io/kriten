@@ -154,7 +154,7 @@ func init() {
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, es, authProviders)
-	gc = controllers.NewGroupController(gs, as, es, authProviders)
+	gc = controllers.NewGroupController(gs, as, es, als, authProviders)
 	rlc = controllers.NewRoleController(rls, as, es)
 	rbc = controllers.NewRoleBindingController(rbs, as, es, authProviders)
 	ac = controllers.NewAuthController(as, es, als, authProviders)

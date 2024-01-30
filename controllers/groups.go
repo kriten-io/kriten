@@ -7,7 +7,6 @@ import (
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -19,15 +18,19 @@ type GroupController struct {
 	GroupService  services.GroupService
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
+	AuditService  services.AuditService
+	AuditCategory string
 	providers     []string
 }
 
-func NewGroupController(groupService services.GroupService, as services.AuthService, es helpers.ElasticSearch, p []string) GroupController {
+func NewGroupController(groupService services.GroupService, as services.AuthService, es helpers.ElasticSearch, als services.AuditService, p []string) GroupController {
 	return GroupController{
 		GroupService:  groupService,
 		AuthService:   as,
 		ElasticSearch: es,
 		providers:     p,
+		AuditService:  als,
+		AuditCategory: "groups",
 	}
 }
 
@@ -68,22 +71,28 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/groups [get]
 //	@Security		Bearer
-func (rc *GroupController) ListGroups(ctx *gin.Context) {
+func (gc *GroupController) ListGroups(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory)
 	authList := ctx.MustGet("authList").([]string)
-	groups, err := rc.GroupService.ListGroups(authList)
+	groups, err := gc.GroupService.ListGroups(authList)
 
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
 	if len(groups) == 0 {
 		var arr [0]int
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	gc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, groups)
 }
@@ -102,15 +111,22 @@ func (rc *GroupController) ListGroups(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/groups/{id} [get]
 //	@Security		Bearer
-func (rc *GroupController) GetGroup(ctx *gin.Context) {
+func (gc *GroupController) GetGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "get", gc.AuditCategory)
 	groupID := ctx.Param("id")
-	group, err := rc.GroupService.GetGroup(groupID)
+	group, err := gc.GroupService.GetGroup(groupID)
+
+	audit.EventTarget = groupID
 
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
 
@@ -128,26 +144,34 @@ func (rc *GroupController) GetGroup(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups [post]
 //	@Security		Bearer
-func (uc *GroupController) CreateGroup(ctx *gin.Context) {
+func (gc *GroupController) CreateGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "create", gc.AuditCategory)
 	var group models.Group
 
 	if err := ctx.ShouldBindJSON(&group); err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if !slices.Contains(uc.providers, group.Provider) {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
+	audit.EventTarget = group.Name
+
+	if !slices.Contains(gc.providers, group.Provider) {
+		gc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": gc.providers})
 		return
 	}
 
-	group, err := uc.GroupService.CreateGroup(group)
-	log.Println(group)
+	group, err := gc.GroupService.CreateGroup(group)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
 
@@ -166,33 +190,41 @@ func (uc *GroupController) CreateGroup(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups/{id} [patch]
 //	@Security		Bearer
-func (uc *GroupController) UpdateGroup(ctx *gin.Context) {
-	groupID := ctx.Param("id")
+func (gc *GroupController) UpdateGroup(ctx *gin.Context) {
 	var group models.Group
 	var err error
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "update", gc.AuditCategory)
+	groupID := ctx.Param("id")
+
+	audit.EventTarget = groupID
 
 	if err := ctx.ShouldBindJSON(&group); err != nil {
-		log.Println(err)
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if !slices.Contains(uc.providers, group.Provider) {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
+	if !slices.Contains(gc.providers, group.Provider) {
+		gc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": gc.providers})
 		return
 	}
 
 	group.ID, err = uuid.FromString(groupID)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	group, err = uc.GroupService.UpdateGroup(group)
+	group, err = gc.GroupService.UpdateGroup(group)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
 
@@ -210,14 +242,21 @@ func (uc *GroupController) UpdateGroup(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/groups/{id} [delete]
 //	@Security		Bearer
-func (rc *GroupController) DeleteGroup(ctx *gin.Context) {
+func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "delete", gc.AuditCategory)
 	groupID := ctx.Param("id")
 
-	err := rc.GroupService.DeleteGroup(groupID)
+	audit.EventTarget = groupID
+
+	err := gc.GroupService.DeleteGroup(groupID)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "group deleted successfully"})
 }
 
@@ -235,23 +274,30 @@ func (rc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [get]
 //	@Security		Bearer
-func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
+func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
+	audit.EventTarget = groupName
 	var err error
 
-	users, err := uc.GroupService.ListUsersInGroup(groupName)
+	users, err := gc.GroupService.ListUsersInGroup(groupName)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, users)
 }
 
@@ -270,22 +316,27 @@ func (uc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [post]
 //	@Security		Bearer
-func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
+func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
+	audit.EventTarget = groupName
 	var users []models.GroupsUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
-		log.Println(err)
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	group, err := uc.GroupService.AddUsersToGroup(groupName, users)
+	group, err := gc.GroupService.AddUsersToGroup(groupName, users)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
 
@@ -304,21 +355,26 @@ func (uc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [delete]
 //	@Security		Bearer
-func (uc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
+func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
+	audit.EventTarget = groupName
 	var users []models.GroupsUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
-		log.Println(err)
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	group, err := uc.GroupService.RemoveUsersFromGroup(groupName, users)
+	group, err := gc.GroupService.RemoveUsersFromGroup(groupName, users)
 	if err != nil {
+		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
