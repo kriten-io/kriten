@@ -11,8 +11,8 @@ import (
 )
 
 type AuditService interface {
-	ListAudits(int) ([]models.AuditLog, error)
-	GetAudit(string) (models.AuditLog, error)
+	ListAuditLogs(int) ([]models.AuditLog, error)
+	GetAuditLog(string) (models.AuditLog, error)
 	CreateAudit(models.AuditLog) (models.AuditLog, error)
 	InitialiseAuditLog(*gin.Context, string, string) models.AuditLog
 }
@@ -29,7 +29,7 @@ func NewAuditService(database *gorm.DB, config config.Config) AuditService {
 	}
 }
 
-func (a *AuditServiceImpl) ListAudits(max int) ([]models.AuditLog, error) {
+func (a *AuditServiceImpl) ListAuditLogs(max int) ([]models.AuditLog, error) {
 	var logs []models.AuditLog
 	var res *gorm.DB
 
@@ -41,7 +41,7 @@ func (a *AuditServiceImpl) ListAudits(max int) ([]models.AuditLog, error) {
 	return logs, nil
 }
 
-func (a *AuditServiceImpl) GetAudit(id string) (models.AuditLog, error) {
+func (a *AuditServiceImpl) GetAuditLog(id string) (models.AuditLog, error) {
 	var log models.AuditLog
 	res := a.db.Where("auditlog_id = ?", id).Find(&log)
 	if res.Error != nil {

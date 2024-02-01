@@ -29,12 +29,12 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 
 	r.Use(middlewares.AuthorizationMiddleware(ac.AuthService, "audit", "read"))
 	{
-		r.GET("", ac.ListAudit)
-		// r.GET("/:id", ac.GetAudit)
+		r.GET("", ac.ListAuditLogs)
+		r.GET("/:id", ac.GetAuditLog)
 	}
 }
 
-// ListAudit godoc
+// ListAuditLogs godoc
 //
 //	@Summary		List audit
 //	@Description	List all audit logs
@@ -45,9 +45,9 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/groups [get]
+//	@Router			/audit_logs [get]
 //	@Security		Bearer
-func (ac *AuditController) ListAudit(ctx *gin.Context) {
+func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	var err error
 	// Default limit
 	max := 100
@@ -62,7 +62,7 @@ func (ac *AuditController) ListAudit(ctx *gin.Context) {
 
 	}
 
-	groups, err := ac.AuditService.ListAudits(max)
+	groups, err := ac.AuditService.ListAuditLogs(max)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -78,4 +78,30 @@ func (ac *AuditController) ListAudit(ctx *gin.Context) {
 
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, groups)
+}
+
+// GetAuditLog godoc
+//
+//	@Summary		Get audit log
+//	@Description	Get information about a specific audit log
+//	@Tags			audit
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Audit Log ID"
+//	@Success		200	{object}	models.AuditLog
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/audit_logs/{id} [get]
+//	@Security		Bearer
+func (ac *AuditController) GetAuditLog(ctx *gin.Context) {
+	auditLogID := ctx.Param("id")
+	role, err := ac.AuditService.GetAuditLog(auditLogID)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, role)
 }
