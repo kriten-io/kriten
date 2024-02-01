@@ -7,7 +7,6 @@ import (
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,14 +19,18 @@ type UserController struct {
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
 	providers     []string
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewUserController(userService services.UserService, as services.AuthService, es helpers.ElasticSearch, p []string) UserController {
+func NewUserController(userService services.UserService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch, p []string) UserController {
 	return UserController{
 		UserService:   userService,
 		AuthService:   as,
 		ElasticSearch: es,
 		providers:     p,
+		AuditService:  als,
+		AuditCategory: "users",
 	}
 }
 
@@ -61,22 +64,27 @@ func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/users [get]
 //	@Security		Bearer
-func (rc *UserController) ListUsers(ctx *gin.Context) {
+func (uc *UserController) ListUsers(ctx *gin.Context) {
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
-	users, err := rc.UserService.ListUsers(authList)
+	users, err := uc.UserService.ListUsers(authList)
 
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	uc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, users)
 }
@@ -95,15 +103,19 @@ func (rc *UserController) ListUsers(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/users/{id} [get]
 //	@Security		Bearer
-func (rc *UserController) GetUser(ctx *gin.Context) {
+func (uc *UserController) GetUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
-	user, err := rc.UserService.GetUser(userID)
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
+	user, err := uc.UserService.GetUser(userID)
 
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -122,25 +134,30 @@ func (rc *UserController) GetUser(ctx *gin.Context) {
 //	@Router			/users [post]
 //	@Security		Bearer
 func (uc *UserController) CreateUser(ctx *gin.Context) {
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	var user models.User
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	audit.EventTarget = user.Username
 
 	if !slices.Contains(uc.providers, user.Provider) {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
 		return
 	}
 
 	user, err := uc.UserService.CreateUser(user)
-	log.Println(user)
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -161,31 +178,37 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *UserController) UpdateUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 	var user models.User
 	var err error
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
-		log.Println(err)
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if !slices.Contains(uc.providers, user.Provider) {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
 		return
 	}
 
 	user.ID, err = uuid.FromString(userID)
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	user, err = uc.UserService.UpdateUser(user)
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -203,13 +226,17 @@ func (uc *UserController) UpdateUser(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/users/{id} [delete]
 //	@Security		Bearer
-func (rc *UserController) DeleteUser(ctx *gin.Context) {
+func (uc *UserController) DeleteUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 
-	err := rc.UserService.DeleteUser(userID)
+	err := uc.UserService.DeleteUser(userID)
 	if err != nil {
+		uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "user deleted successfully"})
 }

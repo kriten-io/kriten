@@ -50,7 +50,7 @@ func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
 func (ac *AuthController) Login(ctx *gin.Context) {
 	// timestamp := time.Now().UTC()
 	var credentials models.Credentials
-	audit := ac.AuditService.InitialiseAuditLog(ctx, "login", ac.AuditCategory)
+	audit := ac.AuditService.InitialiseAuditLog(ctx, "login", ac.AuditCategory, "*")
 
 	if err := ctx.ShouldBindJSON(&credentials); err != nil {
 		ac.AuditService.CreateAudit(audit)

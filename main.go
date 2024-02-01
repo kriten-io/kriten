@@ -154,16 +154,16 @@ func init() {
 	}
 
 	// Controllers
-	uc = controllers.NewUserController(us, as, es, authProviders)
+	uc = controllers.NewUserController(us, as, als, es, authProviders)
 	gc = controllers.NewGroupController(gs, as, es, als, authProviders)
-	rlc = controllers.NewRoleController(rls, as, es)
-	rbc = controllers.NewRoleBindingController(rbs, as, es, authProviders)
+	rlc = controllers.NewRoleController(rls, as, als, es)
+	rbc = controllers.NewRoleBindingController(rbs, as, als, es, authProviders)
 	ac = controllers.NewAuthController(as, es, als, authProviders)
 	alc = controllers.NewAuditController(als, as)
 
 	rc = controllers.NewRunnerController(rs, as, es, als)
-	tc = controllers.NewTaskController(ts, as, es)
-	jc = controllers.NewJobController(js, as, es)
+	tc = controllers.NewTaskController(ts, as, als, es)
+	jc = controllers.NewJobController(js, as, als, es)
 }
 
 //	@title			Swagger Kriten

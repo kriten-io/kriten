@@ -21,15 +21,19 @@ type RoleBindingController struct {
 	RoleBindingService services.RoleBindingService
 	AuthService        services.AuthService
 	ElasticSearch      helpers.ElasticSearch
+	AuditService       services.AuditService
+	AuditCategory      string
 	providers          []string
 }
 
-func NewRoleBindingController(rbs services.RoleBindingService, as services.AuthService, es helpers.ElasticSearch, p []string) RoleBindingController {
+func NewRoleBindingController(rbs services.RoleBindingService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch, p []string) RoleBindingController {
 	return RoleBindingController{
 		RoleBindingService: rbs,
 		AuthService:        as,
 		ElasticSearch:      es,
 		providers:          p,
+		AuditService:       als,
+		AuditCategory:      "groups",
 	}
 }
 
@@ -64,6 +68,7 @@ func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, confi
 //	@Router			/role_bindings [get]
 //	@Security		Bearer
 func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	filters := make(map[string]string)
 	authList := ctx.MustGet("authList").([]string)
 
@@ -79,17 +84,21 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 	roles, err := rc.RoleBindingService.ListRoleBindings(authList, filters)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
 	if len(roles) == 0 {
 		var arr [0]int
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, roles)
 }
@@ -110,13 +119,17 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleBindingController) GetRoleBinding(ctx *gin.Context) {
 	roleBindingID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory, roleBindingID)
 	role, err := rc.RoleBindingService.GetRoleBinding(roleBindingID)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
 
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -135,28 +148,37 @@ func (rc *RoleBindingController) GetRoleBinding(ctx *gin.Context) {
 //	@Router			/role_bindings [post]
 //	@Security		Bearer
 func (rc *RoleBindingController) CreateRoleBinding(ctx *gin.Context) {
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory, "*")
 	var roleBinding models.RoleBinding
 
 	if err := ctx.ShouldBindJSON(&roleBinding); err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.EventTarget = roleBinding.Name
+
 	if !slices.Contains(subjectKinds, roleBinding.SubjectKind) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "subject kind does not exist", "subject_kinds": subjectKinds})
 		return
 	}
 	if !slices.Contains(rc.providers, roleBinding.SubjectProvider) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": rc.providers})
 		return
 	}
 
 	rolebinding, err := rc.RoleBindingService.CreateRoleBinding(roleBinding)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, rolebinding)
 }
 
@@ -177,35 +199,42 @@ func (rc *RoleBindingController) CreateRoleBinding(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleBindingController) UpdateRoleBinding(ctx *gin.Context) {
 	roleBindingID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory, roleBindingID)
 	var roleBinding models.RoleBinding
 	var err error
 
 	if err := ctx.ShouldBindJSON(&roleBinding); err != nil {
-		fmt.Println(err)
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if !slices.Contains(subjectKinds, roleBinding.SubjectKind) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "subject kind does not exist", "subject_kinds": subjectKinds})
 		return
 	}
 	if !slices.Contains(rc.providers, roleBinding.SubjectProvider) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": rc.providers})
 		return
 	}
 
 	roleBinding.ID, err = uuid.FromString(roleBindingID)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	roleBinding, err = rc.RoleBindingService.UpdateRoleBinding(roleBinding)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, roleBinding)
 }
 
@@ -225,11 +254,15 @@ func (rc *RoleBindingController) UpdateRoleBinding(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleBindingController) DeleteRoleBinding(ctx *gin.Context) {
 	roleBindingID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory, roleBindingID)
 
 	err := rc.RoleBindingService.DeleteRoleBinding(roleBindingID)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "role binding deleted successfully"})
 }

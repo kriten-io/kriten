@@ -14,7 +14,7 @@ type AuditService interface {
 	ListAuditLogs(int) ([]models.AuditLog, error)
 	GetAuditLog(string) (models.AuditLog, error)
 	CreateAudit(models.AuditLog) (models.AuditLog, error)
-	InitialiseAuditLog(*gin.Context, string, string) models.AuditLog
+	InitialiseAuditLog(*gin.Context, string, string, string) models.AuditLog
 }
 
 type AuditServiceImpl struct {
@@ -61,7 +61,7 @@ func (a *AuditServiceImpl) CreateAudit(log models.AuditLog) (models.AuditLog, er
 	return log, res.Error
 }
 
-func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string, category string) models.AuditLog {
+func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string, category string, target string) models.AuditLog {
 	var userID uuid.UUID
 	var username, provider string
 	uid, _ := ctx.Get("userID")
@@ -80,7 +80,7 @@ func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string
 		Provider:      provider,
 		EventType:     eventType,
 		EventCategory: category,
-		EventTarget:   "*",
+		EventTarget:   target,
 		Status:        "error", // status will be updated later if successful
 	}
 }

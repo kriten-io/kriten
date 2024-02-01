@@ -7,7 +7,6 @@ import (
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,13 +22,17 @@ type RoleController struct {
 	RoleService   services.RoleService
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewRoleController(rs services.RoleService, as services.AuthService, es helpers.ElasticSearch) RoleController {
+func NewRoleController(rs services.RoleService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) RoleController {
 	return RoleController{
 		RoleService:   rs,
 		AuthService:   as,
 		ElasticSearch: es,
+		AuditService:  als,
+		AuditCategory: "roles",
 	}
 }
 
@@ -64,21 +67,26 @@ func (rc *RoleController) SetRoleRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Router			/roles [get]
 //	@Security		Bearer
 func (rc *RoleController) ListRoles(ctx *gin.Context) {
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	roles, err := rc.RoleService.ListRoles(authList)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
 	if len(roles) == 0 {
 		var arr [0]int
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, roles)
 }
@@ -99,13 +107,17 @@ func (rc *RoleController) ListRoles(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) GetRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory, roleID)
 	role, err := rc.RoleService.GetRole(roleID)
 
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -124,28 +136,36 @@ func (rc *RoleController) GetRole(ctx *gin.Context) {
 //	@Router			/roles [post]
 //	@Security		Bearer
 func (rc *RoleController) CreateRole(ctx *gin.Context) {
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory, "*")
 	var role models.Role
 
 	if err := ctx.ShouldBindJSON(&role); err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	audit.EventTarget = role.Name
 
 	if !slices.Contains(resources, role.Resource) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "resource does not exist", "resources": resources})
 		return
 	}
 	if !slices.Contains(access, role.Access) {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "access not allowed", "access": access})
 		return
 	}
 
 	role, err := rc.RoleService.CreateRole(role)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -166,26 +186,31 @@ func (rc *RoleController) CreateRole(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory, roleID)
 	var role models.Role
 	var err error
 
 	if err := ctx.ShouldBindJSON(&role); err != nil {
-		log.Println(err)
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	role.ID, err = uuid.FromString(roleID)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	role, err = rc.RoleService.UpdateRole(role)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -205,11 +230,15 @@ func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) DeleteRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory, roleID)
 
 	err := rc.RoleService.DeleteRole(roleID)
 	if err != nil {
+		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "role deleted successfully"})
 }

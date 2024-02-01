@@ -9,7 +9,6 @@ import (
 	"kriten/services"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,13 +18,17 @@ type TaskController struct {
 	TaskService   services.TaskService
 	ElasticSearch helpers.ElasticSearch
 	AuthService   services.AuthService
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewTaskController(taskservice services.TaskService, as services.AuthService, es helpers.ElasticSearch) TaskController {
+func NewTaskController(taskservice services.TaskService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) TaskController {
 	return TaskController{
 		TaskService:   taskservice,
 		AuthService:   as,
 		ElasticSearch: es,
+		AuditService:  als,
+		AuditCategory: "tasks",
 	}
 }
 
@@ -68,23 +71,28 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Router			/tasks [get]
 //	@Security		Bearer
 func (tc *TaskController) ListTasks(ctx *gin.Context) {
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "list", tc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	tasksList, err := tc.TaskService.ListTasks(authList)
 
 	if err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
 	if len(tasksList) == 0 {
 		var arr [0]int
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, tasksList)
 	// ctx.JSON(http.StatusOK, gin.H{"msg": "tasks list retrieved successfully", "tasks": tasksList})
 }
@@ -104,21 +112,26 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 //	@Router			/tasks/{id} [get]
 //	@Security		Bearer
 func (tc *TaskController) GetTask(ctx *gin.Context) {
-	// username := ctx.MustGet("username").(string)
 	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "get", tc.AuditCategory, taskName)
+	// username := ctx.MustGet("username").(string)
 	task, _, err := tc.TaskService.GetTask(taskName)
 
 	if err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if task == nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "task not found"})
 		return
 	}
+	audit.Status = "success"
 
 	// ctx.JSON(http.StatusOK, gin.H{"msg": "task retrieved successfully", "value": task, "secret": secret})
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, task)
 }
 
@@ -137,28 +150,30 @@ func (tc *TaskController) GetTask(ctx *gin.Context) {
 //	@Router			/tasks [post]
 //	@Security		Bearer
 func (tc *TaskController) CreateTask(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "create", tc.AuditCategory, "*")
 	var task models.Task
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	audit.EventTarget = task.Name
 
 	configMap, _, err := tc.TaskService.CreateTask(task)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "tasks", task.Name, "failure")
+			tc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "task already exists, please use a different name"})
 			return
 		}
-		helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "tasks", task.Name, "failure")
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "tasks", task.Name, "success")
+	audit.Status = "success"
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
 
@@ -178,12 +193,12 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 //	@Router			/tasks/{id} [patch]
 //	@Security		Bearer
 func (tc *TaskController) UpdateTask(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
+	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "update", tc.AuditCategory, taskName)
 	var task models.Task
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
-		log.Println(err)
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -191,15 +206,16 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 	configMap, _, err := tc.TaskService.UpdateTask(task)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "tasks", task.Name, "failure")
+			tc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "task doesn't exist"})
 			return
 		}
-		helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "tasks", task.Name, "failure")
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "tasks", task.Name, "success")
+	audit.Status = "success"
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
 
@@ -218,22 +234,22 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 //	@Router			/tasks/{id} [delete]
 //	@Security		Bearer
 func (tc *TaskController) DeleteTask(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
 	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete", tc.AuditCategory, taskName)
 
 	err := tc.TaskService.DeleteTask(taskName)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "tasks", taskName, "failure")
+			tc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "task doesn't exist"})
 			return
 		}
-		helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "tasks", taskName, "failure")
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	helpers.CreateElasticSearchLog(tc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "tasks", taskName, "success")
+	audit.Status = "success"
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "task deleted successfully"})
 }
 
@@ -253,18 +269,23 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 //	@Security		Bearer
 func (tc *TaskController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "get_schema", tc.AuditCategory, taskName)
 	schema, err := tc.TaskService.GetSchema(taskName)
 
 	if err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
 
 	if schema == nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
 		return
 	}
 
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }
 
@@ -285,19 +306,24 @@ func (tc *TaskController) GetSchema(ctx *gin.Context) {
 //	@Security		Bearer
 func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "update_schema", tc.AuditCategory, taskName)
 	var schema map[string]interface{}
 
 	if err := ctx.BindJSON(&schema); err != nil {
 		log.Println(err)
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	schema, err := tc.TaskService.UpdateSchema(taskName, schema)
 	if err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	audit.Status = "success"
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }
 
@@ -317,13 +343,17 @@ func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 //	@Security		Bearer
 func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete_schema", tc.AuditCategory, taskName)
 
 	err := tc.TaskService.DeleteSchema(taskName)
 
 	if err != nil {
+		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "schema deleted successfully"})
 }

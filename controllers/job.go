@@ -8,7 +8,6 @@ import (
 	"kriten/middlewares"
 	"kriten/services"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,13 +16,17 @@ type JobController struct {
 	JobService    services.JobService
 	AuthService   services.AuthService
 	ElasticSearch helpers.ElasticSearch
+	AuditService  services.AuditService
+	AuditCategory string
 }
 
-func NewJobController(js services.JobService, as services.AuthService, es helpers.ElasticSearch) JobController {
+func NewJobController(js services.JobService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) JobController {
 	return JobController{
 		JobService:    js,
 		AuthService:   as,
 		ElasticSearch: es,
+		AuditService:  als,
+		AuditCategory: "jobs",
 	}
 }
 
@@ -57,24 +60,28 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 //	@Router			/jobs [get]
 //	@Security		Bearer
 func (jc *JobController) ListJobs(ctx *gin.Context) {
-	// username := ctx.MustGet("username").(string)
-	// taskID := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	jobsList, err := jc.JobService.ListJobs(authList)
 
 	if err != nil {
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
 	if len(jobsList) == 0 {
 		var arr [0]int
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
+	jc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, jobsList)
 }
@@ -96,15 +103,18 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 func (jc *JobController) GetJob(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "get", jc.AuditCategory, jobName)
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
+	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, job)
-
 }
 
 // GetJobLog godoc
@@ -124,15 +134,19 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_job_log", jc.AuditCategory, jobName)
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Status = "success"
 	log := job.Stdout
 
+	jc.AuditService.CreateAudit(audit)
 	ctx.Data(http.StatusOK, "text/plain", []byte(log))
 }
 
@@ -151,14 +165,14 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 //	@Router			/jobs [post]
 //	@Security		Bearer
 func (jc *JobController) CreateJob(ctx *gin.Context) {
-	timestamp := time.Now().UTC()
-	username := ctx.MustGet("username").(string)
 	taskID := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, taskID)
+	username := ctx.MustGet("username").(string)
 
 	extraVars, err := io.ReadAll(ctx.Request.Body)
 
 	if err != nil {
-		helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", taskID, "failure")
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err})
 		return
 	}
@@ -166,17 +180,20 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 	job, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
 
 	if err != nil {
-		helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", taskID, "failure")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"Error": err.Error()})
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	helpers.CreateElasticSearchLog(jc.ElasticSearch, timestamp, username, ctx.ClientIP(), "launch", "jobs", job.ID, "success")
+	audit.Status = "success"
+
 	if (job.ID != "") && (job.Completed != 0) {
 		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
+		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
+	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
 }

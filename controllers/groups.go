@@ -72,7 +72,7 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 //	@Router			/groups [get]
 //	@Security		Bearer
 func (gc *GroupController) ListGroups(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory)
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	groups, err := gc.GroupService.ListGroups(authList)
 
@@ -112,11 +112,9 @@ func (gc *GroupController) ListGroups(ctx *gin.Context) {
 //	@Router			/groups/{id} [get]
 //	@Security		Bearer
 func (gc *GroupController) GetGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "get", gc.AuditCategory)
 	groupID := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "get", gc.AuditCategory, groupID)
 	group, err := gc.GroupService.GetGroup(groupID)
-
-	audit.EventTarget = groupID
 
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
@@ -145,7 +143,7 @@ func (gc *GroupController) GetGroup(ctx *gin.Context) {
 //	@Router			/groups [post]
 //	@Security		Bearer
 func (gc *GroupController) CreateGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "create", gc.AuditCategory)
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "create", gc.AuditCategory, "*")
 	var group models.Group
 
 	if err := ctx.ShouldBindJSON(&group); err != nil {
@@ -193,10 +191,8 @@ func (gc *GroupController) CreateGroup(ctx *gin.Context) {
 func (gc *GroupController) UpdateGroup(ctx *gin.Context) {
 	var group models.Group
 	var err error
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "update", gc.AuditCategory)
 	groupID := ctx.Param("id")
-
-	audit.EventTarget = groupID
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "update", gc.AuditCategory, groupID)
 
 	if err := ctx.ShouldBindJSON(&group); err != nil {
 		gc.AuditService.CreateAudit(audit)
@@ -243,10 +239,8 @@ func (gc *GroupController) UpdateGroup(ctx *gin.Context) {
 //	@Router			/groups/{id} [delete]
 //	@Security		Bearer
 func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "delete", gc.AuditCategory)
 	groupID := ctx.Param("id")
-
-	audit.EventTarget = groupID
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "delete", gc.AuditCategory, groupID)
 
 	err := gc.GroupService.DeleteGroup(groupID)
 	if err != nil {
@@ -275,9 +269,8 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [get]
 //	@Security		Bearer
 func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
-	audit.EventTarget = groupName
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, groupName)
 	var err error
 
 	users, err := gc.GroupService.ListUsersInGroup(groupName)
@@ -317,9 +310,8 @@ func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [post]
 //	@Security		Bearer
 func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
-	audit.EventTarget = groupName
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, groupName)
 	var users []models.GroupsUser
 	var err error
 
@@ -356,9 +348,8 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [delete]
 //	@Security		Bearer
 func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory)
 	groupName := ctx.Param("id")
-	audit.EventTarget = groupName
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, groupName)
 	var users []models.GroupsUser
 	var err error
 
