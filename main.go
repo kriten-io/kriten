@@ -41,6 +41,7 @@ var (
 	rls        services.RoleService
 	rbs        services.RoleBindingService
 	ac         controllers.AuthController
+	alc        controllers.AuditController
 	rc         controllers.RunnerController
 	tc         controllers.TaskController
 	jc         controllers.JobController
@@ -158,6 +159,7 @@ func init() {
 	rlc = controllers.NewRoleController(rls, as, es)
 	rbc = controllers.NewRoleBindingController(rbs, as, es, authProviders)
 	ac = controllers.NewAuthController(as, es, als, authProviders)
+	alc = controllers.NewAuditController(als, as)
 
 	rc = controllers.NewRunnerController(rs, as, es, als)
 	tc = controllers.NewTaskController(ts, as, es)
@@ -201,6 +203,7 @@ func main() {
 	basepath := router.Group("/api/v1")
 	{
 		ac.SetAuthRoutes(basepath)
+		audit := basepath.Group("/audit_logs")
 		runners := basepath.Group("/runners")
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
@@ -209,6 +212,7 @@ func main() {
 		roles := basepath.Group("/roles")
 		roleBindings := basepath.Group("/role_bindings")
 		{
+			alc.SetAuditRoutes(audit, conf)
 			rc.SetRunnerRoutes(runners, conf)
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)

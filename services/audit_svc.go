@@ -7,12 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
 
 type AuditService interface {
-	ListAudits([]string) ([]models.AuditLog, error)
+	ListAudits(int) ([]models.AuditLog, error)
 	GetAudit(string) (models.AuditLog, error)
 	CreateAudit(models.AuditLog) (models.AuditLog, error)
 	InitialiseAuditLog(*gin.Context, string, string) models.AuditLog
@@ -30,19 +29,11 @@ func NewAuditService(database *gorm.DB, config config.Config) AuditService {
 	}
 }
 
-func (a *AuditServiceImpl) ListAudits(authList []string) ([]models.AuditLog, error) {
+func (a *AuditServiceImpl) ListAudits(max int) ([]models.AuditLog, error) {
 	var logs []models.AuditLog
 	var res *gorm.DB
 
-	if len(authList) == 0 {
-		return logs, nil
-	}
-
-	if slices.Contains(authList, "*") {
-		res = a.db.Find(&logs)
-	} else {
-		res = a.db.Find(&logs, authList)
-	}
+	res = a.db.Order("created_at desc").Limit(max).Find(&logs)
 	if res.Error != nil {
 		return logs, res.Error
 	}
