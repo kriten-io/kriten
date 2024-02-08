@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -16,16 +15,14 @@ import (
 type RunnerController struct {
 	RunnerService services.RunnerService
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewRunnerController(rs services.RunnerService, as services.AuthService, es helpers.ElasticSearch, als services.AuditService) RunnerController {
+func NewRunnerController(rs services.RunnerService, as services.AuthService, als services.AuditService) RunnerController {
 	return RunnerController{
 		RunnerService: rs,
 		AuthService:   as,
-		ElasticSearch: es,
 		AuditService:  als,
 		AuditCategory: "runners",
 	}
@@ -156,19 +153,16 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 	configMap, err := rc.RunnerService.CreateRunner(runner)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
 			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner already exists, please use a different name"})
 			return
 		}
-		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "failure")
 		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	audit.Status = "success"
-	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "create", "runners", runner.Name, "success")
 	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
@@ -203,19 +197,16 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 	configMap, err := rc.RunnerService.UpdateRunner(runner)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
 			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "runner doesn't exist"})
 			return
 		}
-		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "failure")
 		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	audit.Status = "success"
-	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "update", "runners", runner.Name, "success")
 	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, configMap.Data)
 }
@@ -242,19 +233,16 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 	err := rc.RunnerService.DeleteRunner(runnerName)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
 			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner doesn't exist"})
 			return
 		}
-		// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "failure")
 		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	audit.Status = "success"
-	// helpers.CreateElasticSearchLog(rc.ElasticSearch, timestamp, username, ctx.ClientIP(), "delete", "runners", runnerName, "success")
 	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "runner deleted successfully"})
 }

@@ -35,11 +35,11 @@ type DBConfig struct {
 	SSL      string
 }
 
-type ESConfig struct {
-	CloudID string
-	APIKey  string
-	Index   string
-}
+// type ESConfig struct {
+// 	CloudID string
+// 	APIKey  string
+// 	Index   string
+// }
 
 type Config struct {
 	Environment      string
@@ -51,7 +51,7 @@ type Config struct {
 	Kube             KubeConfig
 	JWT              JWTConfig
 	DB               DBConfig
-	ElasticSearch    ESConfig
+	// ElasticSearch    ESConfig
 }
 
 // New returns a new Config struct
@@ -86,11 +86,11 @@ func NewConfig(gitBranch string) Config {
 			Port:     getEnvAsInt("DB_PORT", -1),
 			SSL:      getEnv("DB_SSL", "disabled"),
 		},
-		ElasticSearch: ESConfig{
-			CloudID: getEnv("ES_CLOUD_ID", ""),
-			APIKey:  getEnv("ES_API_KEY", ""),
-			Index:   getEnv("ES_INDEX", ""),
-		},
+		// ElasticSearch: ESConfig{
+		// 	CloudID: getEnv("ES_CLOUD_ID", ""),
+		// 	APIKey:  getEnv("ES_API_KEY", ""),
+		// 	Index:   getEnv("ES_INDEX", ""),
+		// },
 	}
 }
 

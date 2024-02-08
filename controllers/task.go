@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -16,17 +15,15 @@ import (
 
 type TaskController struct {
 	TaskService   services.TaskService
-	ElasticSearch helpers.ElasticSearch
 	AuthService   services.AuthService
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewTaskController(taskservice services.TaskService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) TaskController {
+func NewTaskController(taskservice services.TaskService, as services.AuthService, als services.AuditService) TaskController {
 	return TaskController{
 		TaskService:   taskservice,
 		AuthService:   as,
-		ElasticSearch: es,
 		AuditService:  als,
 		AuditCategory: "tasks",
 	}

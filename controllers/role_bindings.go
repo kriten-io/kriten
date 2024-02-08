@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -20,17 +19,15 @@ var subjectKinds = []string{"groups"}
 type RoleBindingController struct {
 	RoleBindingService services.RoleBindingService
 	AuthService        services.AuthService
-	ElasticSearch      helpers.ElasticSearch
 	AuditService       services.AuditService
 	AuditCategory      string
 	providers          []string
 }
 
-func NewRoleBindingController(rbs services.RoleBindingService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch, p []string) RoleBindingController {
+func NewRoleBindingController(rbs services.RoleBindingService, as services.AuthService, als services.AuditService, p []string) RoleBindingController {
 	return RoleBindingController{
 		RoleBindingService: rbs,
 		AuthService:        as,
-		ElasticSearch:      es,
 		providers:          p,
 		AuditService:       als,
 		AuditCategory:      "groups",

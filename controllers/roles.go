@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -21,16 +20,14 @@ var access = []string{"read", "write"}
 type RoleController struct {
 	RoleService   services.RoleService
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewRoleController(rs services.RoleService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) RoleController {
+func NewRoleController(rs services.RoleService, as services.AuthService, als services.AuditService) RoleController {
 	return RoleController{
 		RoleService:   rs,
 		AuthService:   as,
-		ElasticSearch: es,
 		AuditService:  als,
 		AuditCategory: "roles",
 	}

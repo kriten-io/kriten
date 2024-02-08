@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -17,17 +16,15 @@ import (
 type GroupController struct {
 	GroupService  services.GroupService
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	AuditService  services.AuditService
 	AuditCategory string
 	providers     []string
 }
 
-func NewGroupController(groupService services.GroupService, as services.AuthService, es helpers.ElasticSearch, als services.AuditService, p []string) GroupController {
+func NewGroupController(groupService services.GroupService, as services.AuthService, als services.AuditService, p []string) GroupController {
 	return GroupController{
 		GroupService:  groupService,
 		AuthService:   as,
-		ElasticSearch: es,
 		providers:     p,
 		AuditService:  als,
 		AuditCategory: "groups",

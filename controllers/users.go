@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/models"
 	"kriten/services"
@@ -17,17 +16,15 @@ import (
 type UserController struct {
 	UserService   services.UserService
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	providers     []string
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewUserController(userService services.UserService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch, p []string) UserController {
+func NewUserController(userService services.UserService, as services.AuthService, als services.AuditService, p []string) UserController {
 	return UserController{
 		UserService:   userService,
 		AuthService:   as,
-		ElasticSearch: es,
 		providers:     p,
 		AuditService:  als,
 		AuditCategory: "users",

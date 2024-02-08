@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"kriten/config"
-	"kriten/helpers"
 	"kriten/middlewares"
 	"kriten/services"
 	"net/http"
@@ -15,16 +14,14 @@ import (
 type JobController struct {
 	JobService    services.JobService
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewJobController(js services.JobService, as services.AuthService, als services.AuditService, es helpers.ElasticSearch) JobController {
+func NewJobController(js services.JobService, as services.AuthService, als services.AuditService) JobController {
 	return JobController{
 		JobService:    js,
 		AuthService:   as,
-		ElasticSearch: es,
 		AuditService:  als,
 		AuditCategory: "jobs",
 	}

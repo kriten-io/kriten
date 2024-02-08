@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"kriten/helpers"
 	"kriten/models"
 	"kriten/services"
 	"net/http"
@@ -12,16 +11,14 @@ import (
 
 type AuthController struct {
 	AuthService   services.AuthService
-	ElasticSearch helpers.ElasticSearch
 	providers     []string
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewAuthController(as services.AuthService, es helpers.ElasticSearch, als services.AuditService, p []string) AuthController {
+func NewAuthController(as services.AuthService, als services.AuditService, p []string) AuthController {
 	return AuthController{
 		AuthService:   as,
-		ElasticSearch: es,
 		AuditService:  als,
 		AuditCategory: "authentication",
 		providers:     p,
@@ -69,7 +66,6 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
-		// helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "failure")
 		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
 		return
@@ -78,7 +74,6 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 	audit.Status = "success"
 	ac.AuditService.CreateAudit(audit)
 
-	// helpers.CreateElasticSearchLog(ac.ElasticSearch, timestamp, credentials.Username, ctx.ClientIP(), "login", "authentication", "", "success")
 	ctx.SetSameSite(http.SameSiteNoneMode)
 	ctx.SetCookie("token", token, expiry, "", "", false, true)
 	ctx.JSON(http.StatusOK, gin.H{"token": token})

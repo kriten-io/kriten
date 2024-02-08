@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"kriten/config"
 	"kriten/controllers"
-	"kriten/helpers"
 	"kriten/services"
 	"log"
 	"path/filepath"
@@ -18,7 +17,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/elastic/go-elasticsearch/v8"
+	// "github.com/elastic/go-elasticsearch/v8"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -51,8 +50,8 @@ var (
 	rbc        controllers.RoleBindingController
 	conf       config.Config
 	kubeConfig *rest.Config
-	es         helpers.ElasticSearch
-	db         *gorm.DB
+	// es         helpers.ElasticSearch
+	db *gorm.DB
 
 	GitBranch string
 )
@@ -118,21 +117,21 @@ func init() {
 	}
 	config.InitDB(db)
 
-	if conf.ElasticSearch.CloudID != "" {
-		es.Client, err = elasticsearch.NewClient(
-			elasticsearch.Config{
-				CloudID: conf.ElasticSearch.CloudID,
-				APIKey:  conf.ElasticSearch.APIKey,
-			})
-		es.Index = conf.ElasticSearch.Index
-
-		if err != nil {
-			log.Println("Error while connecting to ElasticSearch")
-			log.Println(err)
-		} else {
-			es.Enabled = true
-		}
-	}
+	// if conf.ElasticSearch.CloudID != "" {
+	// 	es.Client, err = elasticsearch.NewClient(
+	// 		elasticsearch.Config{
+	// 			CloudID: conf.ElasticSearch.CloudID,
+	// 			APIKey:  conf.ElasticSearch.APIKey,
+	// 		})
+	// 	es.Index = conf.ElasticSearch.Index
+	//
+	// 	if err != nil {
+	// 		log.Println("Error while connecting to ElasticSearch")
+	// 		log.Println(err)
+	// 	} else {
+	// 		es.Enabled = true
+	// 	}
+	// }
 }
 
 func init() {
@@ -154,16 +153,16 @@ func init() {
 	}
 
 	// Controllers
-	uc = controllers.NewUserController(us, as, als, es, authProviders)
-	gc = controllers.NewGroupController(gs, as, es, als, authProviders)
-	rlc = controllers.NewRoleController(rls, as, als, es)
-	rbc = controllers.NewRoleBindingController(rbs, as, als, es, authProviders)
-	ac = controllers.NewAuthController(as, es, als, authProviders)
+	uc = controllers.NewUserController(us, as, als, authProviders)
+	gc = controllers.NewGroupController(gs, as, als, authProviders)
+	rlc = controllers.NewRoleController(rls, as, als)
+	rbc = controllers.NewRoleBindingController(rbs, as, als, authProviders)
+	ac = controllers.NewAuthController(as, als, authProviders)
 	alc = controllers.NewAuditController(als, as)
 
-	rc = controllers.NewRunnerController(rs, as, es, als)
-	tc = controllers.NewTaskController(ts, as, als, es)
-	jc = controllers.NewJobController(js, as, als, es)
+	rc = controllers.NewRunnerController(rs, as, als)
+	tc = controllers.NewTaskController(ts, as, als)
+	jc = controllers.NewJobController(js, as, als)
 }
 
 //	@title			Swagger Kriten
