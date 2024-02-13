@@ -42,26 +42,24 @@ type DBConfig struct {
 // }
 
 type Config struct {
-	Environment      string
-	AdminsSecret     string
-	RootSecret       string
-	CommunityRelease bool
-	DebugMode        bool // Not currently used
-	LDAP             LDAPConfig
-	Kube             KubeConfig
-	JWT              JWTConfig
-	DB               DBConfig
+	Environment  string
+	AdminsSecret string
+	RootSecret   string
+	DebugMode    bool // Not currently used
+	LDAP         LDAPConfig
+	Kube         KubeConfig
+	JWT          JWTConfig
+	DB           DBConfig
 	// ElasticSearch    ESConfig
 }
 
 // New returns a new Config struct
 func NewConfig(gitBranch string) Config {
 	return Config{
-		Environment:      getEnv("ENV", "development"),
-		AdminsSecret:     getEnv("ADMINS_SECRET", "kriten-admins"),
-		RootSecret:       getEnv("ROOT_SECRET", "kriten-root"),
-		CommunityRelease: gitBranch == "community",
-		DebugMode:        getEnvAsBool("DEBUG_MODE", true),
+		Environment:  getEnv("ENV", "development"),
+		AdminsSecret: getEnv("ADMINS_SECRET", "kriten-admins"),
+		RootSecret:   getEnv("ROOT_SECRET", "kriten-root"),
+		DebugMode:    getEnvAsBool("DEBUG_MODE", true),
 		LDAP: LDAPConfig{
 			BindUser: getEnv("LDAP_BIND_USER", ""),
 			BindPass: getEnv("LDAP_BIND_PASS", ""),

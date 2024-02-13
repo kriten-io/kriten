@@ -56,7 +56,7 @@ var (
 	GitBranch string
 )
 
-var authProviders = []string{"local"}
+var authProviders = []string{"local", "active_directory"}
 
 func init() {
 	// Loading env variables and creating the config
@@ -146,11 +146,6 @@ func init() {
 	rs = services.NewRunnerService(conf)
 	ts = services.NewTaskService(conf)
 	js = services.NewJobService(conf)
-
-	// only enabling active directory if not a community release
-	if !conf.CommunityRelease {
-		authProviders = append(authProviders, "active_directory")
-	}
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, als, authProviders)

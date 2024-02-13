@@ -66,7 +66,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 			log.Println(err)
 			return "", -1, err
 		}
-	} else if !a.config.CommunityRelease && credentials.Provider == "active_directory" {
+	} else if credentials.Provider == "active_directory" {
 		err := helpers.BindAndSearch(a.config.LDAP, credentials.Username, credentials.Password)
 		if err != nil {
 			return "", -1, err
