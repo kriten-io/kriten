@@ -8,7 +8,7 @@
 ```helm repo add kriten https://kriten-io.github.io/kriten-charts/```
 
 ### Copy values.yaml
-```helm show values kriten/kriten > myvalues.yaml
+```helm show values kriten/kriten > myvalues.yaml```
 
 ### Edit myvalues.yaml
 
