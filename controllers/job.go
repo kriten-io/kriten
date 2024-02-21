@@ -34,6 +34,8 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
 	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
+	r.GET("/:id/", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
+	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "write"))
 	{
@@ -193,4 +195,40 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 
 	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
+}
+
+// GetSchema godoc
+//
+//	@Summary		Get task schema
+//	@Description	Get task schema for the job info and input parameters
+//	@Tags			jobs
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Task  name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/jobs/{id} [get]
+//	@Security		Bearer
+func (jc *JobController) GetSchema(ctx *gin.Context) {
+	taskName := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_schema", jc.AuditCategory, taskName)
+	schema, err := jc.JobService.GetSchema(taskName)
+
+	if err != nil {
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	audit.Status = "success"
+
+	if schema == nil {
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
+		return
+	}
+
+	jc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, schema)
 }

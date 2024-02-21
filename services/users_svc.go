@@ -174,7 +174,6 @@ func (u *UserServiceImpl) GetUserRoles(userID string, provider string) ([]models
 		return nil, err
 	}
 	groups = user.Groups
-
 	// SELECT *
 	// FROM roles
 	// INNER JOIN role_bindings
@@ -186,7 +185,6 @@ func (u *UserServiceImpl) GetUserRoles(userID string, provider string) ([]models
 	if res.Error != nil {
 		return []models.Role{}, res.Error
 	}
-
 	return roles, nil
 }
 

@@ -24,6 +24,7 @@ type JobService interface {
 	GetJob(string, string) (models.Job, error)
 	CreateJob(string, string, string) (models.Job, error)
 	GetTaskConfigMap(string) (map[string]string, error)
+	GetSchema(string) (map[string]interface{}, error)
 }
 
 type JobServiceImpl struct {
@@ -260,4 +261,26 @@ func (j *JobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error
 	}
 
 	return configMap.Data, err
+}
+
+func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
+	var data map[string]interface{}
+
+	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
+	if err != nil {
+		return nil, err
+	}
+	if configMap.Data["runner"] == "" {
+		return nil, fmt.Errorf("task %s not found", name)
+	}
+
+	if configMap.Data["schema"] != "" {
+		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return data, nil
 }

@@ -130,12 +130,12 @@ func (a *AuthServiceImpl) GetRootPassword() (string, error) {
 }
 
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
+
 	roles, err := a.UserService.GetUserRoles(auth.UserID.String(), auth.Provider)
 	if err != nil {
 		log.Println(err)
 		return false, err
 	}
-
 	for _, role := range roles {
 		if role.Resource == "*" || role.Resource == auth.Resource &&
 			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" || slices.Contains(role.Resources_IDs, auth.ResourceID)) &&

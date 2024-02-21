@@ -46,6 +46,7 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)
 		provider := ctx.MustGet("provider").(string)
+		requestUrl := ctx.Request.URL.String()
 
 		resourceID := ctx.Param("id")
 		if resourceID == "" {
@@ -54,7 +55,7 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 
 		// trimming last 6 chars for jobs read because
 		// jobs include random caracters at the end
-		if resource == "jobs" && access == "read" {
+		if resource == "jobs" && access == "read" && !strings.HasSuffix(requestUrl, "/schema") {
 			resourceID = resourceID[:len(resourceID)-6]
 		}
 

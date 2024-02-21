@@ -16,19 +16,21 @@ import (
 	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type TaskService interface {
 	ListTasks([]string) ([]map[string]string, error)
-	GetTask(string) (map[string]interface{}, map[string][]byte, error)
-	CreateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
-	UpdateTask(models.Task) (*v1.ConfigMap, *v1.Secret, error)
+	GetTask(string) (map[string]interface{}, map[string]string, error)
+	CreateTask(models.Task) (map[string]interface{}, map[string]string, error)
+	UpdateTask(models.Task) (map[string]interface{}, map[string]string, error)
 	DeleteTask(string) error
 	GetSchema(string) (map[string]interface{}, error)
 	DeleteSchema(string) error
 	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
+	GetSecret(string) (map[string]string, error)
+	UpdateSecret(string, map[string]string) (map[string]string, error)
+	DeleteSecret(string) error
 }
 
 type TaskServiceImpl struct {
@@ -56,20 +58,18 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, err
 	for _, configMap := range configMaps.Items {
 		runnerName := configMap.Data["runner"]
 		if runnerName != "" {
-			if authList[0] != "*" {
-				if slices.Contains(authList, configMap.Data["name"]) {
-					tasksList = append(tasksList, configMap.Data)
-				}
-				continue
+			if authList[0] == "*" || slices.Contains(authList, configMap.Data["name"]) {
+				delete(configMap.Data, "synchronous")
+				delete(configMap.Data, "schema")
+				tasksList = append(tasksList, configMap.Data)
 			}
-			tasksList = append(tasksList, configMap.Data)
 		}
 	}
 
 	return tasksList, nil
 }
 
-func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[string][]byte, error) {
+func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[string]string, error) {
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
 		return nil, nil, err
@@ -93,7 +93,7 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 		data["schema"] = jsonData
 	}
 
-	secret, err := helpers.GetSecret(t.config.Kube, name)
+	secretCleared, err := t.GetSecret(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return data, nil, nil
@@ -101,11 +101,14 @@ func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[stri
 		return data, nil, err
 	}
 
-	return data, secret.Data, nil
+	return data, secretCleared, nil
 }
 
-func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secret, error) {
+func (t *TaskServiceImpl) CreateTask(task models.Task) (map[string]interface{}, map[string]string, error) {
 	var jsonData []byte
+	var configuredTask map[string]interface{}
+	var secretCleared map[string]string
+
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
 		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
@@ -131,24 +134,31 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 	data["schema"] = string(jsonData)
 	delete(data, "secret")
 
-	configMap, err := helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
+	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var secret *v1.Secret
 	if task.Secret != nil {
-		secret, err = helpers.CreateOrUpdateSecret(t.config.Kube, task.Name, task.Secret, "create")
+		_, err = t.UpdateSecret(task.Name, task.Secret)
 
 		if err != nil {
-			return configMap, nil, err
+			return nil, nil, err
 		}
 	}
 
-	return configMap, secret, err
+	configuredTask, secretCleared, err = t.GetTask(task.Name)
+	if err != nil {
+		return nil, nil, err
+	}
+	return configuredTask, secretCleared, err
 }
 
-func (t *TaskServiceImpl) UpdateTask(task models.Task) (*v1.ConfigMap, *v1.Secret, error) {
+func (t *TaskServiceImpl) UpdateTask(task models.Task) (map[string]interface{}, map[string]string, error) {
+	var jsonData []byte
+	var configuredTask map[string]interface{}
+	var secretCleared map[string]string
+
 	_, err := helpers.GetConfigMap(t.config.Kube, task.Name)
 	if err != nil {
 		return nil, nil, err
@@ -159,43 +169,53 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*v1.ConfigMap, *v1.Secre
 		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
+	if task.Schema != nil {
+		jsonData, err = json.Marshal(task.Schema)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = ValidateSchema(jsonData)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Parsing a models.Task into a map
 	b, _ := json.Marshal(task)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"] = strconv.FormatBool(task.Synchronous)
+	data["schema"] = string(jsonData)
 	delete(data, "secret")
 
-	configMap, err := helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
+	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var secret *v1.Secret
+	//var secret *v1.Secret
 	if task.Secret != nil {
-		operation := "update"
-		// default operation is 'update', try to get the Secret first: if it's not found we need to create it
-		// e.g. Someone created a Task without a secret and is adding one with update
-		_, err = helpers.GetSecret(t.config.Kube, task.Name)
+
+		_, err = t.UpdateSecret(task.Name, task.Secret)
+
 		if err != nil {
-			if errors.IsNotFound(err) {
-				operation = "create"
-			} else {
-				return configMap, nil, err
-			}
+			return nil, nil, err
 		}
-		secret, err = helpers.CreateOrUpdateSecret(t.config.Kube, task.Name, task.Secret, operation)
-		if err != nil {
-			return configMap, nil, err
-		}
+
 	} else {
 		err = helpers.DeleteSecret(t.config.Kube, task.Name)
 		if err != nil && !errors.IsNotFound(err) {
-			return configMap, nil, err
+			return nil, nil, err
 		}
 	}
 
-	return configMap, secret, err
+	configuredTask, secretCleared, err = t.GetTask(task.Name)
+	if err != nil {
+		return nil, nil, err
+	}
+	return configuredTask, secretCleared, err
+
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
@@ -306,6 +326,91 @@ func ValidateSchema(schema []byte) error {
 
 	if err != nil {
 		log.Printf("This spec has some validation errors: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (t *TaskServiceImpl) GetSecret(name string) (map[string]string, error) {
+	secretCleaned := make(map[string]string)
+	secret, err := helpers.GetSecret(t.config.Kube, name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	} else if errors.IsNotFound(err) {
+		return nil, nil
+	}
+
+	for key, _ := range secret.Data {
+		secretCleaned[key] = "************"
+
+	}
+
+	return secretCleaned, nil
+}
+
+func (t *TaskServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
+	secretCleaned := make(map[string]string)
+	secretCurrent := make(map[string]string)
+	var operation string
+
+	secretObj, err := helpers.GetSecret(t.config.Kube, name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	// converting k8s secret from v1.Secret into map[string]string
+
+	if secretObj != nil {
+
+		for k, v := range secretObj.Data {
+			secretCurrent[k] = string(v)
+		}
+
+		operation = "update"
+
+	} else {
+		operation = "create"
+	}
+
+	for k, v := range secret {
+
+		v2, ok := secretCurrent[k]
+
+		if v != "" || v != v2 {
+			if v != "************" {
+				secretCurrent[k] = v
+			}
+
+		} else if v == "" && ok {
+			delete(secretCurrent, k)
+		}
+	}
+
+	if len(secretCurrent) != 0 {
+		secretNew, err := helpers.CreateOrUpdateSecret(t.config.Kube, name, secretCurrent, operation)
+		if err != nil {
+			return secretCleaned, err
+		}
+
+		for key, _ := range secretNew.Data {
+			secretCleaned[key] = "*************"
+
+		}
+		return secretCleaned, nil
+
+	} else {
+		err := helpers.DeleteSecret(t.config.Kube, name)
+		if err != nil {
+			return secretCleaned, err
+		}
+		return secretCleaned, nil
+	}
+}
+
+func (t *TaskServiceImpl) DeleteSecret(name string) error {
+
+	err := helpers.DeleteSecret(t.config.Kube, name)
+	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
