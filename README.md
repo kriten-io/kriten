@@ -7,11 +7,15 @@
 ### Add helm repo
 ```helm repo add kriten https://kriten-io.github.io/kriten-charts/```
 
-### Copy values.yaml
+### Copy values.yaml (if necessary)
 ```helm show values kriten/kriten > myvalues.yaml```
 
 ### Edit myvalues.yaml
 
-### Install
+### Create namespace
+```kubectl create namespace kriten```
 
-```helm install -f myvalues.yaml kriten kriten/kriten```
+### Install
+```helm install -f myvalues.yaml kriten kriten/kriten -n kriten```
+or
+```helm install kriten kriten/kriten -n kriten```
