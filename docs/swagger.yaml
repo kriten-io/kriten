@@ -9,6 +9,30 @@ definitions:
         example: status bad request
         type: string
     type: object
+  models.AuditLog:
+    properties:
+      created_at:
+        type: string
+      eventCategory:
+        type: string
+      eventTarget:
+        type: string
+      eventType:
+        type: string
+      id:
+        type: string
+      provider:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      userID:
+        description: Timestamp time.Time  `json:"@timestamp"`
+        type: string
+      userName:
+        type: string
+    type: object
   models.Credentials:
     properties:
       password:
@@ -174,6 +198,72 @@ info:
   title: Swagger Kriten
   version: v0.3
 paths:
+  /audit_logs:
+    get:
+      consumes:
+      - application/json
+      description: List all audit logs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.AuditLog'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List audit
+      tags:
+      - audit
+  /audit_logs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific audit log
+      parameters:
+      - description: Audit Log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.AuditLog'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get audit log
+      tags:
+      - audit
   /groups:
     get:
       consumes:
@@ -503,40 +593,6 @@ paths:
       summary: List all jobs
       tags:
       - jobs
-    post:
-      consumes:
-      - application/json
-      description: Add a job to the cluster
-      parameters:
-      - description: Extra vars
-        in: body
-        name: evars
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.Task'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Create a new job
-      tags:
-      - jobs
   /jobs/{id}:
     get:
       consumes:
@@ -572,6 +628,45 @@ paths:
       summary: Get job info
       tags:
       - jobs
+    post:
+      consumes:
+      - application/json
+      description: Add a job to the cluster
+      parameters:
+      - description: Task  name
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Extra vars
+        in: body
+        name: evars
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a new job
+      tags:
+      - jobs
   /jobs/{id}/log:
     get:
       consumes:
@@ -605,6 +700,42 @@ paths:
       security:
       - Bearer: []
       summary: Get a job log
+      tags:
+      - jobs
+  /jobs/{id}/schema:
+    get:
+      consumes:
+      - application/json
+      description: Get task schema for the job info and input parameters
+      parameters:
+      - description: Task  name
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get task schema
       tags:
       - jobs
   /login:
@@ -1387,7 +1518,7 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Remove validation schema associated to a specific task
+      description: Remove secret associated to a specific task
       parameters:
       - description: Task name
         in: path
@@ -1416,7 +1547,7 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Delete schema
+      summary: Delete secret
       tags:
       - tasks
     get:
@@ -1494,6 +1625,42 @@ paths:
       security:
       - Bearer: []
       summary: Update schema
+      tags:
+      - tasks
+  /tasks/{id}/secret:
+    get:
+      consumes:
+      - application/json
+      description: Update secret associated to a specific task
+      parameters:
+      - description: Task name
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update secret
       tags:
       - tasks
   /users:
