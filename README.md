@@ -6,6 +6,7 @@
 
 ### Add helm repo
 ```helm repo add kriten https://kriten-io.github.io/kriten-charts/```
+
 ```helm repo update```
 
 ### Copy values.yaml (if necessary)
@@ -18,5 +19,7 @@
 
 ### Install
 ```helm install -f myvalues.yaml kriten kriten/kriten -n kriten```
+
 or
+
 ```helm install kriten kriten/kriten -n kriten```
