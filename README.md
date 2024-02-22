@@ -14,4 +14,4 @@
 
 ### Install
 
-```helm install -f myvalues.yaml kriten/kriten```
+```helm install -f myvalues.yaml kriten kriten/kriten```
