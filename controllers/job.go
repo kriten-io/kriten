@@ -34,7 +34,6 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
 	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
-	r.GET("/:id/", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
 	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "write"))
@@ -156,12 +155,13 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
+//	@Param			id	path		string	true	"Task  name"
 //	@Param			evars	body		object	false	"Extra vars"
 //	@Success		200		{object}	models.Task
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/jobs [post]
+//	@Router			/jobs/{id} [post]
 //	@Security		Bearer
 func (jc *JobController) CreateJob(ctx *gin.Context) {
 	taskID := ctx.Param("id")
@@ -209,7 +209,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id} [get]
+//	@Router			/jobs/{id}/schema [get]
 //	@Security		Bearer
 func (jc *JobController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
