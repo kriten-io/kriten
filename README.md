@@ -2,4 +2,4 @@
 
 # Kriten
 
-Docs: https://kriten-io.github.io/kriten-docs/
+Docs: https://kriten-io/
