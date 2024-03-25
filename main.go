@@ -34,6 +34,7 @@ var (
 	rs         services.RunnerService
 	ts         services.TaskService
 	js         services.JobService
+	cjs        services.CronJobService
 	us         services.UserService
 	gs         services.GroupService
 	als        services.AuditService
@@ -44,6 +45,7 @@ var (
 	rc         controllers.RunnerController
 	tc         controllers.TaskController
 	jc         controllers.JobController
+	cjc        controllers.CronJobController
 	uc         controllers.UserController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
@@ -146,6 +148,7 @@ func init() {
 	rs = services.NewRunnerService(conf)
 	ts = services.NewTaskService(conf)
 	js = services.NewJobService(conf)
+	cjs = services.NewCronJobService(conf)
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, als, authProviders)
@@ -158,6 +161,7 @@ func init() {
 	rc = controllers.NewRunnerController(rs, as, als)
 	tc = controllers.NewTaskController(ts, as, als)
 	jc = controllers.NewJobController(js, as, als)
+	cjc = controllers.NewCronJobController(cjs, as, als)
 }
 
 //	@title			Swagger Kriten
@@ -201,6 +205,7 @@ func main() {
 		runners := basepath.Group("/runners")
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
+		cronjobs := basepath.Group("/cronjobs")
 		users := basepath.Group("/users")
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
@@ -210,6 +215,7 @@ func main() {
 			rc.SetRunnerRoutes(runners, conf)
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)
+			cjc.SetCronJobRoutes(cronjobs, conf)
 			uc.SetUserRoutes(users, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)

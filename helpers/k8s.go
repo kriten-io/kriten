@@ -365,3 +365,186 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 		},
 	}
 }
+
+func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.CronJobList, error) {
+	var jobsList *batchv1.CronJobList
+	var err error
+
+	if len(labelSelectors) == 0 {
+		jobsList, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).List(
+			context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+	} else {
+		for _, labelSelector := range labelSelectors {
+			job, err := kube.Clientset.BatchV1().CronJobs(
+				kube.Namespace).List(
+				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+			if err != nil {
+				log.Println(err)
+				return nil, err
+			}
+			if jobsList == nil {
+				jobsList = job
+			} else {
+				jobsList.Items = append(jobsList.Items, job.Items[:]...)
+			}
+		}
+
+	}
+
+	return jobsList, nil
+}
+
+func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
+	job, err := kube.Clientset.BatchV1().CronJobs(
+		kube.Namespace).Get(
+		context.TODO(), name, metav1.GetOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return job, nil
+}
+
+// TODO: Too many arguments, will need a rework
+func CreateCronJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
+	job := CronJobObject(name, kube, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+
+	job, err := kube.Clientset.BatchV1().CronJobs(
+		kube.Namespace).Create(
+		context.TODO(), job, metav1.CreateOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	return job.Name, nil
+}
+
+func CronJobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *batchv1.CronJob {
+	var ttlSeconds int32 = int32(kube.JobsTTL)
+	var backoffLimit int32 = 1
+
+	optional_secret := true
+
+	env := []corev1.EnvVar{}
+	// Append extra vars to environment variables only if provided
+	if extraVars != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "EXTRA_VARS",
+			Value: extraVars,
+		})
+	}
+
+	return &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: name + "-",
+			Namespace:    kube.Namespace,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: "* * * * *",
+			JobTemplate: batchv1.JobTemplateSpec{
+
+				Spec: batchv1.JobSpec{
+					TTLSecondsAfterFinished: &ttlSeconds,
+					BackoffLimit:            &backoffLimit,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"owner":     owner,
+								"task-name": name,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{
+								{
+									Name: "secret",
+									VolumeSource: corev1.VolumeSource{
+										Secret: &corev1.SecretVolumeSource{
+											SecretName: name,
+											Optional:   &optional_secret,
+										},
+									},
+								},
+								{
+									Name: "repo",
+									VolumeSource: corev1.VolumeSource{
+										EmptyDir: &corev1.EmptyDirVolumeSource{},
+									},
+								},
+							},
+							RestartPolicy: corev1.RestartPolicyNever,
+							Containers: []corev1.Container{
+								{
+									Name:            name,
+									Image:           image,
+									ImagePullPolicy: corev1.PullIfNotPresent,
+									Command: []string{
+										"sh",
+										"-c",
+										command,
+									},
+									WorkingDir: "/mnt/repo",
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "secret",
+											MountPath: "/etc/secret/",
+											ReadOnly:  true,
+										},
+										{
+											Name:      "repo",
+											MountPath: "/mnt/repo",
+											ReadOnly:  false,
+										},
+									},
+									Env: env,
+									EnvFrom: []corev1.EnvFromSource{
+										{
+											SecretRef: &corev1.SecretEnvSource{
+												LocalObjectReference: corev1.LocalObjectReference{
+													Name: name,
+												},
+												Optional: &optional_secret,
+											},
+										},
+									},
+								},
+							},
+							InitContainers: []corev1.Container{
+								{
+									Name:            "init-" + name,
+									Image:           "bitnami/git",
+									ImagePullPolicy: corev1.PullIfNotPresent,
+									Command: []string{
+										"git",
+									},
+									Args: []string{
+										"clone",
+										"-b",
+										gitBranch,
+										gitURL,
+										".",
+									},
+									WorkingDir: "/mnt/repo",
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "repo",
+											MountPath: "/mnt/repo",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
