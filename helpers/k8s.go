@@ -3,8 +3,10 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"kriten/config"
+	"kriten/models"
 	"log"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -412,11 +414,15 @@ func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
 	return job, nil
 }
 
-// TODO: Too many arguments, will need a rework
-func CreateCronJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
-	job := CronJobObject(name, kube, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+func CreateCronJob(kube config.KubeConfig, runnerImage string, cronjob models.CronJob, command string, gitURL string, gitBranch string) (string, error) {
+	varsParsed, err := json.Marshal(cronjob.ExtraVars)
+	if err != nil {
+		return "", err
+	}
 
-	job, err := kube.Clientset.BatchV1().CronJobs(
+	job := CronJobObject(cronjob.ID, kube, runnerImage, cronjob.Owner, string(varsParsed), command, gitURL, gitBranch)
+
+	job, err = kube.Clientset.BatchV1().CronJobs(
 		kube.Namespace).Create(
 		context.TODO(), job, metav1.CreateOptions{})
 
@@ -445,8 +451,9 @@ func CronJobObject(name string, kube config.KubeConfig, image string, owner stri
 
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: name + "-",
-			Namespace:    kube.Namespace,
+			// GenerateName: name + "-",
+			Name:      name,
+			Namespace: kube.Namespace,
 		},
 		Spec: batchv1.CronJobSpec{
 			Schedule: "* * * * *",

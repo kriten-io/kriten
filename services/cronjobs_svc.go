@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/go-errors/errors"
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
@@ -19,8 +18,8 @@ import (
 
 type CronJobService interface {
 	ListCronJobs([]string) ([]models.CronJob, error)
-	GetCronJob(string, string) (models.CronJob, error)
-	CreateCronJob(string, string, string) (models.CronJob, error)
+	GetCronJob(string) (models.CronJob, error)
+	CreateCronJob(models.CronJob) (models.CronJob, error)
 	GetTaskConfigMap(string) (map[string]string, error)
 	GetSchema(string) (map[string]interface{}, error)
 }
@@ -55,78 +54,56 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 	}
 
 	for _, job := range jobs.Items {
-		log.Println(job)
-		var jobRet models.CronJob
-		jobRet.ID = job.Name
-		jobRet.Owner = job.Labels["owner"]
+		var data map[string]interface{}
+		// _ = json.Unmarshal(b, &data)
+		err = json.Unmarshal([]byte(job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value), &data)
+		if err != nil {
+			return nil, err
+		}
+		jobRet := models.CronJob{
+			ID:        job.Name,
+			Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
+			Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
+			Schedule:  job.Spec.Schedule,
+			Disable:   *job.Spec.Suspend,
+			ExtraVars: data,
+		}
 		jobsList = append(jobsList, jobRet)
 	}
 
 	return jobsList, nil
 }
 
-func (j *CronJobServiceImpl) GetCronJob(username string, jobID string) (models.CronJob, error) {
-	var jobStatus models.CronJob
+func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
+	var cronjob models.CronJob
 
-	labelSelector := "job-name=" + jobID
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
-
-	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
+	job, err := helpers.GetCronJob(j.config.Kube, name)
 	if err != nil {
-		return jobStatus, err
+		return cronjob, err
 	}
 
-	if len(pods.Items) == 0 {
-		return jobStatus, errors.New("no pods found - check job ID")
-	}
-
-	job, err := helpers.GetCronJob(j.config.Kube, jobID)
-
+	var data map[string]interface{}
+	// _ = json.Unmarshal(b, &data)
+	err = json.Unmarshal([]byte(job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value), &data)
 	if err != nil {
-		return jobStatus, err
+		return cronjob, err
+	}
+	cronjob = models.CronJob{
+		ID:        job.Name,
+		Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
+		Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
+		Schedule:  job.Spec.Schedule,
+		Disable:   *job.Spec.Suspend,
+		ExtraVars: data,
 	}
 
-	jobStatus.ID = job.Name
-	jobStatus.Owner = job.Labels["owner"]
-
-	var logs string
-	for _, pod := range pods.Items {
-		// TODO: this will only retrieve logs for now, can be extended if needed
-		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
-		if err != nil {
-			return jobStatus, err
-		}
-		logs = logs + log
-
-	}
-
-	jobStatus.Stdout = logs
-
-	if jobStatus.Stdout != "" {
-		json_byte, _ := findDelimitedString(jobStatus.Stdout)
-
-		if json_byte != nil {
-			// ^JSON delimited text found in the log
-
-			replacer := strings.NewReplacer("\n", "", "\\", "")
-			json_string := replacer.Replace(string(json_byte))
-
-			if err := json.Unmarshal([]byte(json_string), &jobStatus.JsonData); err != nil {
-				jobStatus.JsonData = map[string]interface{}{"error": "failed to parse JSON"}
-				return jobStatus, nil
-			}
-		}
-	}
-
-	return jobStatus, nil
+	return cronjob, nil
 }
 
-func (j *CronJobServiceImpl) CreateCronJob(username string, taskName string, extraVars string) (models.CronJob, error) {
+func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
 	var jobStatus models.CronJob
 
-	task, err := helpers.GetConfigMap(j.config.Kube, taskName)
+	task, err := helpers.GetConfigMap(j.config.Kube, cronjob.Task)
 	if err != nil {
 		return jobStatus, err
 	}
@@ -136,13 +113,8 @@ func (j *CronJobServiceImpl) CreateCronJob(username string, taskName string, ext
 		schema := new(spec.Schema)
 		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
 
-		input := map[string]interface{}{}
-
-		// JSON data to validate
-		_ = json.Unmarshal([]byte(extraVars), &input)
-
 		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, input, strfmt.Default)
+		err = validate.AgainstSchema(schema, cronjob.ExtraVars, strfmt.Default)
 		if err != nil {
 			log.Printf("JSON does not validate against schema: %v", err)
 			return models.CronJob{}, err
@@ -173,15 +145,9 @@ func (j *CronJobServiceImpl) CreateCronJob(username string, taskName string, ext
 		}
 	}
 
-	jobID, err := helpers.CreateCronJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	_, err = helpers.CreateCronJob(j.config.Kube, runnerImage, cronjob, task.Data["command"], gitURL, gitBranch)
 
-	jobStatus.ID = jobID
-
-	if err != nil {
-		return jobStatus, err
-	}
-
-	return jobStatus, nil
+	return cronjob, err
 }
 
 func (j *CronJobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error) {

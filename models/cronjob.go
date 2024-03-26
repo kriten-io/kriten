@@ -1,12 +1,10 @@
 package models
 
 type CronJob struct {
-	ID             string                 `json:"id"`
-	Owner          string                 `json:"owner"`
-	StartTime      string                 `json:"startTime,omitempty"`
-	CompletionTime string                 `json:"completionTime,omitempty"`
-	Failed         int32                  `json:"failed"`
-	Completed      int32                  `json:"completed"`
-	Stdout         string                 `json:"stdout"`
-	JsonData       map[string]interface{} `json:"json_data"`
+	ID        string                 `json:"id"`
+	Owner     string                 `json:"owner"`
+	Task      string                 `json:"task"`
+	Schedule  string                 `json:"schedule"`
+	Disable   bool                   `json:"disable"`
+	ExtraVars map[string]interface{} `json:"extra_vars,omitempty"`
 }

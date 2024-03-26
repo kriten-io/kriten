@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"fmt"
-	"io"
 	"kriten/config"
 	"kriten/middlewares"
+	"kriten/models"
 	"kriten/services"
 	"net/http"
 
@@ -33,13 +33,12 @@ func (jc *CronJobController) SetCronJobRoutes(rg *gin.RouterGroup, config config
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "cronjobs"), jc.ListCronJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "cronjobs", "read"), jc.GetCronJob)
-	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "cronjobs", "read"), jc.GetCronJobLog)
 	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(jc.AuthService, "cronjobs", "read"), jc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "cronjobs", "write"))
 	{
-		r.POST(":id", jc.CreateCronJob)
-		r.PUT(":id", jc.CreateCronJob)
+		r.POST("", jc.CreateCronJob)
+		r.PUT("", jc.CreateCronJob)
 	}
 
 }
@@ -99,10 +98,9 @@ func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
 //	@Router			/jobs/{id} [get]
 //	@Security		Bearer
 func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
-	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
 	audit := jc.AuditService.InitialiseAuditLog(ctx, "get", jc.AuditCategory, jobName)
-	job, err := jc.CronJobService.GetCronJob(username, jobName)
+	job, err := jc.CronJobService.GetCronJob(jobName)
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
@@ -113,39 +111,6 @@ func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 	audit.Status = "success"
 	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, job)
-}
-
-// GetCronJobLog godoc
-//
-//	@Summary		Get a job log
-//	@Description	Get a job log as text
-//	@Tags			jobs
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		string	true	"CronJob  id"
-//	@Success		200	{object}	models.Task
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
-//	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id}/log [get]
-//	@Security		Bearer
-func (jc *CronJobController) GetCronJobLog(ctx *gin.Context) {
-	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_job_log", jc.AuditCategory, jobName)
-	job, err := jc.CronJobService.GetCronJob(username, jobName)
-
-	if err != nil {
-		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	audit.Status = "success"
-	log := job.Stdout
-
-	jc.AuditService.CreateAudit(audit)
-	ctx.Data(http.StatusOK, "text/plain", []byte(log))
 }
 
 // CreateCronJob godoc
@@ -164,19 +129,19 @@ func (jc *CronJobController) GetCronJobLog(ctx *gin.Context) {
 //	@Router			/jobs/{id} [post]
 //	@Security		Bearer
 func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
-	taskID := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, taskID)
+	var cronjob models.CronJob
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, "*")
 	username := ctx.MustGet("username").(string)
 
-	extraVars, err := io.ReadAll(ctx.Request.Body)
-
-	if err != nil {
+	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	audit.EventTarget = cronjob.Task
 
-	job, err := jc.CronJobService.CreateCronJob(username, taskID, string(extraVars))
+	cronjob.Owner = username
+	job, err := jc.CronJobService.CreateCronJob(cronjob)
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
@@ -186,8 +151,7 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 
 	audit.Status = "success"
 
-	if (job.ID != "") && (job.Completed != 0) {
-		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
+	if job.ID != "" {
 		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
