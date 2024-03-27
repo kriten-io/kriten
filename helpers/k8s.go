@@ -414,143 +414,38 @@ func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
 	return job, nil
 }
 
-func CreateCronJob(kube config.KubeConfig, runnerImage string, cronjob models.CronJob, command string, gitURL string, gitBranch string) (string, error) {
+func CreateCronJob(kube config.KubeConfig, cronjob models.CronJob, runnerImage string, command string, gitURL string, gitBranch string) (*batchv1.CronJob, error) {
 	varsParsed, err := json.Marshal(cronjob.ExtraVars)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	job := CronJobObject(cronjob.ID, kube, runnerImage, cronjob.Owner, string(varsParsed), command, gitURL, gitBranch)
+	jobObj := JobObject(cronjob.Task, kube, runnerImage, cronjob.Owner, string(varsParsed), command, gitURL, gitBranch)
 
-	job, err = kube.Clientset.BatchV1().CronJobs(
+	cron := CronJobObject(kube, cronjob, jobObj.Spec)
+
+	cron, err = kube.Clientset.BatchV1().CronJobs(
 		kube.Namespace).Create(
-		context.TODO(), job, metav1.CreateOptions{})
-
+		context.TODO(), cron, metav1.CreateOptions{})
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return nil, err
 	}
 
-	return job.Name, nil
+	return cron, nil
 }
 
-func CronJobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *batchv1.CronJob {
-	var ttlSeconds int32 = int32(kube.JobsTTL)
-	var backoffLimit int32 = 1
-
-	optional_secret := true
-
-	env := []corev1.EnvVar{}
-	// Append extra vars to environment variables only if provided
-	if extraVars != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  "EXTRA_VARS",
-			Value: extraVars,
-		})
-	}
-
+func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			// GenerateName: name + "-",
-			Name:      name,
+			Name:      cronjob.ID,
 			Namespace: kube.Namespace,
 		},
 		Spec: batchv1.CronJobSpec{
-			Schedule: "* * * * *",
+			Schedule: cronjob.Schedule,
 			JobTemplate: batchv1.JobTemplateSpec{
-
-				Spec: batchv1.JobSpec{
-					TTLSecondsAfterFinished: &ttlSeconds,
-					BackoffLimit:            &backoffLimit,
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"owner":     owner,
-								"task-name": name,
-							},
-						},
-						Spec: corev1.PodSpec{
-							Volumes: []corev1.Volume{
-								{
-									Name: "secret",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: name,
-											Optional:   &optional_secret,
-										},
-									},
-								},
-								{
-									Name: "repo",
-									VolumeSource: corev1.VolumeSource{
-										EmptyDir: &corev1.EmptyDirVolumeSource{},
-									},
-								},
-							},
-							RestartPolicy: corev1.RestartPolicyNever,
-							Containers: []corev1.Container{
-								{
-									Name:            name,
-									Image:           image,
-									ImagePullPolicy: corev1.PullIfNotPresent,
-									Command: []string{
-										"sh",
-										"-c",
-										command,
-									},
-									WorkingDir: "/mnt/repo",
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "secret",
-											MountPath: "/etc/secret/",
-											ReadOnly:  true,
-										},
-										{
-											Name:      "repo",
-											MountPath: "/mnt/repo",
-											ReadOnly:  false,
-										},
-									},
-									Env: env,
-									EnvFrom: []corev1.EnvFromSource{
-										{
-											SecretRef: &corev1.SecretEnvSource{
-												LocalObjectReference: corev1.LocalObjectReference{
-													Name: name,
-												},
-												Optional: &optional_secret,
-											},
-										},
-									},
-								},
-							},
-							InitContainers: []corev1.Container{
-								{
-									Name:            "init-" + name,
-									Image:           "bitnami/git",
-									ImagePullPolicy: corev1.PullIfNotPresent,
-									Command: []string{
-										"git",
-									},
-									Args: []string{
-										"clone",
-										"-b",
-										gitBranch,
-										gitURL,
-										".",
-									},
-									WorkingDir: "/mnt/repo",
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "repo",
-											MountPath: "/mnt/repo",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Spec: jobSpec,
 			},
 		},
 	}

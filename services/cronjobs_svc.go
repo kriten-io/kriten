@@ -101,11 +101,9 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 }
 
 func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
-	var jobStatus models.CronJob
-
 	task, err := helpers.GetConfigMap(j.config.Kube, cronjob.Task)
 	if err != nil {
-		return jobStatus, err
+		return models.CronJob{}, err
 	}
 	runnerName := task.Data["runner"]
 
@@ -123,7 +121,7 @@ func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJ
 
 	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
 	if err != nil {
-		return jobStatus, err
+		return models.CronJob{}, err
 	}
 	runnerImage := runner.Data["image"]
 	gitURL := runner.Data["gitURL"]
@@ -136,7 +134,7 @@ func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJ
 	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
-			return jobStatus, err
+			return models.CronJob{}, err
 		}
 	} else {
 		gitToken := string(secret.Data["token"])
@@ -145,7 +143,7 @@ func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJ
 		}
 	}
 
-	_, err = helpers.CreateCronJob(j.config.Kube, runnerImage, cronjob, task.Data["command"], gitURL, gitBranch)
+	_, err = helpers.CreateCronJob(j.config.Kube, cronjob, runnerImage, task.Data["command"], gitURL, gitBranch)
 
 	return cronjob, err
 }
