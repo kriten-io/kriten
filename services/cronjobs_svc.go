@@ -13,6 +13,7 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -20,7 +21,8 @@ type CronJobService interface {
 	ListCronJobs([]string) ([]models.CronJob, error)
 	GetCronJob(string) (models.CronJob, error)
 	CreateCronJob(models.CronJob) (models.CronJob, error)
-	GetTaskConfigMap(string) (map[string]string, error)
+	UpdateCronJob(models.CronJob) (models.CronJob, error)
+	DeleteCronJob(string) error
 	GetSchema(string) (map[string]interface{}, error)
 }
 
@@ -55,7 +57,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 
 	for _, job := range jobs.Items {
 		var data map[string]interface{}
-		// _ = json.Unmarshal(b, &data)
+		// This unmarshal is only used to fetch the extra vars, it doesn't look very reliable so it might need a rework
 		err = json.Unmarshal([]byte(job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value), &data)
 		if err != nil {
 			return nil, err
@@ -101,61 +103,28 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 }
 
 func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
-	task, err := helpers.GetConfigMap(j.config.Kube, cronjob.Task)
-	if err != nil {
-		return models.CronJob{}, err
-	}
-	runnerName := task.Data["runner"]
+	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 
-	if task.Data["schema"] != "" {
-		schema := new(spec.Schema)
-		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
-
-		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, cronjob.ExtraVars, strfmt.Default)
-		if err != nil {
-			log.Printf("JSON does not validate against schema: %v", err)
-			return models.CronJob{}, err
-		}
-	}
-
-	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
-	if err != nil {
-		return models.CronJob{}, err
-	}
-	runnerImage := runner.Data["image"]
-	gitURL := runner.Data["gitURL"]
-	gitBranch := runner.Data["branch"]
-
-	if gitBranch == "" {
-		gitBranch = "main"
-	}
-
-	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
-	if err != nil {
-		if !kerrors.IsNotFound(err) {
-			return models.CronJob{}, err
-		}
-	} else {
-		gitToken := string(secret.Data["token"])
-		if gitToken != "" {
-			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
-		}
-	}
-
-	_, err = helpers.CreateCronJob(j.config.Kube, cronjob, runnerImage, task.Data["command"], gitURL, gitBranch)
+	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "create")
 
 	return cronjob, err
 }
 
-func (j *CronJobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error) {
-	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
+func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJob, error) {
+	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 
+	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "update")
+
+	return cronjob, err
+}
+
+func (j *CronJobServiceImpl) DeleteCronJob(id string) error {
+	err := helpers.DeleteCronJob(j.config.Kube, id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return configMap.Data, err
+	return nil
 }
 
 func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
@@ -178,4 +147,47 @@ func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, err
 	}
 
 	return data, nil
+}
+
+func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.ConfigMap, string, error) {
+	task, err := helpers.GetConfigMap(kube, cronjob.Task)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if task.Data["schema"] != "" {
+		schema := new(spec.Schema)
+		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
+
+		// strfmt.Default is the registry of recognized formats
+		err = validate.AgainstSchema(schema, cronjob.ExtraVars, strfmt.Default)
+		if err != nil {
+			log.Printf("JSON does not validate against schema: %v", err)
+			return nil, "", err
+		}
+	}
+
+	runner, err := helpers.GetConfigMap(kube, task.Data["runner"])
+	if err != nil {
+		return nil, "", err
+	}
+
+	if runner.Data["branch"] == "" {
+		runner.Data["branch"] = "main"
+	}
+
+	secret, err := helpers.GetSecret(kube, task.Data["runner"])
+	if err != nil {
+		if !kerrors.IsNotFound(err) {
+			return nil, "", err
+		}
+	} else {
+		gitToken := string(secret.Data["token"])
+		if gitToken != "" {
+			runner.Data["gitURL"] = strings.Replace(runner.Data["gitURL"], "://", "://"+gitToken+":@", 1)
+		}
+	}
+
+	return runner, task.Data["command"], nil
+
 }

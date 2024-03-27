@@ -39,6 +39,9 @@ func (jc *CronJobController) SetCronJobRoutes(rg *gin.RouterGroup, config config
 	{
 		r.POST("", jc.CreateCronJob)
 		r.PUT("", jc.CreateCronJob)
+		r.PATCH("/:id", jc.UpdateCronJob)
+		r.PUT("/:id", jc.UpdateCronJob)
+		r.DELETE("/:id", jc.DeleteCronJob)
 	}
 
 }
@@ -159,6 +162,76 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 
 	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
+}
+
+// UpdateCronJob godoc
+//
+//	@Summary		Update a cronjob
+//	@Description	Update a cronjob in the cluster
+//	@Tags			cronjobs
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string			true	"CronJob ID"
+//	@Param			cronjob	body		models.CronJob	true	"Update CronJob"
+//	@Success		200		{object}	models.CronJob
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/cronjobs/{id} [patch]
+//	@Security		Bearer
+func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
+	var cronjob models.CronJob
+	var err error
+	id := ctx.Param("id")
+	username := ctx.MustGet("username").(string)
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "update", jc.AuditCategory, id)
+
+	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	cronjob.Owner = username
+	cronjob, err = jc.CronJobService.UpdateCronJob(cronjob)
+	if err != nil {
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	audit.Status = "success"
+	jc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, cronjob)
+}
+
+// DeleteCronJob godoc
+//
+//	@Summary		Delete a CronJob
+//	@Description	Delete by CronJob ID
+//	@Tags			cronjobs
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"CronJob ID"
+//	@Success		204	{object}	models.CronJob
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/cronjobs/{id} [delete]
+//	@Security		Bearer
+func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
+	groupID := ctx.Param("id")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "delete", jc.AuditCategory, groupID)
+
+	err := jc.CronJobService.DeleteCronJob(groupID)
+	if err != nil {
+		jc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	audit.Status = "success"
+	jc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, gin.H{"msg": "cronjob deleted successfully"})
 }
 
 // GetSchema godoc

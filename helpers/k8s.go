@@ -414,19 +414,33 @@ func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
 	return job, nil
 }
 
-func CreateCronJob(kube config.KubeConfig, cronjob models.CronJob, runnerImage string, command string, gitURL string, gitBranch string) (*batchv1.CronJob, error) {
+func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runner *corev1.ConfigMap, command string, operation string) (*batchv1.CronJob, error) {
 	varsParsed, err := json.Marshal(cronjob.ExtraVars)
 	if err != nil {
 		return nil, err
 	}
 
-	jobObj := JobObject(cronjob.Task, kube, runnerImage, cronjob.Owner, string(varsParsed), command, gitURL, gitBranch)
-
+	jobObj := JobObject(cronjob.Task,
+		kube,
+		runner.Data["image"],
+		cronjob.Owner,
+		string(varsParsed),
+		command,
+		runner.Data["gitURL"],
+		runner.Data["branch"],
+	)
 	cron := CronJobObject(kube, cronjob, jobObj.Spec)
 
-	cron, err = kube.Clientset.BatchV1().CronJobs(
-		kube.Namespace).Create(
-		context.TODO(), cron, metav1.CreateOptions{})
+	if operation == "create" {
+		cron, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).Create(
+			context.TODO(), cron, metav1.CreateOptions{})
+	} else if operation == "update" {
+		cron, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).Update(
+			context.TODO(), cron, metav1.UpdateOptions{})
+	}
+
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -435,15 +449,28 @@ func CreateCronJob(kube config.KubeConfig, cronjob models.CronJob, runnerImage s
 	return cron, nil
 }
 
+func DeleteCronJob(kube config.KubeConfig, name string) error {
+	err := kube.Clientset.BatchV1().CronJobs(
+		kube.Namespace).Delete(
+		context.TODO(), name, metav1.DeleteOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
+}
+
 func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			// GenerateName: name + "-",
 			Name:      cronjob.ID,
 			Namespace: kube.Namespace,
 		},
 		Spec: batchv1.CronJobSpec{
 			Schedule: cronjob.Schedule,
+			Suspend:  &cronjob.Disable,
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: jobSpec,
 			},
