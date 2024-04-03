@@ -53,7 +53,7 @@ func (jc *CronJobController) SetCronJobRoutes(rg *gin.RouterGroup, config config
 //	@Tags			cronjobs
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{array}		string
+//	@Success		200	{array}		models.CronJob
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
@@ -90,15 +90,15 @@ func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
 //
 //	@Summary		Get job info
 //	@Description	Get information about a specific job
-//	@Tags			jobs
+//	@Tags			cronjobs
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"CronJob  id"
-//	@Success		200	{object}	models.Task
+//	@Success		200	{object}	models.CronJob
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id} [get]
+//	@Router			/cronjobs/{id} [get]
 //	@Security		Bearer
 func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 	jobName := ctx.Param("id")
@@ -120,16 +120,15 @@ func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 //
 //	@Summary		Create a new job
 //	@Description	Add a job to the cluster
-//	@Tags			jobs
+//	@Tags			cronjobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task  name"
-//	@Param			evars	body		object	false	"Extra vars"
-//	@Success		200		{object}	models.Task
+//	@Param			cronjob	body		models.CronJob	true	"New cronjob"
+//	@Success		200		{object}	models.CronJob
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/jobs/{id} [post]
+//	@Router			/cronjobs [post]
 //	@Security		Bearer
 func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 	var cronjob models.CronJob
@@ -171,13 +170,12 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 //	@Tags			cronjobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path		string			true	"CronJob ID"
 //	@Param			cronjob	body		models.CronJob	true	"Update CronJob"
 //	@Success		200		{object}	models.CronJob
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/cronjobs/{id} [patch]
+//	@Router			/cronjobs/ [patch]
 //	@Security		Bearer
 func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
 	var cronjob models.CronJob
@@ -236,9 +234,9 @@ func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
 
 // GetSchema godoc
 //
-//	@Summary		Get task schema
-//	@Description	Get task schema for the job info and input parameters
-//	@Tags			jobs
+//	@Summary		Get schema
+//	@Description	Get schema for the job info and input parameters
+//	@Tags			cronjobs
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"Task  name"
@@ -246,7 +244,7 @@ func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id}/schema [get]
+//	@Router			/cronjobs/{id}/schema [get]
 //	@Security		Bearer
 func (jc *CronJobController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
