@@ -415,16 +415,22 @@ func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
 }
 
 func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runner *corev1.ConfigMap, command string, operation string) (*batchv1.CronJob, error) {
-	varsParsed, err := json.Marshal(cronjob.ExtraVars)
-	if err != nil {
-		return nil, err
+	var extraVars string
+	var err error
+
+	if len(cronjob.ExtraVars) > 0 {
+		varsParsed, err := json.Marshal(cronjob.ExtraVars)
+		if err != nil {
+			return nil, err
+		}
+		extraVars = string(varsParsed)
 	}
 
 	jobObj := JobObject(cronjob.Task,
 		kube,
 		runner.Data["image"],
 		cronjob.Owner,
-		string(varsParsed),
+		extraVars,
 		command,
 		runner.Data["gitURL"],
 		runner.Data["branch"],
