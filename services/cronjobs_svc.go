@@ -58,9 +58,12 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 	for _, job := range jobs.Items {
 		var data map[string]interface{}
 		// This unmarshal is only used to fetch the extra vars, it doesn't look very reliable so it might need a rework
-		err = json.Unmarshal([]byte(job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value), &data)
-		if err != nil {
-			return nil, err
+		containerEnv := job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env
+		if len(containerEnv) > 0 {
+			err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
+			if err != nil {
+				return nil, err
+			}
 		}
 		jobRet := models.CronJob{
 			ID:        job.Name,
@@ -85,10 +88,13 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 	}
 
 	var data map[string]interface{}
-	// _ = json.Unmarshal(b, &data)
-	err = json.Unmarshal([]byte(job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value), &data)
-	if err != nil {
-		return cronjob, err
+	// This unmarshal is only used to fetch the extra vars, it doesn't look very reliable so it might need a rework
+	containerEnv := job.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env
+	if len(containerEnv) > 0 {
+		err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
+		if err != nil {
+			return cronjob, err
+		}
 	}
 	cronjob = models.CronJob{
 		ID:        job.Name,
