@@ -15,6 +15,7 @@ func InitDB(db *gorm.DB) {
 		&models.Role{},
 		&models.RoleBinding{},
 		&models.User{},
+		&models.ApiToken{},
 	)
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")

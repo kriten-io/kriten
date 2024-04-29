@@ -62,8 +62,8 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 //	@Security		Bearer
 func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
-	authList := ctx.MustGet("authList").([]string)
-	apiTokens, err := uc.ApiTokenService.ListApiTokens(authList)
+	userid := ctx.MustGet("userID").(uuid.UUID)
+	apiTokens, err := uc.ApiTokenService.ListApiTokens(userid)
 
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
@@ -101,7 +101,7 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, apiTokenID)
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "get", uc.AuditCategory, apiTokenID)
 	apiToken, err := uc.ApiTokenService.GetApiToken(apiTokenID)
 
 	if err != nil {
@@ -129,20 +129,22 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/apiTokens [post]
 //	@Security		Bearer
-func (uc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
+func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
+	userid := ctx.MustGet("userID").(uuid.UUID)
+	audit := atc.AuditService.InitialiseAuditLog(ctx, "create", atc.AuditCategory, "*")
 	var apiToken models.ApiToken
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
-		uc.AuditService.CreateAudit(audit)
+		atc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	audit.EventTarget = apiToken.Key
+	apiToken.Owner = userid
 
-	apiToken, err := uc.ApiTokenService.CreateApiToken(apiToken)
+	apiToken, err := atc.ApiTokenService.CreateApiToken(apiToken)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		atc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -171,7 +173,7 @@ func (uc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, apiTokenID)
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "update", uc.AuditCategory, apiTokenID)
 	var apiToken models.ApiToken
 	var err error
 
@@ -215,7 +217,7 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, apiTokenID)
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "delete", uc.AuditCategory, apiTokenID)
 
 	err := uc.ApiTokenService.DeleteApiToken(apiTokenID)
 	if err != nil {
