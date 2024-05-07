@@ -66,7 +66,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 			}
 		}
 		jobRet := models.CronJob{
-			ID:        job.Name,
+			Name:      job.Name,
 			Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
 			Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
 			Schedule:  job.Spec.Schedule,
@@ -97,7 +97,7 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 		}
 	}
 	cronjob = models.CronJob{
-		ID:        job.Name,
+		Name:      job.Name,
 		Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
 		Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
 		Schedule:  job.Spec.Schedule,

@@ -153,14 +153,14 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 
 	audit.Status = "success"
 
-	if job.ID != "" {
+	if job.Name != "" {
 		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
 	jc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.Name})
 }
 
 // UpdateCronJob godoc

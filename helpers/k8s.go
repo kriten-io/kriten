@@ -471,7 +471,7 @@ func DeleteCronJob(kube config.KubeConfig, name string) error {
 func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cronjob.ID,
+			Name:      cronjob.Name,
 			Namespace: kube.Namespace,
 		},
 		Spec: batchv1.CronJobSpec{
