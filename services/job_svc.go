@@ -23,7 +23,6 @@ type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
 	GetJob(string, string) (models.Job, error)
 	CreateJob(string, string, string) (models.Job, error)
-	GetTaskConfigMap(string) (map[string]string, error)
 	GetSchema(string) (map[string]interface{}, error)
 }
 
@@ -251,16 +250,6 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	}
 
 	return jobStatus, nil
-}
-
-func (j *JobServiceImpl) GetTaskConfigMap(name string) (map[string]string, error) {
-	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return configMap.Data, err
 }
 
 func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) {

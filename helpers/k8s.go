@@ -3,8 +3,10 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"kriten/config"
+	"kriten/models"
 	"log"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -361,6 +363,122 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.CronJobList, error) {
+	var jobsList *batchv1.CronJobList
+	var err error
+
+	if len(labelSelectors) == 0 {
+		jobsList, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).List(
+			context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+	} else {
+		for _, labelSelector := range labelSelectors {
+			job, err := kube.Clientset.BatchV1().CronJobs(
+				kube.Namespace).List(
+				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+			if err != nil {
+				log.Println(err)
+				return nil, err
+			}
+			if jobsList == nil {
+				jobsList = job
+			} else {
+				jobsList.Items = append(jobsList.Items, job.Items[:]...)
+			}
+		}
+
+	}
+
+	return jobsList, nil
+}
+
+func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
+	job, err := kube.Clientset.BatchV1().CronJobs(
+		kube.Namespace).Get(
+		context.TODO(), name, metav1.GetOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return job, nil
+}
+
+func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runner *corev1.ConfigMap, command string, operation string) (*batchv1.CronJob, error) {
+	var extraVars string
+	var err error
+
+	if len(cronjob.ExtraVars) > 0 {
+		varsParsed, err := json.Marshal(cronjob.ExtraVars)
+		if err != nil {
+			return nil, err
+		}
+		extraVars = string(varsParsed)
+	}
+
+	jobObj := JobObject(cronjob.Task,
+		kube,
+		runner.Data["image"],
+		cronjob.Owner,
+		extraVars,
+		command,
+		runner.Data["gitURL"],
+		runner.Data["branch"],
+	)
+	cron := CronJobObject(kube, cronjob, jobObj.Spec)
+
+	if operation == "create" {
+		cron, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).Create(
+			context.TODO(), cron, metav1.CreateOptions{})
+	} else if operation == "update" {
+		cron, err = kube.Clientset.BatchV1().CronJobs(
+			kube.Namespace).Update(
+			context.TODO(), cron, metav1.UpdateOptions{})
+	}
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return cron, nil
+}
+
+func DeleteCronJob(kube config.KubeConfig, name string) error {
+	err := kube.Clientset.BatchV1().CronJobs(
+		kube.Namespace).Delete(
+		context.TODO(), name, metav1.DeleteOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
+}
+
+func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
+	return &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cronjob.Name,
+			Namespace: kube.Namespace,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: cronjob.Schedule,
+			Suspend:  &cronjob.Disable,
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: jobSpec,
 			},
 		},
 	}

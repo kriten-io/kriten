@@ -16,6 +16,12 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
+
+      - name: Generates Swag docs
+        uses: yegorrybchenko/go-swag-action@v0.1
+        with:
+          command: init --parseDependency --parseInternal
+          swagWersion: 1.8.12
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
