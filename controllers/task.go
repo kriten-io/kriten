@@ -31,7 +31,7 @@ func NewTaskController(taskservice services.TaskService, as services.AuthService
 
 func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(tc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(tc.AuthService, "tasks"), tc.ListTasks)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetTask)

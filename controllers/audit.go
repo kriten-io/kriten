@@ -25,7 +25,7 @@ func NewAuditController(als services.AuditService, as services.AuthService) Audi
 
 func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(ac.AuthService, config.JWT))
 
 	r.Use(middlewares.AuthorizationMiddleware(ac.AuthService, "audit", "read"))
 	{

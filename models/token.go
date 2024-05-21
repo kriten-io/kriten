@@ -14,5 +14,5 @@ type ApiToken struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Expires     time.Time `json:"expires"`
-	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	Enabled     *bool     `json:"enabled"`
 }

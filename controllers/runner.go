@@ -30,7 +30,7 @@ func NewRunnerController(rs services.RunnerService, as services.AuthService, als
 
 func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(rc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(rc.AuthService, "runners"), rc.ListRunners)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(rc.AuthService, "runners", "read"), rc.GetRunner)

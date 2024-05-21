@@ -32,7 +32,7 @@ func NewApiTokenController(apiTokenService services.ApiTokenService, as services
 
 func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "apiTokens"), uc.ListApiTokens)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "apiTokens", "read"), uc.GetApiToken)

@@ -143,7 +143,7 @@ func init() {
 	gs = services.NewGroupService(db, us, conf)
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, gs)
-	as = services.NewAuthService(conf, us, rls, rbs)
+	as = services.NewAuthService(conf, us, rls, rbs, db)
 	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(conf)

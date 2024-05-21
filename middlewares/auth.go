@@ -13,31 +13,44 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-func AuthenticationMiddleware(jwtConf config.JWTConfig) gin.HandlerFunc {
+func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var token string
-		bearer := strings.Split(ctx.GetHeader("Authorization"), "Bearer ")
-		if len(bearer) > 1 {
-			token = bearer[1]
-		}
-		cookie, err := ctx.Request.Cookie("token")
-		if token == "" {
+		token = ctx.GetHeader("Token")
+		if token != "" {
+			owner, err := as.ValidateAPIToken(token)
 			if err != nil {
-				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "please authenticate."})
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 				return
 			}
-			token = cookie.Value
-		}
+			ctx.Set("userID", owner.ID)
+			ctx.Set("username", owner.Username)
+			ctx.Set("provider", owner.Provider)
+		} else {
+			// If no API token is provided, checking for Bearer or Cookies
+			bearer := strings.Split(ctx.GetHeader("Authorization"), "Bearer ")
+			if len(bearer) > 1 {
+				token = bearer[1]
+			}
+			cookie, err := ctx.Request.Cookie("token")
+			if token == "" {
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "please authenticate."})
+					return
+				}
+				token = cookie.Value
+			}
 
-		claims, err := helpers.ValidateToken(token, jwtConf)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
-			return
-		}
+			claims, err := helpers.ValidateToken(token, jwtConf)
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
+				return
+			}
 
-		ctx.Set("userID", claims.UserID)
-		ctx.Set("username", claims.Username)
-		ctx.Set("provider", claims.Provider)
+			ctx.Set("userID", claims.UserID)
+			ctx.Set("username", claims.Username)
+			ctx.Set("provider", claims.Provider)
+		}
 		ctx.Next()
 	}
 }

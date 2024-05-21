@@ -33,7 +33,7 @@ func NewGroupController(groupService services.GroupService, as services.AuthServ
 
 func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "groups"), uc.ListGroups)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "groups", "read"), uc.GetGroup)

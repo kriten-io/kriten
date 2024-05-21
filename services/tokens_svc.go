@@ -14,7 +14,6 @@ import (
 type ApiTokenService interface {
 	ListApiTokens(uuid.UUID) ([]models.ApiToken, error)
 	GetApiToken(string) (models.ApiToken, error)
-	IsTokenValid(string) (bool, error)
 	CreateApiToken(models.ApiToken) (models.ApiToken, error)
 	UpdateApiToken(models.ApiToken) (models.ApiToken, error)
 	DeleteApiToken(string) error
@@ -55,18 +54,12 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	return apiToken, nil
 }
 
-func (u *ApiTokenServiceImpl) IsTokenValid(key string) (bool, error) {
-	var apiToken models.ApiToken
-	res := u.db.Where("key = ?", key).Find(&apiToken)
-	if res.Error != nil {
-		return false, res.Error
-	}
-
-	return apiToken.Enabled, nil
-}
-
 func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
 	apiToken.Key, _ = randomHex(40)
+
+	if apiToken.Enabled == nil {
+		*apiToken.Enabled = true
+	}
 
 	res := u.db.Create(&apiToken)
 
