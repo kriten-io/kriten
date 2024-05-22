@@ -341,7 +341,7 @@ func (t *TaskServiceImpl) GetSecret(name string) (map[string]string, error) {
 		return nil, nil
 	}
 
-	for key, _ := range secret.Data {
+	for key := range secret.Data {
 		secretCleaned[key] = "************"
 
 	}
@@ -392,7 +392,7 @@ func (t *TaskServiceImpl) UpdateSecret(name string, secret map[string]string) (m
 			return secretCleaned, err
 		}
 
-		for key, _ := range secretNew.Data {
+		for key := range secretNew.Data {
 			secretCleaned[key] = "*************"
 
 		}

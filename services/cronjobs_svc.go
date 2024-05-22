@@ -110,6 +110,9 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 
 func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
+	if err != nil {
+		return models.CronJob{}, err
+	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "create")
 
@@ -118,6 +121,9 @@ func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJ
 
 func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJob, error) {
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
+	if err != nil {
+		return models.CronJob{}, err
+	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "update")
 

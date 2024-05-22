@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kriten/config"
 	"kriten/models"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"
@@ -13,7 +14,7 @@ import (
 type AuditService interface {
 	ListAuditLogs(int) ([]models.AuditLog, error)
 	GetAuditLog(string) (models.AuditLog, error)
-	CreateAudit(models.AuditLog) (models.AuditLog, error)
+	CreateAudit(models.AuditLog)
 	InitialiseAuditLog(*gin.Context, string, string, string) models.AuditLog
 }
 
@@ -53,10 +54,11 @@ func (a *AuditServiceImpl) GetAuditLog(id string) (models.AuditLog, error) {
 	return log, nil
 }
 
-func (a *AuditServiceImpl) CreateAudit(log models.AuditLog) (models.AuditLog, error) {
-	res := a.db.Create(&log)
-
-	return log, res.Error
+func (a *AuditServiceImpl) CreateAudit(auditlog models.AuditLog) {
+	res := a.db.Create(&auditlog)
+	if res.Error != nil {
+		log.Println("Error during Audit creation: " + res.Error.Error())
+	}
 }
 
 func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string, category string, target string) models.AuditLog {

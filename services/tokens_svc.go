@@ -33,9 +33,8 @@ func NewApiTokenService(database *gorm.DB, config config.Config) ApiTokenService
 
 func (u *ApiTokenServiceImpl) ListApiTokens(userid uuid.UUID) ([]models.ApiToken, error) {
 	var apiTokens []models.ApiToken
-	var res *gorm.DB
 
-	res = u.db.Where("owner = ?", userid).Find(&apiTokens)
+	res := u.db.Where("owner = ?", userid).Find(&apiTokens)
 
 	if res.Error != nil {
 		return apiTokens, res.Error
