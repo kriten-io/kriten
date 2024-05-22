@@ -67,11 +67,31 @@ func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.A
 }
 
 func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
-	newApiToken, err := u.GetApiToken(apiToken.ID.String())
+	oldToken, err := u.GetApiToken(apiToken.ID.String())
 	if err != nil {
 		return models.ApiToken{}, err
 	}
-	return newApiToken, nil
+
+	if apiToken.Enabled != nil {
+		oldToken.Enabled = apiToken.Enabled
+	}
+	if apiToken.Description != "" {
+		oldToken.Description = apiToken.Description
+	}
+	if apiToken.Expires != nil {
+		oldToken.Expires = apiToken.Expires
+	}
+
+	res := u.db.Updates(oldToken)
+	if res.Error != nil {
+		return models.ApiToken{}, res.Error
+	}
+
+	newToken, err := u.GetApiToken(apiToken.ID.String())
+	if err != nil {
+		return models.ApiToken{}, err
+	}
+	return newToken, nil
 }
 
 func (u *ApiTokenServiceImpl) DeleteApiToken(id string) error {
