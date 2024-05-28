@@ -92,7 +92,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		return "", -1, err
 	}
 
-	token, err := helpers.CreateToken(credentials, user.ID, a.config.JWT)
+	token, err := helpers.CreateJWTToken(credentials, user.ID, a.config.JWT)
 	if err != nil {
 		log.Println(err)
 		return "", -1, err
@@ -102,7 +102,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 }
 
 func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
-	claims, err := helpers.ValidateToken(tokenStr, a.config.JWT)
+	claims, err := helpers.ValidateJWTToken(tokenStr, a.config.JWT)
 	if err != nil {
 		return "", -1, err
 	}
@@ -135,9 +135,16 @@ func (a *AuthServiceImpl) GetRootPassword() (string, error) {
 
 func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 	var apiToken models.ApiToken
-	res := a.db.Where("key = ?", key).Find(&apiToken)
+	apiKey := helpers.GenerateHMAC(a.config.APISecret, key)
+
+	res := a.db.Where("key = ?", apiKey).Find(&apiToken)
 	if res.Error != nil {
 		return models.User{}, res.Error
+	}
+
+	// checking if there's any result
+	if res.RowsAffected == 0 {
+		return models.User{}, errors.New("invalid token")
 	}
 
 	if !apiToken.Expires.IsZero() && apiToken.Expires.Before(time.Now()) {

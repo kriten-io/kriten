@@ -2,9 +2,12 @@ package services
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"fmt"
 	"kriten/config"
+	"kriten/helpers"
 	"kriten/models"
+	"math/big"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 
@@ -50,17 +53,34 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 		return models.ApiToken{}, res.Error
 	}
 
+	if res.RowsAffected == 0 {
+		return models.ApiToken{}, fmt.Errorf("token %s not found, please check uuid", id)
+
+	}
+
 	return apiToken, nil
 }
 
 func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
-	apiToken.Key, _ = randomHex(40)
+	key, err := GenerateToken(40)
+	if err != nil {
+		return models.ApiToken{}, err
+	}
 
+	apiToken.Key = helpers.GenerateHMAC(u.config.APISecret, key)
+
+	// if No value is passed, initialise to Zero value
+	if apiToken.Expires == nil {
+		apiToken.Expires = new(time.Time)
+	}
 	if apiToken.Enabled == nil {
 		*apiToken.Enabled = true
 	}
 
 	res := u.db.Create(&apiToken)
+
+	// Passing unencripted key on creation
+	apiToken.Key = key
 
 	return apiToken, res.Error
 }
@@ -101,10 +121,18 @@ func (u *ApiTokenServiceImpl) DeleteApiToken(id string) error {
 	return u.db.Unscoped().Delete(&apiToken).Error
 }
 
-func randomHex(n int) (string, error) {
-	bytes := make([]byte, n)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+func GenerateToken(n int) (string, error) {
+	// Removing 4 chars from the total length for "kri_" prefix
+	n -= 4
+	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	ret := make([]byte, n)
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return "", err
+		}
+		ret[i] = letters[num.Int64()]
 	}
-	return hex.EncodeToString(bytes), nil
+
+	return "kri_" + string(ret), nil
 }

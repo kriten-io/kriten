@@ -41,7 +41,7 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 				token = cookie.Value
 			}
 
-			claims, err := helpers.ValidateToken(token, jwtConf)
+			claims, err := helpers.ValidateJWTToken(token, jwtConf)
 			if err != nil {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
 				return
