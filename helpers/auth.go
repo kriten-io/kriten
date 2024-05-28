@@ -1,6 +1,9 @@
 package helpers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"kriten/config"
 	"kriten/models"
@@ -11,7 +14,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-func CreateToken(credentials *models.Credentials, userID uuid.UUID, jwtConf config.JWTConfig) (string, error) {
+func CreateJWTToken(credentials *models.Credentials, userID uuid.UUID, jwtConf config.JWTConfig) (string, error) {
 	expirationTime := time.Now().Add(time.Second * time.Duration(jwtConf.ExpirySeconds))
 
 	claims := &models.Claims{
@@ -32,7 +35,7 @@ func CreateToken(credentials *models.Credentials, userID uuid.UUID, jwtConf conf
 	return tokenString, nil
 }
 
-func ValidateToken(tokenStr string, jwtConf config.JWTConfig) (*models.Claims, error) {
+func ValidateJWTToken(tokenStr string, jwtConf config.JWTConfig) (*models.Claims, error) {
 	claims := &models.Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenStr, claims,
@@ -45,4 +48,17 @@ func ValidateToken(tokenStr string, jwtConf config.JWTConfig) (*models.Claims, e
 		return nil, errors.New("error: invalid token")
 	}
 	return claims, nil
+}
+
+func GenerateHMAC(apiSecret string, key string) string {
+	// Create a new HMAC by defining the hash type and the key (as byte array)
+	h := hmac.New(sha256.New, []byte(apiSecret))
+
+	// Write Data to it
+	h.Write([]byte(key))
+
+	// Get result and encode as hexadecimal string
+	sha := hex.EncodeToString(h.Sum(nil))
+
+	return sha
 }
