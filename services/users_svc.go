@@ -112,6 +112,17 @@ func (u *UserServiceImpl) DeleteUser(id string) error {
 	if len(user.Groups) != 0 {
 		return errors.New("cannot delete user who is part of a group")
 	}
+
+	var apiTokens []models.ApiToken
+	res := u.db.Where("owner = ?", id).Find(&apiTokens)
+
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected != 0 {
+		return errors.New("found API tokens associated to the user, please delete those first")
+	}
+
 	return u.db.Unscoped().Delete(&user).Error
 }
 

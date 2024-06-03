@@ -7,6 +7,7 @@ import (
 	"kriten/helpers"
 	"kriten/models"
 	"math/big"
+	"slices"
 	"time"
 
 	uuid "github.com/satori/go.uuid"
@@ -16,6 +17,7 @@ import (
 
 type ApiTokenService interface {
 	ListApiTokens(uuid.UUID) ([]models.ApiToken, error)
+	ListAllApiTokens([]string) ([]models.ApiToken, error)
 	GetApiToken(string) (models.ApiToken, error)
 	CreateApiToken(models.ApiToken) (models.ApiToken, error)
 	UpdateApiToken(models.ApiToken) (models.ApiToken, error)
@@ -46,6 +48,26 @@ func (u *ApiTokenServiceImpl) ListApiTokens(userid uuid.UUID) ([]models.ApiToken
 	return apiTokens, nil
 }
 
+func (u *ApiTokenServiceImpl) ListAllApiTokens(authList []string) ([]models.ApiToken, error) {
+	var apiTokens []models.ApiToken
+	var res *gorm.DB
+
+	if len(authList) == 0 {
+		return apiTokens, nil
+	}
+
+	if slices.Contains(authList, "*") {
+		res = u.db.Find(&apiTokens)
+	} else {
+		res = u.db.Find(&apiTokens, authList)
+	}
+	if res.Error != nil {
+		return apiTokens, res.Error
+	}
+
+	return apiTokens, nil
+}
+
 func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	var apiToken models.ApiToken
 	res := u.db.Where("id = ?", id).Find(&apiToken)
@@ -55,7 +77,6 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 
 	if res.RowsAffected == 0 {
 		return models.ApiToken{}, fmt.Errorf("token %s not found, please check uuid", id)
-
 	}
 
 	return apiToken, nil

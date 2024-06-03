@@ -34,13 +34,17 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 	r := rg.Group("").Use(
 		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
 
-	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "apiTokens"), uc.ListApiTokens)
+	// Authorizations is set in the svc, only returning own tokens
+	r.GET("", uc.ListApiTokens)
+
+	r.GET("/all", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "apiTokens"), uc.ListAllApiTokens)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "apiTokens", "read"), uc.GetApiToken)
+
+	r.POST("", uc.CreateApiToken)
+	r.PUT("", uc.CreateApiToken)
 
 	r.Use(middlewares.AuthorizationMiddleware(uc.AuthService, "apiTokens", "write"))
 	{
-		r.POST("", uc.CreateApiToken)
-		r.PUT("", uc.CreateApiToken)
 		r.PATCH("/:id", uc.UpdateApiToken)
 		r.PUT("/:id", uc.UpdateApiToken)
 		r.DELETE("/:id", uc.DeleteApiToken)
@@ -49,8 +53,8 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 
 // ListApiTokens godoc
 //
-//	@Summary		List all apiTokens
-//	@Description	List all apiTokens available on the cluster
+//	@Summary		List own apiTokens
+//	@Description	List own apiTokens available on the cluster
 //	@Tags			api_tokens
 //	@Accept			json
 //	@Produce		json
@@ -64,6 +68,44 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	userid := ctx.MustGet("userID").(uuid.UUID)
 	apiTokens, err := uc.ApiTokenService.ListApiTokens(userid)
+
+	if err != nil {
+		uc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	audit.Status = "success"
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(apiTokens)))
+	if len(apiTokens) == 0 {
+		var arr [0]int
+		uc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusOK, arr)
+		return
+	}
+
+	uc.AuditService.CreateAudit(audit)
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.JSON(http.StatusOK, apiTokens)
+}
+
+// ListAllApiTokens godoc
+//
+//	@Summary		List all apiTokens
+//	@Description	List all apiTokens available on the cluster
+//	@Tags			api_tokens
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{array}		models.ApiToken
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/api_tokens/all [get]
+//	@Security		Bearer
+func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
+	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
+	authList := ctx.MustGet("authList").([]string)
+	apiTokens, err := uc.ApiTokenService.ListAllApiTokens(authList)
 
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
