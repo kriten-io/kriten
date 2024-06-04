@@ -164,6 +164,18 @@ func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 }
 
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
+	// Checking if the user owns the API token
+	if auth.Resource == "apiTokens" {
+		var apiToken models.ApiToken
+		res := a.db.Where("id = ?", auth.ResourceID).Find(&apiToken)
+		if res.Error != nil {
+			return false, res.Error
+		}
+
+		if apiToken.Owner == auth.UserID {
+			return true, nil
+		}
+	}
 
 	roles, err := a.UserService.GetUserRoles(auth.UserID.String(), auth.Provider)
 	if err != nil {
@@ -175,7 +187,6 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" || slices.Contains(role.Resources_IDs, auth.ResourceID)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
-
 		}
 	}
 

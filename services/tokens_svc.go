@@ -7,10 +7,10 @@ import (
 	"kriten/helpers"
 	"kriten/models"
 	"math/big"
-	"slices"
 	"time"
 
 	uuid "github.com/satori/go.uuid"
+	"golang.org/x/exp/slices"
 
 	"gorm.io/gorm"
 )
