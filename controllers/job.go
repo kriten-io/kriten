@@ -29,7 +29,7 @@ func NewJobController(js services.JobService, as services.AuthService, als servi
 
 func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(jc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)

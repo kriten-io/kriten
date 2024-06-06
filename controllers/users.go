@@ -33,7 +33,7 @@ func NewUserController(userService services.UserService, as services.AuthService
 
 func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "users"), uc.ListUsers)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "users", "read"), uc.GetUser)

@@ -35,7 +35,7 @@ func NewRoleController(rs services.RoleService, as services.AuthService, als ser
 
 func (rc *RoleController) SetRoleRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(rc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(rc.AuthService, "roles"), rc.ListRoles)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(rc.AuthService, "roles", "read"), rc.GetRole)

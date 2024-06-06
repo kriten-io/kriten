@@ -36,7 +36,7 @@ func NewRoleBindingController(rbs services.RoleBindingService, as services.AuthS
 
 func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(rc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(rc.AuthService, "role_bindings"), rc.ListRoleBindings)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(rc.AuthService, "role_bindings", "read"), rc.GetRoleBinding)

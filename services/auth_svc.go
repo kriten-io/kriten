@@ -12,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/slices"
+	"gorm.io/gorm"
 )
 
 type AuthService interface {
@@ -19,6 +20,7 @@ type AuthService interface {
 	Refresh(string) (string, int, error)
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
+	ValidateAPIToken(string) (models.User, error)
 }
 
 type AuthServiceImpl struct {
@@ -26,14 +28,16 @@ type AuthServiceImpl struct {
 	UserService        UserService
 	RoleService        RoleService
 	RoleBindingService RoleBindingService
+	db                 *gorm.DB
 }
 
-func NewAuthService(config config.Config, us UserService, rls RoleService, rbc RoleBindingService) AuthService {
+func NewAuthService(config config.Config, us UserService, rls RoleService, rbc RoleBindingService, database *gorm.DB) AuthService {
 	return &AuthServiceImpl{
 		config:             config,
 		UserService:        us,
 		RoleService:        rls,
 		RoleBindingService: rbc,
+		db:                 database,
 	}
 }
 
@@ -88,7 +92,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		return "", -1, err
 	}
 
-	token, err := helpers.CreateToken(credentials, user.ID, a.config.JWT)
+	token, err := helpers.CreateJWTToken(credentials, user.ID, a.config.JWT)
 	if err != nil {
 		log.Println(err)
 		return "", -1, err
@@ -98,7 +102,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 }
 
 func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
-	claims, err := helpers.ValidateToken(tokenStr, a.config.JWT)
+	claims, err := helpers.ValidateJWTToken(tokenStr, a.config.JWT)
 	if err != nil {
 		return "", -1, err
 	}
@@ -129,7 +133,49 @@ func (a *AuthServiceImpl) GetRootPassword() (string, error) {
 	return string(password), nil
 }
 
+func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
+	var apiToken models.ApiToken
+	apiKey := helpers.GenerateHMAC(a.config.APISecret, key)
+
+	res := a.db.Where("key = ?", apiKey).Find(&apiToken)
+	if res.Error != nil {
+		return models.User{}, res.Error
+	}
+
+	// checking if there's any result
+	if res.RowsAffected == 0 {
+		return models.User{}, errors.New("invalid token")
+	}
+
+	if !apiToken.Expires.IsZero() && apiToken.Expires.Before(time.Now()) {
+		return models.User{}, errors.New("token expired")
+	}
+	if !*apiToken.Enabled {
+		return models.User{}, errors.New("token not enabled")
+	}
+
+	// Token is Valid, retrieving User info
+	var user models.User
+	res = a.db.Where("user_id = ?", apiToken.Owner).Find(&user)
+	if res.Error != nil {
+		return models.User{}, res.Error
+	}
+	return user, nil
+}
+
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
+	// Checking if the user owns the API token
+	if auth.Resource == "apiTokens" {
+		var apiToken models.ApiToken
+		res := a.db.Where("id = ?", auth.ResourceID).Find(&apiToken)
+		if res.Error != nil {
+			return false, res.Error
+		}
+
+		if apiToken.Owner == auth.UserID {
+			return true, nil
+		}
+	}
 
 	roles, err := a.UserService.GetUserRoles(auth.UserID.String(), auth.Provider)
 	if err != nil {
@@ -141,7 +187,6 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" || slices.Contains(role.Resources_IDs, auth.ResourceID)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
-
 		}
 	}
 

@@ -17,8 +17,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	// "github.com/elastic/go-elasticsearch/v8"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -36,6 +34,7 @@ var (
 	js         services.JobService
 	cjs        services.CronJobService
 	us         services.UserService
+	ats        services.ApiTokenService
 	gs         services.GroupService
 	als        services.AuditService
 	rls        services.RoleService
@@ -47,6 +46,7 @@ var (
 	jc         controllers.JobController
 	cjc        controllers.CronJobController
 	uc         controllers.UserController
+	atc        controllers.ApiTokenController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
 	rbc        controllers.RoleBindingController
@@ -139,10 +139,11 @@ func init() {
 func init() {
 	// Services
 	us = services.NewUserService(db, conf)
+	ats = services.NewApiTokenService(db, conf)
 	gs = services.NewGroupService(db, us, conf)
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, gs)
-	as = services.NewAuthService(conf, us, rls, rbs)
+	as = services.NewAuthService(conf, us, rls, rbs, db)
 	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(conf)
@@ -152,6 +153,7 @@ func init() {
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, als, authProviders)
+	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
 	gc = controllers.NewGroupController(gs, as, als, authProviders)
 	rlc = controllers.NewRoleController(rls, as, als)
 	rbc = controllers.NewRoleBindingController(rbs, as, als, authProviders)
@@ -207,6 +209,7 @@ func main() {
 		jobs := basepath.Group("/jobs")
 		cronjobs := basepath.Group("/cronjobs")
 		users := basepath.Group("/users")
+		tokens := basepath.Group("/api_tokens")
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
 		roleBindings := basepath.Group("/role_bindings")
@@ -217,6 +220,7 @@ func main() {
 			jc.SetJobRoutes(jobs, conf)
 			cjc.SetCronJobRoutes(cronjobs, conf)
 			uc.SetUserRoutes(users, conf)
+			atc.SetApiTokenRoutes(tokens, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 			rbc.SetRoleBindingRoutes(roleBindings, conf)
