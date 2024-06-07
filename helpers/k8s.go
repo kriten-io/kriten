@@ -9,11 +9,11 @@ import (
 	"kriten/models"
 	"log"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func ListConfigMaps(kube config.KubeConfig) (*corev1.ConfigMapList, error) {
@@ -220,7 +220,7 @@ func CreateJob(kube config.KubeConfig, name string, runnerImage string, owner st
 func ListPods(kube config.KubeConfig, labelSelector string) (*corev1.PodList, error) {
 	pods, err := kube.Clientset.CoreV1().Pods(
 		kube.Namespace).List(context.TODO(),
-		v1.ListOptions{LabelSelector: labelSelector})
+		metav1.ListOptions{LabelSelector: labelSelector})
 
 	if err != nil {
 		log.Println(err)
@@ -479,6 +479,215 @@ func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batch
 			Suspend:  &cronjob.Disable,
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: jobSpec,
+			},
+		},
+	}
+}
+
+func ListDeployments(kube config.KubeConfig, labelSelectors []string) (*appsv1.DeploymentList, error) {
+	var deploysList *appsv1.DeploymentList
+	var err error
+
+	if len(labelSelectors) == 0 {
+		deploysList, err = kube.Clientset.AppsV1().Deployments(
+			kube.Namespace).List(
+			context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+	} else {
+		for _, labelSelector := range labelSelectors {
+			deploy, err := kube.Clientset.AppsV1().Deployments(
+				kube.Namespace).List(
+				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+			if err != nil {
+				log.Println(err)
+				return nil, err
+			}
+			if deploysList == nil {
+				deploysList = deploy
+			} else {
+				deploysList.Items = append(deploysList.Items, deploy.Items[:]...)
+			}
+		}
+
+	}
+
+	return deploysList, nil
+}
+
+func GetDeployment(kube config.KubeConfig, name string) (*appsv1.Deployment, error) {
+	job, err := kube.Clientset.AppsV1().Deployments(
+		kube.Namespace).Get(
+		context.TODO(), name, metav1.GetOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return job, nil
+}
+
+func CreateOrUpdateDeployment(kube config.KubeConfig, deploy models.Deployment, runner *corev1.ConfigMap, command string, operation string) (*appsv1.Deployment, error) {
+	var extraVars string
+	var err error
+
+	if len(deploy.ExtraVars) > 0 {
+		varsParsed, err := json.Marshal(deploy.ExtraVars)
+		if err != nil {
+			return nil, err
+		}
+		extraVars = string(varsParsed)
+	}
+
+	pod := PodSpec(deploy.Task,
+		kube,
+		runner.Data["image"],
+		deploy.Owner,
+		extraVars,
+		command,
+		runner.Data["gitURL"],
+		runner.Data["branch"],
+	)
+	cron := DeploymentObject(kube, deploy, *pod)
+
+	if operation == "create" {
+		cron, err = kube.Clientset.AppsV1().Deployments(
+			kube.Namespace).Create(
+			context.TODO(), cron, metav1.CreateOptions{})
+	} else if operation == "update" {
+		cron, err = kube.Clientset.AppsV1().Deployments(
+			kube.Namespace).Update(
+			context.TODO(), cron, metav1.UpdateOptions{})
+	}
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return cron, nil
+}
+
+func DeleteDeployment(kube config.KubeConfig, name string) error {
+	err := kube.Clientset.AppsV1().Deployments(
+		kube.Namespace).Delete(
+		context.TODO(), name, metav1.DeleteOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
+}
+
+func DeploymentObject(kube config.KubeConfig, deploy models.Deployment, podSpec corev1.PodSpec) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploy.Name,
+			Namespace: kube.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &deploy.Replicas,
+			Template: corev1.PodTemplateSpec{
+				Spec: podSpec,
+			},
+		},
+	}
+}
+
+func PodSpec(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *corev1.PodSpec {
+	optional_secret := true
+
+	env := []corev1.EnvVar{}
+	// Append extra vars to environment variables only if provided
+	if extraVars != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "EXTRA_VARS",
+			Value: extraVars,
+		})
+	}
+
+	return &corev1.PodSpec{
+		Volumes: []corev1.Volume{
+			{
+				Name: "secret",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: name,
+						Optional:   &optional_secret,
+					},
+				},
+			},
+			{
+				Name: "repo",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		},
+		RestartPolicy: corev1.RestartPolicyNever,
+		Containers: []corev1.Container{
+			{
+				Name:            name,
+				Image:           image,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command: []string{
+					"sh",
+					"-c",
+					command,
+				},
+				WorkingDir: "/mnt/repo",
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "secret",
+						MountPath: "/etc/secret/",
+						ReadOnly:  true,
+					},
+					{
+						Name:      "repo",
+						MountPath: "/mnt/repo",
+						ReadOnly:  false,
+					},
+				},
+				Env: env,
+				EnvFrom: []corev1.EnvFromSource{
+					{
+						SecretRef: &corev1.SecretEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: name,
+							},
+							Optional: &optional_secret,
+						},
+					},
+				},
+			},
+		},
+		InitContainers: []corev1.Container{
+			{
+				Name:            "init-" + name,
+				Image:           "bitnami/git",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command: []string{
+					"git",
+				},
+				Args: []string{
+					"clone",
+					"-b",
+					gitBranch,
+					gitURL,
+					".",
+				},
+				WorkingDir: "/mnt/repo",
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "repo",
+						MountPath: "/mnt/repo",
+					},
+				},
 			},
 		},
 	}
