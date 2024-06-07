@@ -220,10 +220,10 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	podSpec := helpers.PodSpec(taskName, runnerImage, extraVars, task.Data["command"], gitURL, gitBranch)
+	jobID, err := helpers.CreateJob(j.config.Kube, podSpec, taskName, username)
 
 	jobStatus.ID = jobID
-
 	if err != nil {
 		return jobStatus, err
 	}

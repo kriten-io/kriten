@@ -201,9 +201,8 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 	return job, nil
 }
 
-// TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
-	job := JobObject(name, kube, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+func CreateJob(kube config.KubeConfig, podSpec *corev1.PodSpec, name string, owner string) (string, error) {
+	job := JobObject(kube, podSpec, name, owner)
 
 	job, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Create(
@@ -253,20 +252,9 @@ func GetLogs(kube config.KubeConfig, podName string) (string, error) {
 	return buf.String(), nil
 }
 
-func JobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *batchv1.Job {
+func JobObject(kube config.KubeConfig, podSpec *corev1.PodSpec, name string, owner string) *batchv1.Job {
 	var ttlSeconds int32 = int32(kube.JobsTTL)
 	var backoffLimit int32 = 1
-
-	optional_secret := true
-
-	env := []corev1.EnvVar{}
-	// Append extra vars to environment variables only if provided
-	if extraVars != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  "EXTRA_VARS",
-			Value: extraVars,
-		})
-	}
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -283,86 +271,7 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 						"task-name": name,
 					},
 				},
-				Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: "secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: name,
-									Optional:   &optional_secret,
-								},
-							},
-						},
-						{
-							Name: "repo",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:            name,
-							Image:           image,
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command: []string{
-								"sh",
-								"-c",
-								command,
-							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "secret",
-									MountPath: "/etc/secret/",
-									ReadOnly:  true,
-								},
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-									ReadOnly:  false,
-								},
-							},
-							Env: env,
-							EnvFrom: []corev1.EnvFromSource{
-								{
-									SecretRef: &corev1.SecretEnvSource{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: name,
-										},
-										Optional: &optional_secret,
-									},
-								},
-							},
-						},
-					},
-					InitContainers: []corev1.Container{
-						{
-							Name:            "init-" + name,
-							Image:           "bitnami/git",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command: []string{
-								"git",
-							},
-							Args: []string{
-								"clone",
-								"-b",
-								gitBranch,
-								gitURL,
-								".",
-							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-								},
-							},
-						},
-					},
-				},
+				Spec: *podSpec,
 			},
 		},
 	}
@@ -426,15 +335,14 @@ func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runne
 		extraVars = string(varsParsed)
 	}
 
-	jobObj := JobObject(cronjob.Task,
-		kube,
+	podSpec := PodSpec(cronjob.Task,
 		runner.Data["image"],
-		cronjob.Owner,
 		extraVars,
 		command,
 		runner.Data["gitURL"],
 		runner.Data["branch"],
 	)
+	jobObj := JobObject(kube, podSpec, cronjob.Task, cronjob.Owner)
 	cron := CronJobObject(kube, cronjob, jobObj.Spec)
 
 	if operation == "create" {
@@ -543,24 +451,22 @@ func CreateOrUpdateDeployment(kube config.KubeConfig, deploy models.Deployment, 
 	}
 
 	pod := PodSpec(deploy.Task,
-		kube,
 		runner.Data["image"],
-		deploy.Owner,
 		extraVars,
 		command,
 		runner.Data["gitURL"],
 		runner.Data["branch"],
 	)
-	cron := DeploymentObject(kube, deploy, *pod)
+	deployment := DeploymentObject(kube, deploy, *pod)
 
 	if operation == "create" {
-		cron, err = kube.Clientset.AppsV1().Deployments(
+		deployment, err = kube.Clientset.AppsV1().Deployments(
 			kube.Namespace).Create(
-			context.TODO(), cron, metav1.CreateOptions{})
+			context.TODO(), deployment, metav1.CreateOptions{})
 	} else if operation == "update" {
-		cron, err = kube.Clientset.AppsV1().Deployments(
+		deployment, err = kube.Clientset.AppsV1().Deployments(
 			kube.Namespace).Update(
-			context.TODO(), cron, metav1.UpdateOptions{})
+			context.TODO(), deployment, metav1.UpdateOptions{})
 	}
 
 	if err != nil {
@@ -568,7 +474,7 @@ func CreateOrUpdateDeployment(kube config.KubeConfig, deploy models.Deployment, 
 		return nil, err
 	}
 
-	return cron, nil
+	return deployment, nil
 }
 
 func DeleteDeployment(kube config.KubeConfig, name string) error {
@@ -599,7 +505,7 @@ func DeploymentObject(kube config.KubeConfig, deploy models.Deployment, podSpec 
 	}
 }
 
-func PodSpec(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *corev1.PodSpec {
+func PodSpec(name string, image string, extraVars string, command string, gitURL string, gitBranch string) *corev1.PodSpec {
 	optional_secret := true
 
 	env := []corev1.EnvVar{}
