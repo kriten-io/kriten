@@ -457,6 +457,7 @@ func CreateOrUpdateDeployment(kube config.KubeConfig, deploy models.Deployment, 
 		runner.Data["gitURL"],
 		runner.Data["branch"],
 	)
+
 	deployment := DeploymentObject(kube, deploy, *pod)
 
 	if operation == "create" {
@@ -491,6 +492,12 @@ func DeleteDeployment(kube config.KubeConfig, name string) error {
 }
 
 func DeploymentObject(kube config.KubeConfig, deploy models.Deployment, podSpec corev1.PodSpec) *appsv1.Deployment {
+	labels := map[string]string{
+		"name":      deploy.Name,
+		"owner":     deploy.Owner,
+		"task-name": deploy.Task,
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploy.Name,
@@ -498,7 +505,13 @@ func DeploymentObject(kube config.KubeConfig, deploy models.Deployment, podSpec 
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &deploy.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
 				Spec: podSpec,
 			},
 		},
@@ -535,7 +548,7 @@ func PodSpec(name string, image string, extraVars string, command string, gitURL
 				},
 			},
 		},
-		RestartPolicy: corev1.RestartPolicyNever,
+		RestartPolicy: corev1.RestartPolicyAlways,
 		Containers: []corev1.Container{
 			{
 				Name:            name,

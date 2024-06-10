@@ -109,7 +109,7 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 }
 
 func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
-	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
+	runner, command, err := PreFlightChecks(j.config.Kube, cronjob.Task, cronjob.ExtraVars)
 	if err != nil {
 		return models.CronJob{}, err
 	}
@@ -120,7 +120,7 @@ func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJ
 }
 
 func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJob, error) {
-	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
+	runner, command, err := PreFlightChecks(j.config.Kube, cronjob.Task, cronjob.ExtraVars)
 	if err != nil {
 		return models.CronJob{}, err
 	}
@@ -161,8 +161,8 @@ func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, err
 	return data, nil
 }
 
-func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.ConfigMap, string, error) {
-	task, err := helpers.GetConfigMap(kube, cronjob.Task)
+func PreFlightChecks(kube config.KubeConfig, taskName string, extraVars map[string]interface{}) (*corev1.ConfigMap, string, error) {
+	task, err := helpers.GetConfigMap(kube, taskName)
 	if err != nil {
 		return nil, "", err
 	}
@@ -172,7 +172,7 @@ func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.Co
 		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
 
 		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, cronjob.ExtraVars, strfmt.Default)
+		err = validate.AgainstSchema(schema, extraVars, strfmt.Default)
 		if err != nil {
 			log.Printf("JSON does not validate against schema: %v", err)
 			return nil, "", err

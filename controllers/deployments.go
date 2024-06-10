@@ -29,7 +29,7 @@ func NewDeploymentController(js services.DeploymentService, as services.AuthServ
 
 func (dc *DeploymentController) SetDeploymentRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(config.JWT))
+		middlewares.AuthenticationMiddleware(dc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(dc.AuthService, "deployments"), dc.ListDeployments)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(dc.AuthService, "deployments", "read"), dc.GetDeployment)
