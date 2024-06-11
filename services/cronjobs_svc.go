@@ -46,7 +46,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 
 	if authList[0] != "*" {
 		for _, s := range authList {
-			labelSelector = append(labelSelector, "task-name="+s)
+			labelSelector = append(labelSelector, "task="+s)
 		}
 	}
 
@@ -68,7 +68,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 		jobRet := models.CronJob{
 			Name:      job.Name,
 			Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
-			Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
+			Task:      job.Spec.JobTemplate.Spec.Template.Labels["task"],
 			Schedule:  job.Spec.Schedule,
 			Disable:   *job.Spec.Suspend,
 			ExtraVars: data,
@@ -99,7 +99,7 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 	cronjob = models.CronJob{
 		Name:      job.Name,
 		Owner:     job.Spec.JobTemplate.Spec.Template.Labels["owner"],
-		Task:      job.Spec.JobTemplate.Spec.Template.Labels["task-name"],
+		Task:      job.Spec.JobTemplate.Spec.Template.Labels["task"],
 		Schedule:  job.Spec.Schedule,
 		Disable:   *job.Spec.Suspend,
 		ExtraVars: data,

@@ -267,8 +267,8 @@ func JobObject(kube config.KubeConfig, podSpec *corev1.PodSpec, name string, own
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"owner":     owner,
-						"task-name": name,
+						"owner": owner,
+						"task":  name,
 					},
 				},
 				Spec: *podSpec,
@@ -493,9 +493,10 @@ func DeleteDeployment(kube config.KubeConfig, name string) error {
 
 func DeploymentObject(kube config.KubeConfig, deploy models.Deployment, podSpec corev1.PodSpec) *appsv1.Deployment {
 	labels := map[string]string{
-		"name":      deploy.Name,
-		"owner":     deploy.Owner,
-		"task-name": deploy.Task,
+		"managed-by": "kriten",
+		"name":       deploy.Name,
+		"owner":      deploy.Owner,
+		"task":       deploy.Task,
 	}
 
 	return &appsv1.Deployment{

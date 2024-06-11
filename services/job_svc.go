@@ -77,10 +77,10 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 
 	if authList[0] != "*" {
 		for _, s := range authList {
-			labelSelector = append(labelSelector, "task-name="+s)
+			labelSelector = append(labelSelector, "task="+s)
 		}
 	}
-	// labelSelector := "task-name=" + taskName
+	// labelSelector := "task=" + taskName
 	// if username != "" {
 	// 	labelSelector = labelSelector + ",owner=" + username
 	// }

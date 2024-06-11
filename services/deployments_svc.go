@@ -39,7 +39,7 @@ func (d *DeploymentServiceImpl) ListDeployments(authList []string) ([]models.Dep
 
 	if authList[0] != "*" {
 		for _, s := range authList {
-			labelSelector = append(labelSelector, "task-name="+s)
+			labelSelector = append(labelSelector, "task="+s)
 		}
 	}
 
@@ -50,7 +50,7 @@ func (d *DeploymentServiceImpl) ListDeployments(authList []string) ([]models.Dep
 
 	for _, d := range deploysList.Items {
 		// TODO: this is just a temporary fix, will need a more robust solution
-		if d.Name == "kriten" || d.Name == "kriten-frontend" {
+		if d.Spec.Template.Labels["managed-by"] != "kriten" {
 			continue
 		}
 		var data map[string]interface{}
@@ -66,7 +66,7 @@ func (d *DeploymentServiceImpl) ListDeployments(authList []string) ([]models.Dep
 		dRet := models.Deployment{
 			Name:      d.Name,
 			Owner:     d.Spec.Template.Labels["owner"],
-			Task:      d.Spec.Template.Labels["task-name"],
+			Task:      d.Spec.Template.Labels["task"],
 			Replicas:  *d.Spec.Replicas,
 			ExtraVars: data,
 		}
