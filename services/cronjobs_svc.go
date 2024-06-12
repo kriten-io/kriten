@@ -126,8 +126,11 @@ func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJ
 	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "update")
+	if err != nil {
+		return models.CronJob{}, err
+	}
 
-	return cronjob, err
+	return cronjob, nil
 }
 
 func (j *CronJobServiceImpl) DeleteCronJob(id string) error {

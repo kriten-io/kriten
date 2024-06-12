@@ -5,7 +5,6 @@ import (
 	"kriten/config"
 	"kriten/helpers"
 	"kriten/models"
-	"log"
 
 	"encoding/json"
 )
@@ -56,7 +55,6 @@ func (d *DeploymentServiceImpl) ListDeployments(authList []string) ([]models.Dep
 		var data map[string]interface{}
 		// This unmarshal is only used to fetch the extra vars, it doesn't look very reliable so it might need a rework
 		containerEnv := d.Spec.Template.Spec.Containers[0].Env
-		log.Println(containerEnv)
 		if len(containerEnv) > 0 {
 			err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
 			if err != nil {
@@ -77,9 +75,29 @@ func (d *DeploymentServiceImpl) ListDeployments(authList []string) ([]models.Dep
 }
 
 func (d *DeploymentServiceImpl) GetDeployment(name string) (models.Deployment, error) {
-	var deploy models.Deployment
+	deploy, err := helpers.GetDeployment(d.config.Kube, name)
+	if err != nil {
+		return models.Deployment{}, err
+	}
 
-	return deploy, nil
+	var data map[string]interface{}
+	// This unmarshal is only used to fetch the extra vars, it doesn't look very reliable so it might need a rework
+	containerEnv := deploy.Spec.Template.Spec.Containers[0].Env
+	if len(containerEnv) > 0 {
+		err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
+		if err != nil {
+			return models.Deployment{}, err
+		}
+	}
+	deployment := models.Deployment{
+		Name:      deploy.Name,
+		Owner:     deploy.Spec.Template.Labels["owner"],
+		Task:      deploy.Spec.Template.Labels["task"],
+		Replicas:  *deploy.Spec.Replicas,
+		ExtraVars: data,
+	}
+
+	return deployment, nil
 }
 
 func (d *DeploymentServiceImpl) CreateDeployment(deploy models.Deployment) (models.Deployment, error) {
@@ -94,6 +112,16 @@ func (d *DeploymentServiceImpl) CreateDeployment(deploy models.Deployment) (mode
 }
 
 func (d *DeploymentServiceImpl) UpdateDeployment(deploy models.Deployment) (models.Deployment, error) {
+	runner, command, err := PreFlightChecks(d.config.Kube, deploy.Task, deploy.ExtraVars)
+	if err != nil {
+		return models.Deployment{}, err
+	}
+
+	_, err = helpers.CreateOrUpdateDeployment(d.config.Kube, deploy, runner, command, "update")
+	if err != nil {
+		return models.Deployment{}, err
+	}
+
 	return deploy, nil
 }
 
