@@ -77,10 +77,10 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 
 	if authList[0] != "*" {
 		for _, s := range authList {
-			labelSelector = append(labelSelector, "task-name="+s)
+			labelSelector = append(labelSelector, "task="+s)
 		}
 	}
-	// labelSelector := "task-name=" + taskName
+	// labelSelector := "task=" + taskName
 	// if username != "" {
 	// 	labelSelector = labelSelector + ",owner=" + username
 	// }
@@ -220,10 +220,10 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	podSpec := helpers.PodSpec(taskName, runnerImage, extraVars, task.Data["command"], gitURL, gitBranch)
+	jobID, err := helpers.CreateJob(j.config.Kube, podSpec, taskName, username)
 
 	jobStatus.ID = jobID
-
 	if err != nil {
 		return jobStatus, err
 	}

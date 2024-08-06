@@ -33,6 +33,7 @@ var (
 	ts         services.TaskService
 	js         services.JobService
 	cjs        services.CronJobService
+	ds         services.DeploymentService
 	us         services.UserService
 	ats        services.ApiTokenService
 	gs         services.GroupService
@@ -45,6 +46,7 @@ var (
 	tc         controllers.TaskController
 	jc         controllers.JobController
 	cjc        controllers.CronJobController
+	dc         controllers.DeploymentController
 	uc         controllers.UserController
 	atc        controllers.ApiTokenController
 	gc         controllers.GroupController
@@ -150,6 +152,7 @@ func init() {
 	ts = services.NewTaskService(conf)
 	js = services.NewJobService(conf)
 	cjs = services.NewCronJobService(conf)
+	ds = services.NewDeploymentService(conf)
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, als, authProviders)
@@ -164,6 +167,7 @@ func init() {
 	tc = controllers.NewTaskController(ts, as, als)
 	jc = controllers.NewJobController(js, as, als)
 	cjc = controllers.NewCronJobController(cjs, as, als)
+	dc = controllers.NewDeploymentController(ds, as, als)
 }
 
 //	@title			Swagger Kriten
@@ -208,6 +212,7 @@ func main() {
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
 		cronjobs := basepath.Group("/cronjobs")
+		deploys := basepath.Group("/deployments")
 		users := basepath.Group("/users")
 		tokens := basepath.Group("/api_tokens")
 		groups := basepath.Group("/groups")
@@ -219,6 +224,7 @@ func main() {
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)
 			cjc.SetCronJobRoutes(cronjobs, conf)
+			dc.SetDeploymentRoutes(deploys, conf)
 			uc.SetUserRoutes(users, conf)
 			atc.SetApiTokenRoutes(tokens, conf)
 			gc.SetGroupRoutes(groups, conf)
