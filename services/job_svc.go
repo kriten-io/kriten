@@ -141,11 +141,23 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	var logs string
 	for _, pod := range pods.Items {
 		// TODO: this will only retrieve logs for now, can be extended if needed
-		log, err := helpers.GetLogs(j.config.Kube, pod.Name)
-		if err != nil {
-			return jobStatus, err
+		logs += "## init container logs\n"
+		for c := range pod.Spec.InitContainers {
+			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
+			if err != nil {
+				return jobStatus, err
+			}
+			logs += log
 		}
-		logs = logs + log
+
+		logs += "##\n\n application container logs \n"
+		for c := range pod.Spec.Containers {
+			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
+			if err != nil {
+				return jobStatus, err
+			}
+			logs += log
+		}
 
 	}
 
@@ -220,7 +232,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
 
 	jobStatus.ID = jobID
 

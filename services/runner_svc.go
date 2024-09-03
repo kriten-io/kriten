@@ -9,18 +9,20 @@ import (
 	"time"
 
 	"golang.org/x/exp/slices"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type RunnerService interface {
 	ListRunners([]string) ([]map[string]string, error)
-	GetRunner(string) (map[string]string, error)
-	CreateRunner(models.Runner) (*v1.ConfigMap, error)
-	UpdateRunner(models.Runner) (*v1.ConfigMap, error)
+	GetRunner(string) (*models.Runner, error)
+	CreateRunner(models.Runner) (*models.Runner, error)
+	UpdateRunner(models.Runner) (*models.Runner, error)
 	DeleteRunner(string) error
 	GetAdminGroups(string) (string, error)
 	ListAllJobs() ([]models.Job, error)
+	GetSecret(string) (map[string]string, error)
+	UpdateSecret(string, map[string]string) (map[string]string, error)
+	DeleteSecret(string) error
 }
 
 type RunnerServiceImpl struct {
@@ -62,55 +64,82 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 	return runnersList, nil
 }
 
-func (r *RunnerServiceImpl) GetRunner(name string) (map[string]string, error) {
+func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
+	var runnerData models.Runner
 	configMap, err := helpers.GetConfigMap(r.config.Kube, name)
 
 	if err != nil {
-		return nil, err
+		return &runnerData, err
 	}
 
 	if configMap.Data["image"] == "" {
 		return nil, fmt.Errorf("runner %s not found", name)
 	}
 
-	secret, err := helpers.GetSecret(r.config.Kube, name)
+	b, _ := json.Marshal(configMap.Data)
+	_ = json.Unmarshal(b, &runnerData)
+
+	token, err := helpers.GetSecret(r.config.Kube, name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return configMap.Data, nil
+			return &runnerData, nil
 		}
-		return nil, err
+		return &runnerData, err
 	}
-	configMap.Data["token"] = string(secret.Data["token"])
+	runnerData.Token = string(token.Data["token"])
 
-	return configMap.Data, nil
+	secretName := name + "-secret"
+	secretCleared, err := r.GetSecret(secretName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return &runnerData, nil
+		}
+		return &runnerData, err
+	}
+
+	runnerData.Secret = secretCleared
+	return &runnerData, nil
 }
 
-func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*v1.ConfigMap, error) {
+func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
 	b, _ := json.Marshal(runner)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
 	delete(data, "token")
+	delete(data, "secret")
 
 	if data["branch"] == "" {
 		data["branch"] = "main"
 	}
 
-	configMap, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
+	_, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
 
+	// runner contains two types of secrets: git repo token and custom secrets, to be stored
+	// in separate k8s secrets. token will be stored under runner name, secrets as runner name + secrets.
 	if runner.Token != "" {
-		secret := make(map[string]string)
-		secret["token"] = runner.Token
-		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, secret, "create")
+		token := make(map[string]string)
+		token["token"] = runner.Token
+		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, token, "create")
 
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return configMap, err
+	if runner.Secret != nil {
+		secretsK8SName := runner.Name + "-secret"
+		_, err = r.UpdateSecret(secretsK8SName, runner.Secret)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	runnerData, err := r.GetRunner(runner.Name)
+	return runnerData, err
 }
 
-func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*v1.ConfigMap, error) {
+func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, error) {
 	_, err := helpers.GetConfigMap(r.config.Kube, runner.Name)
 	if err != nil {
 		return nil, err
@@ -121,14 +150,14 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*v1.ConfigMap, e
 	_ = json.Unmarshal(b, &data)
 	delete(data, "token")
 
-	configMap, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "update")
+	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "update")
 	if err != nil {
 		return nil, err
 	}
 
 	if runner.Token != "" {
-		secret := make(map[string]string)
-		secret["token"] = runner.Token
+		token := make(map[string]string)
+		token["token"] = runner.Token
 		operation := "update"
 		// default operation is 'update', try to get the Secret first: if it's not found we need to create it
 		// e.g. Someone created a Task without a secret and is adding one with update
@@ -140,7 +169,7 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*v1.ConfigMap, e
 				return nil, err
 			}
 		}
-		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, secret, operation)
+		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, token, operation)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +180,22 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*v1.ConfigMap, e
 		}
 	}
 
-	return configMap, err
+	if runner.Secret != nil {
+		secretName := runner.Name + "-secret"
+		_, err = r.UpdateSecret(secretName, runner.Secret)
+
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	updatedRunner, err := r.GetRunner(runner.Name)
+	if err != nil {
+		return nil, err
+	}
+	return updatedRunner, err
+
 }
 
 func (r *RunnerServiceImpl) DeleteRunner(name string) error {
@@ -214,4 +258,91 @@ func (r *RunnerServiceImpl) ListAllJobs() ([]models.Job, error) {
 	}
 
 	return jobsRet, nil
+}
+
+func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
+	secretCleaned := make(map[string]string)
+	secretName := name + "-secret"
+	secret, err := helpers.GetSecret(r.config.Kube, secretName)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	} else if errors.IsNotFound(err) {
+		return nil, nil
+	}
+
+	for key := range secret.Data {
+		secretCleaned[key] = "************"
+
+	}
+
+	return secretCleaned, nil
+}
+
+func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
+	secretCleaned := make(map[string]string)
+	secretCurrent := make(map[string]string)
+	var operation string
+
+	secretName := name + "-secret"
+	secretObj, err := helpers.GetSecret(r.config.Kube, secretName)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	// converting k8s secret from v1.Secret into map[string]string
+
+	if secretObj != nil {
+
+		for k, v := range secretObj.Data {
+			secretCurrent[k] = string(v)
+		}
+
+		operation = "update"
+
+	} else {
+		operation = "create"
+	}
+
+	for k, v := range secret {
+
+		v2, ok := secretCurrent[k]
+
+		if v != "" || v != v2 {
+			if v != "************" {
+				secretCurrent[k] = v
+			}
+
+		} else if v == "" && ok {
+			delete(secretCurrent, k)
+		}
+	}
+
+	if len(secretCurrent) != 0 {
+		secretNew, err := helpers.CreateOrUpdateSecret(r.config.Kube, secretName, secretCurrent, operation)
+		if err != nil {
+			return secretCleaned, err
+		}
+
+		for key := range secretNew.Data {
+			secretCleaned[key] = "*************"
+
+		}
+		return secretCleaned, nil
+
+	} else {
+		err := helpers.DeleteSecret(r.config.Kube, secretName)
+		if err != nil {
+			return secretCleaned, err
+		}
+		return secretCleaned, nil
+	}
+}
+
+func (r *RunnerServiceImpl) DeleteSecret(name string) error {
+	secretName := name + "-secret"
+	err := helpers.DeleteSecret(r.config.Kube, secretName)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }

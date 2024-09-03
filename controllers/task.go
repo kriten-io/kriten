@@ -49,11 +49,6 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 			r.POST("/:id/schema", tc.UpdateSchema)
 			r.PUT("/:id/schema", tc.UpdateSchema)
 			r.DELETE("/:id/schema", tc.DeleteSchema)
-
-			r.GET("/:id/secret", tc.GetSecret)
-			r.POST("/:id/secret", tc.UpdateSecret)
-			r.PUT("/:id/secret", tc.UpdateSecret)
-			r.DELETE("/:id/secret", tc.DeleteSecret)
 		}
 	}
 
@@ -117,7 +112,7 @@ func (tc *TaskController) GetTask(ctx *gin.Context) {
 	taskName := ctx.Param("id")
 	audit := tc.AuditService.InitialiseAuditLog(ctx, "get", tc.AuditCategory, taskName)
 	// username := ctx.MustGet("username").(string)
-	task, secret, err := tc.TaskService.GetTask(taskName)
+	task, err := tc.TaskService.GetTask(taskName)
 
 	if err != nil {
 		tc.AuditService.CreateAudit(audit)
@@ -132,7 +127,6 @@ func (tc *TaskController) GetTask(ctx *gin.Context) {
 	}
 	audit.Status = "success"
 
-	task["secret"] = secret
 	// ctx.JSON(http.StatusOK, gin.H{"msg": "task retrieved successfully", "value": task, "secret": secret})
 	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, task)
@@ -163,7 +157,7 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 	}
 	audit.EventTarget = task.Name
 
-	taskConfig, secret, err := tc.TaskService.CreateTask(task)
+	taskConfig, err := tc.TaskService.CreateTask(task)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			tc.AuditService.CreateAudit(audit)
@@ -176,7 +170,6 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 	}
 
 	audit.Status = "success"
-	taskConfig["secret"] = secret
 	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, taskConfig)
 }
@@ -207,7 +200,7 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 		return
 	}
 
-	taskConfig, secret, err := tc.TaskService.UpdateTask(task)
+	taskConfig, err := tc.TaskService.UpdateTask(task)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			tc.AuditService.CreateAudit(audit)
@@ -220,7 +213,6 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 	}
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
-	taskConfig["secret"] = secret
 	ctx.JSON(http.StatusOK, taskConfig)
 }
 
@@ -361,108 +353,4 @@ func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "schema deleted successfully"})
-}
-
-// GetSecret godoc
-//
-//	@Summary		Get secret
-//	@Description	Get secret associated to a specific task (passwords are obfuscated)
-//	@Tags			tasks
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		string	true	"Task name"
-//	@Success		200	{object}	map[string]interface{}
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
-//	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/secret [get]
-//	@Security		Bearer
-func (tc *TaskController) GetSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "get_secret", tc.AuditCategory, taskName)
-	secret, err := tc.TaskService.GetSecret(taskName)
-
-	if err != nil {
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if secret == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "secret not found"})
-		return
-	}
-
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, secret)
-}
-
-// GetSecret godoc
-//
-//	@Summary		Update secret
-//	@Description	Update secret associated to a specific task
-//	@Tags			tasks
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		string	true	"Task name"
-//	@Success		200	{object}	map[string]interface{}
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
-//	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/secret [get]
-//	@Security		Bearer
-func (tc *TaskController) UpdateSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "update_secret", tc.AuditCategory, taskName)
-	var secret map[string]string
-
-	if err := ctx.BindJSON(&secret); err != nil {
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	secretStored, err := tc.TaskService.UpdateSecret(taskName, secret)
-
-	if err != nil {
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, secretStored)
-}
-
-// DeleteSecret godoc
-//
-//	@Summary		Delete secret
-//	@Description	Remove secret associated to a specific task
-//	@Tags			tasks
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		string	true	"Task name"
-//	@Success		200	{object}	map[string]interface{}
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
-//	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/schema [delete]
-//	@Security		Bearer
-func (tc *TaskController) DeleteSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete_secret", tc.AuditCategory, taskName)
-
-	err := tc.TaskService.DeleteSecret(taskName)
-
-	if err != nil {
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "secret deleted successfully"})
 }
