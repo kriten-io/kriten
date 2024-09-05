@@ -269,9 +269,9 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 //	@Router			/tasks/{id}/secret [get]
 //	@Security		Bearer
 func (rc *RunnerController) GetSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "get_secret", rc.AuditCategory, taskName)
-	secret, err := rc.RunnerService.GetSecret(taskName)
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "get_secret", rc.AuditCategory, runnerName)
+	secret, err := rc.RunnerService.GetSecret(runnerName)
 
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
@@ -304,8 +304,8 @@ func (rc *RunnerController) GetSecret(ctx *gin.Context) {
 //	@Router			/runners/{id}/secret [get]
 //	@Security		Bearer
 func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "update_secret", rc.AuditCategory, taskName)
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "update_secret", rc.AuditCategory, runnerName)
 	var secret map[string]string
 
 	if err := ctx.BindJSON(&secret); err != nil {
@@ -314,7 +314,7 @@ func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
 		return
 	}
 
-	secretStored, err := rc.RunnerService.UpdateSecret(taskName, secret)
+	secretStored, err := rc.RunnerService.UpdateSecret(runnerName, secret)
 
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
@@ -342,10 +342,10 @@ func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
 //	@Router			/runners/{id}/schema [delete]
 //	@Security		Bearer
 func (rc *RunnerController) DeleteSecret(ctx *gin.Context) {
-	taskName := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete_secret", rc.AuditCategory, taskName)
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete_secret", rc.AuditCategory, runnerName)
 
-	err := rc.RunnerService.DeleteSecret(taskName)
+	err := rc.RunnerService.DeleteSecret(runnerName)
 
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)

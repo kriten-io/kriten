@@ -12,7 +12,6 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -59,7 +58,6 @@ func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, ope
 	}
 
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
@@ -98,7 +96,6 @@ func GetSecret(kube config.KubeConfig, secretName string) (*corev1.Secret, error
 		context.TODO(), secretName, metav1.GetOptions{})
 
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
@@ -136,9 +133,6 @@ func DeleteSecret(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
 		log.Println(err)
 		return err
 	}
@@ -302,7 +296,7 @@ func JobObject(name string,
 							Name: "secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: runnerName + "-secret",
+									SecretName: runnerName,
 									Optional:   &optionalSecret,
 								},
 							},
@@ -343,7 +337,7 @@ func JobObject(name string,
 								{
 									SecretRef: &corev1.SecretEnvSource{
 										LocalObjectReference: corev1.LocalObjectReference{
-											Name: runnerName + "-secret",
+											Name: runnerName,
 										},
 										Optional: &optionalSecret,
 									},

@@ -48,7 +48,7 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 	}
 
 	for _, configMap := range configMaps.Items {
-		// TODO: we don't currently have a way of definying what is a Runner configmap so I'm checking if it has an Image field
+		// TODO: we don't currently have a way to identify what is a Runner configmap so I'm checking if it has an Image field
 		// This will be changed when runners will live in a separate namespace
 		if configMap.Data["image"] != "" {
 			if authList[0] != "*" {
@@ -79,25 +79,25 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 	b, _ := json.Marshal(configMap.Data)
 	_ = json.Unmarshal(b, &runnerData)
 
-	token, err := helpers.GetSecret(r.config.Kube, name)
+	tokenObjName := name + "-token"
+	token, err := r.GetSecret(tokenObjName)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return &runnerData, nil
+		if !errors.IsNotFound(err) {
+			return &runnerData, err
 		}
-		return &runnerData, err
-	}
-	runnerData.Token = string(token.Data["token"])
-
-	secretName := name + "-secret"
-	secretCleared, err := r.GetSecret(secretName)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return &runnerData, nil
-		}
-		return &runnerData, err
+	} else {
+		runnerData.Token = token["token"]
 	}
 
-	runnerData.Secret = secretCleared
+	secretCleared, err := r.GetSecret(name)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return &runnerData, err
+		}
+	} else {
+		runnerData.Secret = secretCleared
+	}
+
 	return &runnerData, nil
 }
 
@@ -113,13 +113,17 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 	}
 
 	_, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
+	if err != nil {
+		return nil, err
+	}
 
 	// runner contains two types of secrets: git repo token and custom secrets, to be stored
 	// in separate k8s secrets. token will be stored under runner name, secrets as runner name + secrets.
 	if runner.Token != "" {
+		tokenObjName := runner.Name + "-token"
 		token := make(map[string]string)
 		token["token"] = runner.Token
-		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, token, "create")
+		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, "create")
 
 		if err != nil {
 			return nil, err
@@ -127,8 +131,7 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 	}
 
 	if runner.Secret != nil {
-		secretsK8SName := runner.Name + "-secret"
-		_, err = r.UpdateSecret(secretsK8SName, runner.Secret)
+		_, err = r.UpdateSecret(runner.Name, runner.Secret)
 
 		if err != nil {
 			return nil, err
@@ -155,13 +158,14 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 		return nil, err
 	}
 
-	if runner.Token != "" {
+	tokenObjName := runner.Name + "-token"
+	if runner.Token != "" && runner.Token != "************" {
 		token := make(map[string]string)
 		token["token"] = runner.Token
 		operation := "update"
 		// default operation is 'update', try to get the Secret first: if it's not found we need to create it
 		// e.g. Someone created a Task without a secret and is adding one with update
-		_, err = helpers.GetSecret(r.config.Kube, runner.Name)
+		_, err = r.GetSecret(tokenObjName)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				operation = "create"
@@ -169,20 +173,19 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 				return nil, err
 			}
 		}
-		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, runner.Name, token, operation)
+		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, operation)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		err = helpers.DeleteSecret(r.config.Kube, runner.Name)
+	} else if runner.Token == "" {
+		err = helpers.DeleteSecret(r.config.Kube, tokenObjName)
 		if err != nil && !errors.IsNotFound(err) {
 			return nil, err
 		}
 	}
 
 	if runner.Secret != nil {
-		secretName := runner.Name + "-secret"
-		_, err = r.UpdateSecret(secretName, runner.Secret)
+		_, err = r.UpdateSecret(runner.Name, runner.Secret)
 
 		if err != nil {
 			return nil, err
@@ -262,19 +265,16 @@ func (r *RunnerServiceImpl) ListAllJobs() ([]models.Job, error) {
 
 func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
 	secretCleaned := make(map[string]string)
-	secretName := name + "-secret"
-	secret, err := helpers.GetSecret(r.config.Kube, secretName)
-	if err != nil && !errors.IsNotFound(err) {
+	secret, err := helpers.GetSecret(r.config.Kube, name)
+
+	if err != nil {
 		return nil, err
-	} else if errors.IsNotFound(err) {
-		return nil, nil
 	}
 
 	for key := range secret.Data {
 		secretCleaned[key] = "************"
 
 	}
-
 	return secretCleaned, nil
 }
 
@@ -283,8 +283,7 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 	secretCurrent := make(map[string]string)
 	var operation string
 
-	secretName := name + "-secret"
-	secretObj, err := helpers.GetSecret(r.config.Kube, secretName)
+	secretObj, err := helpers.GetSecret(r.config.Kube, name)
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, err
 	}
@@ -297,7 +296,6 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 		}
 
 		operation = "update"
-
 	} else {
 		operation = "create"
 	}
@@ -310,14 +308,13 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 			if v != "************" {
 				secretCurrent[k] = v
 			}
-
 		} else if v == "" && ok {
 			delete(secretCurrent, k)
 		}
 	}
 
 	if len(secretCurrent) != 0 {
-		secretNew, err := helpers.CreateOrUpdateSecret(r.config.Kube, secretName, secretCurrent, operation)
+		secretNew, err := helpers.CreateOrUpdateSecret(r.config.Kube, name, secretCurrent, operation)
 		if err != nil {
 			return secretCleaned, err
 		}
@@ -329,7 +326,7 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 		return secretCleaned, nil
 
 	} else {
-		err := helpers.DeleteSecret(r.config.Kube, secretName)
+		err := helpers.DeleteSecret(r.config.Kube, name)
 		if err != nil {
 			return secretCleaned, err
 		}
@@ -338,8 +335,7 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 }
 
 func (r *RunnerServiceImpl) DeleteSecret(name string) error {
-	secretName := name + "-secret"
-	err := helpers.DeleteSecret(r.config.Kube, secretName)
+	err := helpers.DeleteSecret(r.config.Kube, name)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
