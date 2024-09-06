@@ -12,7 +12,7 @@ jobs:
     env:
       DOCKER_REGISTRY: hub.docker.com
       DOCKER_REPOSITORY: kriten
-      DOCKER_PLATFORM: linux/arm64
+      DOCKER_PLATFORM: linux/amd64
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
