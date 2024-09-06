@@ -219,14 +219,14 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	if gitBranch == "" {
 		gitBranch = "main"
 	}
-
-	secret, err := helpers.GetSecret(j.config.Kube, runnerName)
+	tokenObjName := runnerName + "-token"
+	token, err := helpers.GetSecret(j.config.Kube, tokenObjName)
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
 			return jobStatus, err
 		}
 	} else {
-		gitToken := string(secret.Data["token"])
+		gitToken := string(token.Data["token"])
 		if gitToken != "" {
 			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
 		}
