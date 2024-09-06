@@ -152,6 +152,7 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
 	delete(data, "token")
+	delete(data, "secret")
 
 	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "update")
 	if err != nil {
