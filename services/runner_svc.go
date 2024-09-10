@@ -291,7 +291,6 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 	// converting k8s secret from v1.Secret into map[string]string
 
 	if secretObj != nil {
-
 		for k, v := range secretObj.Data {
 			secretCurrent[k] = string(v)
 		}
@@ -302,10 +301,9 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 	}
 
 	for k, v := range secret {
-
 		v2, ok := secretCurrent[k]
 
-		if v != "" || v != v2 {
+		if v != "" && v != v2 {
 			if v != "************" {
 				secretCurrent[k] = v
 			}
@@ -321,7 +319,7 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 		}
 
 		for key := range secretNew.Data {
-			secretCleaned[key] = "*************"
+			secretCleaned[key] = "************"
 
 		}
 		return secretCleaned, nil
