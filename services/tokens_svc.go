@@ -39,7 +39,9 @@ func NewApiTokenService(database *gorm.DB, config config.Config) ApiTokenService
 func (u *ApiTokenServiceImpl) ListApiTokens(userid uuid.UUID) ([]models.ApiToken, error) {
 	var apiTokens []models.ApiToken
 
-	res := u.db.Where("owner = ?", userid).Find(&apiTokens)
+	res := u.db.Select("id", "owner", "expires", "created_at", "updated_at", "description", "enabled").
+		Where("owner = ?", userid).
+		Find(&apiTokens)
 
 	if res.Error != nil {
 		return apiTokens, res.Error
@@ -70,7 +72,11 @@ func (u *ApiTokenServiceImpl) ListAllApiTokens(authList []string) ([]models.ApiT
 
 func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	var apiToken models.ApiToken
-	res := u.db.Where("id = ?", id).Find(&apiToken)
+
+	res := u.db.Select("id", "owner", "expires", "created_at", "updated_at", "description", "enabled").
+		Where("id = ?", id).
+		Find(&apiToken)
+
 	if res.Error != nil {
 		return models.ApiToken{}, res.Error
 	}
@@ -87,15 +93,17 @@ func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.A
 	if err != nil {
 		return models.ApiToken{}, err
 	}
-
+	var tokenEnabled = true
 	apiToken.Key = helpers.GenerateHMAC(u.config.APISecret, key)
 
 	// if No value is passed, initialise to Zero value
 	if apiToken.Expires == nil {
 		apiToken.Expires = new(time.Time)
 	}
+
+	// nil pointer dereference via tokenEnabled bool var
 	if apiToken.Enabled == nil {
-		*apiToken.Enabled = true
+		apiToken.Enabled = &tokenEnabled
 	}
 
 	res := u.db.Create(&apiToken)
