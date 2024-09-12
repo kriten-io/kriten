@@ -1,6 +1,6 @@
 module kriten
 
-go 1.22
+go 1.19
 
 require (
 	github.com/elastic/go-elasticsearch/v8 v8.8.2
