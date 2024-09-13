@@ -42,6 +42,13 @@ func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.C
 		r.PATCH("/:id", rc.UpdateRunner)
 		r.PUT("/:id", rc.UpdateRunner)
 		r.DELETE("/:id", rc.DeleteRunner)
+
+		{
+			r.GET("/:id/secret", rc.GetSecret)
+			r.POST("/:id/secret", rc.UpdateSecret)
+			r.PUT("/:id/secret", rc.UpdateSecret)
+			r.DELETE("/:id/secret", rc.DeleteSecret)
+		}
 	}
 
 }
@@ -150,7 +157,7 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 
 	audit.EventTarget = runner.Name
 
-	configMap, err := rc.RunnerService.CreateRunner(runner)
+	runnerData, err := rc.RunnerService.CreateRunner(runner)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			rc.AuditService.CreateAudit(audit)
@@ -164,7 +171,7 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, configMap.Data)
+	ctx.JSON(http.StatusOK, runnerData)
 }
 
 // UpdateRunner godoc
@@ -194,7 +201,7 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 		return
 	}
 
-	configMap, err := rc.RunnerService.UpdateRunner(runner)
+	runnerData, err := rc.RunnerService.UpdateRunner(runner)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			rc.AuditService.CreateAudit(audit)
@@ -208,7 +215,7 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, configMap.Data)
+	ctx.JSON(http.StatusOK, runnerData)
 }
 
 // DeleteRunner godoc
@@ -245,4 +252,108 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "runner deleted successfully"})
+}
+
+// GetSecret godoc
+//
+//	@Summary		Get secret
+//	@Description	Get secret associated with runner (passwords are obfuscated)
+//	@Tags			runners
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Runner name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/tasks/{id}/secret [get]
+//	@Security		Bearer
+func (rc *RunnerController) GetSecret(ctx *gin.Context) {
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "get_secret", rc.AuditCategory, runnerName)
+	secret, err := rc.RunnerService.GetSecret(runnerName)
+
+	if err != nil {
+		rc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if secret == nil {
+		ctx.JSON(http.StatusOK, gin.H{"msg": "secret not found"})
+		return
+	}
+
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, secret)
+}
+
+// GetSecret godoc
+//
+//	@Summary		Update secret
+//	@Description	Update secret associated with runner
+//	@Tags			runners
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"runner name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/runners/{id}/secret [get]
+//	@Security		Bearer
+func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "update_secret", rc.AuditCategory, runnerName)
+	var secret map[string]string
+
+	if err := ctx.BindJSON(&secret); err != nil {
+		rc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	secretStored, err := rc.RunnerService.UpdateSecret(runnerName, secret)
+
+	if err != nil {
+		rc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, secretStored)
+}
+
+// DeleteSecret godoc
+//
+//	@Summary		Delete secret
+//	@Description	Remove secret associated with runner
+//	@Tags			runners
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Runner name"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/runners/{id}/schema [delete]
+//	@Security		Bearer
+func (rc *RunnerController) DeleteSecret(ctx *gin.Context) {
+	runnerName := ctx.Param("id")
+	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete_secret", rc.AuditCategory, runnerName)
+
+	err := rc.RunnerService.DeleteSecret(runnerName)
+
+	if err != nil {
+		rc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	audit.Status = "success"
+	rc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, gin.H{"msg": "secret deleted successfully"})
 }

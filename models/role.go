@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type Role struct {

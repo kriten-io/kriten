@@ -15,22 +15,17 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
-
-	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type TaskService interface {
 	ListTasks([]string) ([]map[string]string, error)
-	GetTask(string) (map[string]interface{}, map[string]string, error)
-	CreateTask(models.Task) (map[string]interface{}, map[string]string, error)
-	UpdateTask(models.Task) (map[string]interface{}, map[string]string, error)
+	GetTask(string) (*models.Task, error)
+	CreateTask(models.Task) (*models.Task, error)
+	UpdateTask(models.Task) (*models.Task, error)
 	DeleteTask(string) error
 	GetSchema(string) (map[string]interface{}, error)
 	DeleteSchema(string) error
 	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
-	GetSecret(string) (map[string]string, error)
-	UpdateSecret(string, map[string]string) (map[string]string, error)
-	DeleteSecret(string) error
 }
 
 type TaskServiceImpl struct {
@@ -69,60 +64,51 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, err
 	return tasksList, nil
 }
 
-func (t *TaskServiceImpl) GetTask(name string) (map[string]interface{}, map[string]string, error) {
+func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
+	var taskData models.Task
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if configMap.Data["runner"] == "" {
-		return nil, nil, fmt.Errorf("task %s not found", name)
+		return nil, fmt.Errorf("task %s not found", name)
 	}
 
 	// TODO: this is a temporary solution to return synchronous as a boolean
 	b, _ := json.Marshal(configMap.Data)
-	var data map[string]interface{}
-	_ = json.Unmarshal(b, &data)
-	data["synchronous"], _ = strconv.ParseBool(configMap.Data["synchronous"])
+
+	_ = json.Unmarshal(b, &taskData)
+	taskData.Synchronous, _ = strconv.ParseBool(configMap.Data["synchronous"])
 
 	if configMap.Data["schema"] != "" {
 		var jsonData map[string]interface{}
 		err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		data["schema"] = jsonData
+		taskData.Schema = jsonData
 	}
 
-	secretCleared, err := t.GetSecret(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return data, nil, nil
-		}
-		return data, nil, err
-	}
-
-	return data, secretCleared, nil
+	return &taskData, nil
 }
 
-func (t *TaskServiceImpl) CreateTask(task models.Task) (map[string]interface{}, map[string]string, error) {
+func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	var jsonData []byte
-	var configuredTask map[string]interface{}
-	var secretCleared map[string]string
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
-		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
+		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -136,48 +122,38 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (map[string]interface{}, 
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	if task.Secret != nil {
-		_, err = t.UpdateSecret(task.Name, task.Secret)
-
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	configuredTask, secretCleared, err = t.GetTask(task.Name)
+	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return configuredTask, secretCleared, err
+	return configuredTask, err
 }
 
-func (t *TaskServiceImpl) UpdateTask(task models.Task) (map[string]interface{}, map[string]string, error) {
+func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 	var jsonData []byte
-	var configuredTask map[string]interface{}
-	var secretCleared map[string]string
 
 	_, err := helpers.GetConfigMap(t.config.Kube, task.Name)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
-		return nil, nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
+		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -187,45 +163,23 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (map[string]interface{}, 
 	_ = json.Unmarshal(b, &data)
 	data["synchronous"] = strconv.FormatBool(task.Synchronous)
 	data["schema"] = string(jsonData)
-	delete(data, "secret")
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	//var secret *v1.Secret
-	if task.Secret != nil {
-
-		_, err = t.UpdateSecret(task.Name, task.Secret)
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-	} else {
-		err = helpers.DeleteSecret(t.config.Kube, task.Name)
-		if err != nil && !errors.IsNotFound(err) {
-			return nil, nil, err
-		}
-	}
-
-	configuredTask, secretCleared, err = t.GetTask(task.Name)
+	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return configuredTask, secretCleared, err
+	return configuredTask, err
 
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
 	err := helpers.DeleteConfigMap(t.config.Kube, name)
 	if err != nil {
-		return err
-	}
-
-	err = helpers.DeleteSecret(t.config.Kube, name)
-	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
@@ -283,14 +237,12 @@ func (t *TaskServiceImpl) UpdateSchema(taskName string, schema map[string]interf
 }
 
 func (t *TaskServiceImpl) DeleteSchema(name string) error {
-	task, _, err := t.GetTask(name)
+	task, err := t.GetTask(name)
 	if err != nil {
 		return err
 	}
 
-	log.Println(task)
-	log.Println(task["schema"])
-	if task["schema"] == "" {
+	if task.Schema == nil {
 		return nil
 	}
 
@@ -326,91 +278,6 @@ func ValidateSchema(schema []byte) error {
 
 	if err != nil {
 		log.Printf("This spec has some validation errors: %v\n", err)
-		return err
-	}
-
-	return nil
-}
-
-func (t *TaskServiceImpl) GetSecret(name string) (map[string]string, error) {
-	secretCleaned := make(map[string]string)
-	secret, err := helpers.GetSecret(t.config.Kube, name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	} else if errors.IsNotFound(err) {
-		return nil, nil
-	}
-
-	for key := range secret.Data {
-		secretCleaned[key] = "************"
-
-	}
-
-	return secretCleaned, nil
-}
-
-func (t *TaskServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
-	secretCleaned := make(map[string]string)
-	secretCurrent := make(map[string]string)
-	var operation string
-
-	secretObj, err := helpers.GetSecret(t.config.Kube, name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
-	// converting k8s secret from v1.Secret into map[string]string
-
-	if secretObj != nil {
-
-		for k, v := range secretObj.Data {
-			secretCurrent[k] = string(v)
-		}
-
-		operation = "update"
-
-	} else {
-		operation = "create"
-	}
-
-	for k, v := range secret {
-
-		v2, ok := secretCurrent[k]
-
-		if v != "" || v != v2 {
-			if v != "************" {
-				secretCurrent[k] = v
-			}
-
-		} else if v == "" && ok {
-			delete(secretCurrent, k)
-		}
-	}
-
-	if len(secretCurrent) != 0 {
-		secretNew, err := helpers.CreateOrUpdateSecret(t.config.Kube, name, secretCurrent, operation)
-		if err != nil {
-			return secretCleaned, err
-		}
-
-		for key := range secretNew.Data {
-			secretCleaned[key] = "*************"
-
-		}
-		return secretCleaned, nil
-
-	} else {
-		err := helpers.DeleteSecret(t.config.Kube, name)
-		if err != nil {
-			return secretCleaned, err
-		}
-		return secretCleaned, nil
-	}
-}
-
-func (t *TaskServiceImpl) DeleteSecret(name string) error {
-
-	err := helpers.DeleteSecret(t.config.Kube, name)
-	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 

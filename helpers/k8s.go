@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"kriten/config"
 	"kriten/models"
@@ -11,7 +12,6 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -58,7 +58,6 @@ func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, ope
 	}
 
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
@@ -97,7 +96,6 @@ func GetSecret(kube config.KubeConfig, secretName string) (*corev1.Secret, error
 		context.TODO(), secretName, metav1.GetOptions{})
 
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
@@ -135,9 +133,6 @@ func DeleteSecret(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
 		log.Println(err)
 		return err
 	}
@@ -202,8 +197,8 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 }
 
 // TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
-	job := JobObject(name, kube, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
+	job := JobObject(name, kube, runnerName, runnerImage, owner, extraVars, command, gitURL, gitBranch)
 
 	job, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Create(
@@ -231,8 +226,10 @@ func ListPods(kube config.KubeConfig, labelSelector string) (*corev1.PodList, er
 }
 
 // TODO: Need to implement logs for init-containers
-func GetLogs(kube config.KubeConfig, podName string) (string, error) {
-	podLogOpts := corev1.PodLogOptions{}
+func GetLogs(kube config.KubeConfig, podName string, containerName string) (string, error) {
+	podLogOpts := corev1.PodLogOptions{
+		Container: containerName,
+	}
 
 	req := kube.Clientset.CoreV1().Pods(kube.Namespace).GetLogs(podName, &podLogOpts)
 
@@ -253,11 +250,21 @@ func GetLogs(kube config.KubeConfig, podName string) (string, error) {
 	return buf.String(), nil
 }
 
-func JobObject(name string, kube config.KubeConfig, image string, owner string, extraVars string, command string, gitURL string, gitBranch string) *batchv1.Job {
-	var ttlSeconds int32 = int32(kube.JobsTTL)
+func JobObject(name string,
+	kube config.KubeConfig,
+	runnerName string,
+	image string, owner string,
+	extraVars string,
+	command string,
+	gitURL string,
+	gitBranch string) *batchv1.Job {
+
+	var ttlSeconds = int32(kube.JobsTTL)
 	var backoffLimit int32 = 1
 
-	optional_secret := true
+	optionalSecret := true
+
+	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote", gitBranch, gitURL)
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
@@ -289,8 +296,8 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 							Name: "secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: name,
-									Optional:   &optional_secret,
+									SecretName: runnerName,
+									Optional:   &optionalSecret,
 								},
 							},
 						},
@@ -330,9 +337,9 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 								{
 									SecretRef: &corev1.SecretEnvSource{
 										LocalObjectReference: corev1.LocalObjectReference{
-											Name: name,
+											Name: runnerName,
 										},
-										Optional: &optional_secret,
+										Optional: &optionalSecret,
 									},
 								},
 							},
@@ -344,14 +351,9 @@ func JobObject(name string, kube config.KubeConfig, image string, owner string, 
 							Image:           "bitnami/git",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command: []string{
-								"git",
-							},
-							Args: []string{
-								"clone",
-								"-b",
-								gitBranch,
-								gitURL,
-								".",
+								"sh",
+								"-c",
+								initCmd,
 							},
 							WorkingDir: "/mnt/repo",
 							VolumeMounts: []corev1.VolumeMount{
@@ -428,6 +430,7 @@ func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runne
 
 	jobObj := JobObject(cronjob.Task,
 		kube,
+		runner.Data["name"],
 		runner.Data["image"],
 		cronjob.Owner,
 		extraVars,
