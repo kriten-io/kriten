@@ -22,6 +22,7 @@ import (
 type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
 	GetJob(string, string) (models.Job, error)
+	GetLog(string, string) (string, error)
 	CreateJob(string, string, string) (models.Job, error)
 	GetSchema(string) (map[string]interface{}, error)
 }
@@ -123,6 +124,22 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 		return jobStatus, errors.New("no pods found - check job ID")
 	}
 
+	for i, _ := range pods.Items {
+		for c, _ := range pods.Items[i].Status.InitContainerStatuses {
+			switch {
+			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
+				return jobStatus, errors.New("failed to pull init container image from container registry.")
+			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "Error":
+				return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
+			}
+		}
+		for c, _ := range pods.Items[i].Status.InitContainerStatuses {
+			if pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff" {
+				return jobStatus, errors.New("failed to pull application container image from container registry.")
+			}
+		}
+	}
+
 	job, err := helpers.GetJob(j.config.Kube, jobID)
 
 	if err != nil {
@@ -138,30 +155,12 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	jobStatus.Failed = job.Status.Failed
 	jobStatus.Completed = job.Status.Succeeded
 
-	var logs string
-	for _, pod := range pods.Items {
-		// TODO: this will only retrieve logs for now, can be extended if needed
-		logs += "## init container logs\n"
-		for c := range pod.Spec.InitContainers {
-			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
-			if err != nil {
-				return jobStatus, err
-			}
-			logs += log
-		}
-
-		logs += "##\n\n application container logs \n"
-		for c := range pod.Spec.Containers {
-			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
-			if err != nil {
-				return jobStatus, err
-			}
-			logs += log
-		}
-
+	jobLog, err := j.GetLog(username, jobID)
+	if err != nil {
+		jobStatus.Stdout += fmt.Sprintf("failed to read logs from containers: %v", err)
+	} else {
+		jobStatus.Stdout += jobLog
 	}
-
-	jobStatus.Stdout = logs
 
 	if jobStatus.Stdout != "" {
 		json_byte, _ := findDelimitedString(jobStatus.Stdout)
@@ -180,6 +179,49 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	}
 
 	return jobStatus, nil
+}
+
+func (j *JobServiceImpl) GetLog(username string, jobID string) (string, error) {
+	var logs string
+
+	labelSelector := "job-name=" + jobID
+	if username != "" {
+		labelSelector = labelSelector + ",owner=" + username
+	}
+
+	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
+	if err != nil {
+		return logs, err
+	}
+
+	if len(pods.Items) == 0 {
+		return logs, errors.New("no pods found - check job ID")
+	}
+
+	for _, pod := range pods.Items {
+		// TODO: this will only retrieve logs for now, can be extended if needed
+		logs += "\n\n## init container logs\n"
+		for c := range pod.Spec.InitContainers {
+			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
+			if err != nil {
+				logs += fmt.Sprintf("error reading logs from init container: %v", err)
+			} else {
+				logs += jobLog
+			}
+		}
+		// resetting jobLog to avoid duplications
+		logs += "\n\n##application container logs \n"
+		for c := range pod.Spec.Containers {
+			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
+			if err != nil {
+				logs += fmt.Sprintf("error reading logs from application container: %v", err)
+			} else {
+				logs += jobLog
+			}
+		}
+	}
+
+	return logs, nil
 }
 
 func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (models.Job, error) {

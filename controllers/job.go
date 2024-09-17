@@ -133,7 +133,7 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
 	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_job_log", jc.AuditCategory, jobName)
-	job, err := jc.JobService.GetJob(username, jobName)
+	log, err := jc.JobService.GetLog(username, jobName)
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
@@ -142,7 +142,6 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	}
 
 	audit.Status = "success"
-	log := job.Stdout
 
 	jc.AuditService.CreateAudit(audit)
 	ctx.Data(http.StatusOK, "text/plain", []byte(log))
