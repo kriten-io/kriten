@@ -133,7 +133,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 				return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
 			}
 		}
-		for c, _ := range pods.Items[i].Status.InitContainerStatuses {
+		for c, _ := range pods.Items[i].Status.ContainerStatuses {
 			if pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff" {
 				return jobStatus, errors.New("failed to pull application container image from container registry.")
 			}
