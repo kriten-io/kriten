@@ -60,6 +60,12 @@ This software uses the following open source packages:
 - [Swaggo](https://github.com/swaggo/swag)
 - [GORM](https://gorm.io/)
 
+## Contact us
+
+Email to <info@kriten.io>.
+
+Find us on [Slack](https://netdev-community.slack.com/archives/C06PJKB2HUJ).
+
 ## License
 
 GNU General Public License v3.0, see [LICENSE](https://github.com/kriten-io/kriten/blob/main/LICENSE).

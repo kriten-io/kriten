@@ -134,8 +134,14 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 			}
 		}
 		for c, _ := range pods.Items[i].Status.ContainerStatuses {
-			if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
-				return jobStatus, errors.New("failed to pull application container image from container registry.")
+
+			state := pods.Items[i].Status.ContainerStatuses[c].State
+			// adding check if application container is not running because it cannot pull image
+			// more checks to be added to cover any other cases
+			if state.Waiting != nil {
+				if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
+					return jobStatus, errors.New("failed to pull application container image from container registry.")
+				}
 			}
 		}
 	}
