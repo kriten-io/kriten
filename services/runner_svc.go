@@ -3,10 +3,11 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/api/errors"

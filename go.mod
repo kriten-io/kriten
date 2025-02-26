@@ -1,4 +1,4 @@
-module kriten
+module github.com/kriten-io/kriten
 
 go 1.19
 

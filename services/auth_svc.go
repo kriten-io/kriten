@@ -2,12 +2,13 @@ package services
 
 import (
 	"errors"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"

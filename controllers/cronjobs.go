@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,28 +61,28 @@ func (jc *CronJobController) SetCronJobRoutes(rg *gin.RouterGroup, config config
 //	@Router			/cronjobs [get]
 //	@Security		Bearer
 func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
+	//audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	jobsList, err := jc.CronJobService.ListCronJobs(authList)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
 	if len(jobsList) == 0 {
 		var arr [0]int
-		jc.AuditService.CreateAudit(audit)
+		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
+	//jc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, jobsList)
 }

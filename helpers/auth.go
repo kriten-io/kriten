@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"kriten/config"
-	"kriten/models"
 	"log"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/golang-jwt/jwt"
 	uuid "github.com/satori/go.uuid"

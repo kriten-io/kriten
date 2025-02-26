@@ -2,9 +2,10 @@ package services
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"

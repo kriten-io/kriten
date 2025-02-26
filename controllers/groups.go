@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
 
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/gin-gonic/gin"
-	"github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 )
 
@@ -21,7 +22,9 @@ type GroupController struct {
 	providers     []string
 }
 
-func NewGroupController(groupService services.GroupService, as services.AuthService, als services.AuditService, p []string) GroupController {
+func NewGroupController(groupService services.GroupService,
+	as services.AuthService,
+	als services.AuditService, p []string) GroupController {
 	return GroupController{
 		GroupService:  groupService,
 		AuthService:   as,
@@ -69,27 +72,27 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 //	@Router			/groups [get]
 //	@Security		Bearer
 func (gc *GroupController) ListGroups(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
+	//audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	groups, err := gc.GroupService.ListGroups(authList)
 
 	if err != nil {
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
 	if len(groups) == 0 {
 		var arr [0]int
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	gc.AuditService.CreateAudit(audit)
+	//gc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, groups)
 }

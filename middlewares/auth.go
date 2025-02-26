@@ -1,13 +1,14 @@
 package middlewares
 
 import (
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
-	"kriten/services"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"

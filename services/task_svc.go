@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/strfmt"
@@ -55,7 +56,8 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, err
 		if runnerName != "" {
 			if authList[0] == "*" || slices.Contains(authList, configMap.Data["name"]) {
 				delete(configMap.Data, "synchronous")
-				delete(configMap.Data, "schema")
+				// allow returning schema in the list of tasks to accomodate frontend
+				// delete(configMap.Data, "schema")
 				tasksList = append(tasksList, configMap.Data)
 			}
 		}

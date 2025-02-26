@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
 
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/gin-gonic/gin"
-	"github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 )
 

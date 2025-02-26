@@ -2,12 +2,13 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"log"
 	"net/http"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/api/errors"

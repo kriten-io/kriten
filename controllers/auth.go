@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"kriten/models"
-	"kriten/services"
 	"net/http"
+
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"

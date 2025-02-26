@@ -1,8 +1,9 @@
 package config
 
 import (
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/lib/pq"
 	"gorm.io/gorm"

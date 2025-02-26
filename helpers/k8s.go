@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"kriten/config"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"

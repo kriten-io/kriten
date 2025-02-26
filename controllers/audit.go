@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/services"
 	"net/http"
 	"strconv"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 )

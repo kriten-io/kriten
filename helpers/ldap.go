@@ -2,9 +2,10 @@ package helpers
 
 import (
 	"fmt"
-	"kriten/config"
 	"log"
 	"strings"
+
+	"github.com/kriten-io/kriten/config"
 
 	"github.com/go-errors/errors"
 	"github.com/go-ldap/ldap/v3"

@@ -3,10 +3,11 @@ package controllers
 import (
 	"fmt"
 	"io"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/services"
 	"net/http"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,28 +59,28 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 //	@Router			/jobs [get]
 //	@Security		Bearer
 func (jc *JobController) ListJobs(ctx *gin.Context) {
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
+	//audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	jobsList, err := jc.JobService.ListJobs(authList)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
 	if len(jobsList) == 0 {
 		var arr [0]int
-		jc.AuditService.CreateAudit(audit)
+		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
+	//jc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, jobsList)
 }

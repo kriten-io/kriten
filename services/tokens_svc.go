@@ -3,11 +3,12 @@ package services
 import (
 	"crypto/rand"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"math/big"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"

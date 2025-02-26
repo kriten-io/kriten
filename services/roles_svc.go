@@ -3,9 +3,10 @@ package services
 import (
 	"errors"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"golang.org/x/exp/slices"
 

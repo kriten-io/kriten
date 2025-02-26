@@ -2,10 +2,11 @@ package services
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"encoding/json"
 	"strings"

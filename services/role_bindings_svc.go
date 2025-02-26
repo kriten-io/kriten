@@ -3,9 +3,10 @@ package services
 import (
 	"errors"
 	"fmt"
-	"kriten/config"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
