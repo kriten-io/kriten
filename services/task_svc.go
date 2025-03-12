@@ -19,7 +19,7 @@ import (
 )
 
 type TaskService interface {
-	ListTasks([]string) ([]map[string]string, error)
+	ListTasks([]string) ([]*models.Task, error)
 	GetTask(string) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
 	UpdateTask(models.Task) (*models.Task, error)
@@ -39,11 +39,11 @@ func NewTaskService(config config.Config) TaskService {
 	}
 }
 
-func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, error) {
-	var tasksList []map[string]string
+func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
+	var tasks []*models.Task
 
 	if len(authList) == 0 {
-		return tasksList, nil
+		return tasks, nil
 	}
 
 	configMaps, err := helpers.ListConfigMaps(t.config.Kube)
@@ -55,15 +55,25 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, err
 		runnerName := configMap.Data["runner"]
 		if runnerName != "" {
 			if authList[0] == "*" || slices.Contains(authList, configMap.Data["name"]) {
-				delete(configMap.Data, "synchronous")
-				// allow returning schema in the list of tasks to accomodate frontend
-				// delete(configMap.Data, "schema")
-				tasksList = append(tasksList, configMap.Data)
+				var taskData *models.Task
+				b, _ := json.Marshal(configMap.Data)
+
+				_ = json.Unmarshal(b, &taskData)
+				taskData.Synchronous, _ = strconv.ParseBool(configMap.Data["synchronous"])
+				if configMap.Data["schema"] != "" {
+					var jsonData map[string]interface{}
+					err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
+					if err != nil {
+						return nil, err
+					}
+					taskData.Schema = jsonData
+				}
+				tasks = append(tasks, taskData)
 			}
 		}
 	}
 
-	return tasksList, nil
+	return tasks, nil
 }
 
 func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {

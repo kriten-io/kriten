@@ -72,7 +72,7 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	//audit := tc.AuditService.InitialiseAuditLog(ctx, "list", tc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
-	tasksList, err := tc.TaskService.ListTasks(authList)
+	tasks, err := tc.TaskService.ListTasks(authList)
 
 	if err != nil {
 		//tc.AuditService.CreateAudit(audit)
@@ -81,8 +81,8 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	}
 
 	//audit.Status = "success"
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	if len(tasksList) == 0 {
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasks)))
+	if len(tasks) == 0 {
 		var arr [0]int
 		//tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
@@ -91,7 +91,7 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 
 	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
 	//tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, tasksList)
+	ctx.JSON(http.StatusOK, tasks)
 	// ctx.JSON(http.StatusOK, gin.H{"msg": "tasks list retrieved successfully", "tasks": tasksList})
 }
 
