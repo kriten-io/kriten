@@ -36,6 +36,7 @@ var (
 	cjs        services.CronJobService
 	us         services.UserService
 	ats        services.ApiTokenService
+	ws         services.WebhookService
 	gs         services.GroupService
 	als        services.AuditService
 	rls        services.RoleService
@@ -48,6 +49,7 @@ var (
 	cjc        controllers.CronJobController
 	uc         controllers.UserController
 	atc        controllers.ApiTokenController
+	wc         controllers.WebhookController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
 	rbc        controllers.RoleBindingController
@@ -141,6 +143,7 @@ func init() {
 	// Services
 	us = services.NewUserService(db, conf)
 	ats = services.NewApiTokenService(db, conf)
+	ws = services.NewWebhookService(db, conf)
 	gs = services.NewGroupService(db, us, conf)
 	rls = services.NewRoleService(db, conf, &rbs, &us)
 	rbs = services.NewRoleBindingService(db, conf, rls, gs)
@@ -154,6 +157,7 @@ func init() {
 
 	// Controllers
 	uc = controllers.NewUserController(us, as, als, authProviders)
+	wc = controllers.NewWebhookController(ws, js, as, als, authProviders)
 	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
 	gc = controllers.NewGroupController(gs, as, als, authProviders)
 	rlc = controllers.NewRoleController(rls, as, als)
@@ -214,6 +218,7 @@ func main() {
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
 		roleBindings := basepath.Group("/role_bindings")
+		webhooks := basepath.Group("/webhooks")
 		{
 			alc.SetAuditRoutes(audit, conf)
 			rc.SetRunnerRoutes(runners, conf)
@@ -222,6 +227,7 @@ func main() {
 			cjc.SetCronJobRoutes(cronjobs, conf)
 			uc.SetUserRoutes(users, conf)
 			atc.SetApiTokenRoutes(tokens, conf)
+			wc.SetWebhookRoutes(webhooks, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 			rbc.SetRoleBindingRoutes(roleBindings, conf)

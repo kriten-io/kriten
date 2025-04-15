@@ -1,6 +1,8 @@
 package middlewares
 
 import (
+	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -17,8 +19,35 @@ import (
 func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var token string
+		webhookID := ctx.Param("id")
+		webhookTimestamp := ctx.GetHeader("webhook-timestamp")
+		webhookMsgID := ctx.GetHeader("webhook-id")
+		signature := ctx.GetHeader("webhook-signature")
 		token = ctx.GetHeader("Token")
-		if token != "" {
+		if strings.Contains(ctx.Request.URL.String(), "/api/v1/webhooks/run") {
+			if signature == "" {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+				return
+			}
+
+			body, err := io.ReadAll(ctx.Request.Body)
+
+			if err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
+				return
+			}
+			owner, taskID, err := as.ValidateWebhookSignature(webhookID, webhookMsgID, webhookTimestamp, signature, body)
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+				return
+			}
+			ctx.Set("userID", owner.ID)
+			ctx.Set("username", owner.Username)
+			ctx.Set("provider", owner.Provider)
+			ctx.Set("taskID", taskID)
+
+			ctx.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+		} else if token != "" {
 			owner, err := as.ValidateAPIToken(token)
 			if err != nil {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})

@@ -111,7 +111,7 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
 	var jobStatus models.Job
 
-	labelSelector := "job-name=" + jobID
+	labelSelector := fmt.Sprintf("job-name=%s", jobID)
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
 	}
@@ -125,7 +125,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 		return jobStatus, errors.New("no pods found - check job ID")
 	}
 
-	for i, _ := range pods.Items {
+	for i := range pods.Items {
 		for c, _ := range pods.Items[i].Status.InitContainerStatuses {
 			switch {
 			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":

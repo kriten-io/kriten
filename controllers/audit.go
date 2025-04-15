@@ -60,7 +60,6 @@ func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
 	}
 
 	groups, err := ac.AuditService.ListAuditLogs(max)

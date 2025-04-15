@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/models"
@@ -67,6 +68,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
+		fmt.Println("error:", err)
 		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
 		return

@@ -1,7 +1,11 @@
 package services
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -22,6 +26,7 @@ type AuthService interface {
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
 	ValidateAPIToken(string) (models.User, error)
+	ValidateWebhookSignature(string, string, string, string, []byte) (models.User, string, error)
 }
 
 type AuthServiceImpl struct {
@@ -32,7 +37,13 @@ type AuthServiceImpl struct {
 	db                 *gorm.DB
 }
 
-func NewAuthService(config config.Config, us UserService, rls RoleService, rbc RoleBindingService, database *gorm.DB) AuthService {
+func NewAuthService(
+	config config.Config,
+	us UserService,
+	rls RoleService,
+	rbc RoleBindingService,
+	database *gorm.DB,
+) AuthService {
 	return &AuthServiceImpl{
 		config:             config,
 		UserService:        us,
@@ -164,6 +175,50 @@ func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 	return user, nil
 }
 
+func (a *AuthServiceImpl) ValidateWebhookSignature(
+	id string,
+	msgID string,
+	msgTimestamp string,
+	signature string,
+	body []byte,
+) (models.User, string, error) {
+	// Splitting the signature to get the to remove prepended "v1," from InfraHub
+	split := strings.Split(signature, ",")
+	if len(split) != 2 {
+		return models.User{}, "", errors.New("invalid signature")
+	}
+	signature = split[1]
+	data := []byte(fmt.Sprintf("%s.%s.", msgID, msgTimestamp))
+	data = append(data, body...)
+
+	var webhook models.Webhook
+	res := a.db.Where("id = ?", id).Find(&webhook)
+	if res.Error != nil {
+		return models.User{}, "", res.Error
+	}
+	// checking if there's any result
+	if res.RowsAffected == 0 {
+		return models.User{}, "", errors.New("invalid webhook")
+	}
+	// checking if the signature is valid
+	// Validating the signature
+
+	h := hmac.New(sha256.New, []byte(webhook.Secret))
+	h.Write(data)
+	expectedSignature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+		return models.User{}, "", errors.New("invalid signature")
+	}
+
+	var user models.User
+	res = a.db.Where("user_id = ?", webhook.Owner).Find(&user)
+	if res.Error != nil {
+		return models.User{}, "", res.Error
+	}
+	return user, webhook.Task, nil
+}
+
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
 	// Checking if the user owns the API token
 	if auth.Resource == "apiTokens" {
@@ -185,7 +240,8 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 	}
 	for _, role := range roles {
 		if role.Resource == "*" || role.Resource == auth.Resource &&
-			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" || slices.Contains(role.Resources_IDs, auth.ResourceID)) &&
+			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" ||
+				slices.Contains(role.Resources_IDs, auth.ResourceID)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
 		}
