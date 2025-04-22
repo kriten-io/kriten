@@ -19,7 +19,11 @@ type CronJobController struct {
 	AuditCategory  string
 }
 
-func NewCronJobController(js services.CronJobService, as services.AuthService, als services.AuditService) CronJobController {
+func NewCronJobController(
+	js services.CronJobService,
+	as services.AuthService,
+	als services.AuditService,
+) CronJobController {
 	return CronJobController{
 		CronJobService: js,
 		AuthService:    as,

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -30,11 +31,11 @@ type AuthService interface {
 }
 
 type AuthServiceImpl struct {
-	config             config.Config
+	db                 *gorm.DB
 	UserService        UserService
 	RoleService        RoleService
 	RoleBindingService RoleBindingService
-	db                 *gorm.DB
+	config             config.Config
 }
 
 func NewAuthService(
@@ -53,8 +54,8 @@ func NewAuthService(
 	}
 }
 
-// TODO: This function is getting very crowded
-// might need to be refactored in the future
+// Login - TODO: This function is getting very crowded
+// might need to be refactored in the future.
 func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, error) {
 	var user models.User
 	var err error
@@ -62,52 +63,51 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 	if credentials.Username == "root" {
 		rootPassword, err := a.GetRootPassword()
 		if err != nil {
-			return "", -1, err
+			return "", -1, fmt.Errorf("failed to get root password: %w", err)
 		}
 		if credentials.Password != rootPassword {
 			err := errors.New("password is incorrect")
-			return "", -1, err
+			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
 		}
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
-			return "", -1, err
+			return "", -1, fmt.Errorf("user not found: %w", err)
 		}
 	} else if credentials.Provider == "local" {
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
-			return "", -1, err
+			return "", -1, fmt.Errorf("user not found: %w", err)
 		}
 		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password))
 		if err != nil {
-			log.Println(err)
-			return "", -1, err
+			return "", -1, fmt.Errorf("incorrect password: %w", err)
 		}
 	} else if credentials.Provider == "active_directory" {
 		err := helpers.BindAndSearch(a.config.LDAP, credentials.Username, credentials.Password)
 		if err != nil {
-			return "", -1, err
+			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
 		}
-		user, err = a.UserService.CreateUser(models.User{
+		_, err = a.UserService.CreateUser(models.User{
 			Username: credentials.Username,
 			Provider: credentials.Provider,
 		})
 		if err != nil && !strings.Contains(err.Error(), "ERROR: duplicate key value violates unique constraint") {
 			log.Println(err.Error())
-			return "", -1, err
+			return "", -1, fmt.Errorf("failed to create ldap user into local user db: %w", err)
 		}
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
-			return "", -1, err
+			return "", -1, fmt.Errorf("failed to get user credentials: %w", err)
 		}
 	} else {
 		err := errors.New("provider does not exist")
-		return "", -1, err
+		return "", -1, fmt.Errorf("unknown provider: %w", err)
 	}
 
 	token, err := helpers.CreateJWTToken(credentials, user.ID, a.config.JWT)
 	if err != nil {
 		log.Println(err)
-		return "", -1, err
+		return "", -1, fmt.Errorf("failed to create token: %w", err)
 	}
 
 	return token, a.config.JWT.ExpirySeconds, nil
@@ -116,7 +116,7 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
 	claims, err := helpers.ValidateJWTToken(tokenStr, a.config.JWT)
 	if err != nil {
-		return "", -1, err
+		return "", -1, fmt.Errorf("failed to validate token: %w", err)
 	}
 
 	expirationTime := time.Now().Add(time.Second * time.Duration(a.config.JWT.ExpirySeconds))
@@ -127,7 +127,7 @@ func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
 	tokenStr, err = token.SignedString(a.config.JWT.Key)
 	if err != nil {
 		log.Println(err)
-		return "", -1, err
+		return "", -1, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
 	return tokenStr, a.config.JWT.ExpirySeconds, nil
@@ -137,7 +137,7 @@ func (a *AuthServiceImpl) GetRootPassword() (string, error) {
 	secret, err := helpers.GetSecret(a.config.Kube, a.config.RootSecret)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get secret for root user: %w", err)
 	}
 
 	password := secret.Data["password"]
@@ -189,7 +189,8 @@ func (a *AuthServiceImpl) ValidateWebhookSignature(
 	}
 	signature = split[1]
 	data := []byte(fmt.Sprintf("%s.%s.", msgID, msgTimestamp))
-	data = append(data, body...)
+	newBody := bytes.ReplaceAll(body, []byte(`"`), []byte(`'`))
+	data = append(data, newBody...)
 
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
@@ -258,7 +259,8 @@ func (a *AuthServiceImpl) GetAuthorizationList(auth *models.Authorization) ([]st
 	}
 
 	var authList []string
-	for _, role := range roles {
+	for i := range roles {
+		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource {
 			if role.Resources_IDs[0] == "*" {
 				return []string{"*"}, nil

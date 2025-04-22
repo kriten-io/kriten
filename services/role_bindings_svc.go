@@ -24,10 +24,10 @@ type RoleBindingService interface {
 }
 
 type RoleBindingServiceImpl struct {
-	db           *gorm.DB
-	config       config.Config
 	RoleService  RoleService
 	GroupService GroupService
+	db           *gorm.DB
+	config       config.Config
 }
 
 func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs GroupService) RoleBindingService {
@@ -39,7 +39,10 @@ func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs
 	}
 }
 
-func (r *RoleBindingServiceImpl) ListRoleBindings(authList []string, filters map[string]string) ([]models.RoleBinding, error) {
+func (r *RoleBindingServiceImpl) ListRoleBindings(
+	authList []string,
+	filters map[string]string,
+) ([]models.RoleBinding, error) {
 	var roleBindings []models.RoleBinding
 	var res *gorm.DB
 

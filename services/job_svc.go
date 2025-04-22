@@ -63,7 +63,6 @@ func findDelimitedString(str string) ([]byte, error) {
 			match = nil
 			break
 		}
-
 	}
 
 	return match, nil
@@ -92,7 +91,8 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 		return nil, err
 	}
 
-	for _, job := range jobs.Items {
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
 		var jobRet models.Job
 		jobRet.ID = job.Name
 		jobRet.Owner = job.Labels["owner"]
@@ -126,7 +126,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	}
 
 	for i := range pods.Items {
-		for c, _ := range pods.Items[i].Status.InitContainerStatuses {
+		for c := range pods.Items[i].Status.InitContainerStatuses {
 			switch {
 			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
 				return jobStatus, errors.New("failed to pull init container image from container registry.")
@@ -134,8 +134,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 				return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
 			}
 		}
-		for c, _ := range pods.Items[i].Status.ContainerStatuses {
-
+		for c := range pods.Items[i].Status.ContainerStatuses {
 			state := pods.Items[i].Status.ContainerStatuses[c].State
 			// adding check if application container is not running because it cannot pull image
 			// more checks to be added to cover any other cases
@@ -281,7 +280,17 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	jobID, err := helpers.CreateJob(
+		j.config.Kube,
+		taskName,
+		runnerName,
+		runnerImage,
+		username,
+		extraVars,
+		task.Data["command"],
+		gitURL,
+		gitBranch,
+	)
 
 	jobStatus.ID = jobID
 
@@ -329,7 +338,6 @@ func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) 
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return data, nil

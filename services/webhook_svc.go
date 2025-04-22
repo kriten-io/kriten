@@ -78,14 +78,13 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	}
 
 	if res.RowsAffected == 0 {
-		return models.Webhook{}, fmt.Errorf("token %s not found, please check uuid", id)
+		return models.Webhook{}, fmt.Errorf("webhook %s not found, please check uuid", id)
 	}
 
 	return webHook, nil
 }
 
 func (w *WebhookServiceImpl) CreateWebhook(webHook models.Webhook) (models.Webhook, error) {
-
 	res := w.db.Create(&webHook)
 
 	return webHook, res.Error

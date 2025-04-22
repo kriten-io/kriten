@@ -31,9 +31,9 @@ func NewAuditService(database *gorm.DB, config config.Config) AuditService {
 	}
 }
 
-func (a *AuditServiceImpl) ListAuditLogs(max int) ([]models.AuditLog, error) {
+func (a *AuditServiceImpl) ListAuditLogs(num int) ([]models.AuditLog, error) {
 	var logs []models.AuditLog
-	res := a.db.Order("created_at desc").Limit(max).Find(&logs)
+	res := a.db.Order("created_at desc").Limit(num).Find(&logs)
 	if res.Error != nil {
 		return logs, res.Error
 	}
@@ -62,7 +62,12 @@ func (a *AuditServiceImpl) CreateAudit(auditlog models.AuditLog) {
 	}
 }
 
-func (a *AuditServiceImpl) InitialiseAuditLog(ctx *gin.Context, eventType string, category string, target string) models.AuditLog {
+func (a *AuditServiceImpl) InitialiseAuditLog(
+	ctx *gin.Context,
+	eventType string,
+	category string,
+	target string,
+) models.AuditLog {
 	var userID uuid.UUID
 	var username, provider string
 	uid, _ := ctx.Get("userID")

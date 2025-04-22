@@ -53,7 +53,7 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 	r.POST("", wc.CreateWebhook)
 	r.PUT("", wc.CreateWebhook)
 
-	r.POST("/run/:id", middlewares.AuthorizationMiddleware(wc.AuthService, "webHooks", "write"), wc.RunWebhook)
+	r.POST("/run/:id", middlewares.AuthorizationMiddleware(wc.AuthService, "jobs", "write"), wc.RunWebhook)
 
 	r.Use(middlewares.AuthorizationMiddleware(wc.AuthService, "webHooks", "write"))
 	{
@@ -108,7 +108,7 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 //	@Tags			webhooks
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{array}		models.webHook
+//	@Success		200	{array}		models.Webhook
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
@@ -210,51 +210,6 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, webhook)
 }
 
-// // UpdateWebhook godoc
-// //
-// //	@Summary		Update a webhook
-// //	@Description	Update a webhook in the cluster
-// //	@Tags			webhooks
-// //	@Accept			json
-// //	@Produce		json
-// //	@Param			id		path		string		true	"Webhook ID"
-// //	@Param			webhook	body		models.Webhook	true	"Update webhook"
-// //	@Success		200		{object}	models.Webhook
-// //	@Failure		400		{object}	helpers.HTTPError
-// //	@Failure		404		{object}	helpers.HTTPError
-// //	@Failure		500		{object}	helpers.HTTPError
-// //	@Router			/webhooks/{id} [patch]
-// //	@Security		Bearer
-// func (wc *WebhookController) UpdateWebhook(ctx *gin.Context) {
-// 	webhookID := ctx.Param("id")
-// 	audit := wc.AuditService.InitialiseAuditLog(ctx, "update", wc.AuditCategory, webhookID)
-// 	var webhook models.Webhook
-// 	var err error
-
-// 	if err := ctx.ShouldBindJSON(&webhook); err != nil {
-// 		wc.AuditService.CreateAudit(audit)
-// 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	webhook.ID, err = uuid.FromString(webhookID)
-// 	if err != nil {
-// 		wc.AuditService.CreateAudit(audit)
-// 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	webhook, err = wc.WebhookService.UpdateApiToken(webhook)
-// 	if err != nil {
-// 		wc.AuditService.CreateAudit(audit)
-// 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-// 		return
-// 	}
-// 	audit.Status = "success"
-// 	wc.AuditService.CreateAudit(audit)
-// 	ctx.JSON(http.StatusOK, webhook)
-// }
-
 // DeleteWebhook godoc
 //
 //	@Summary		Delete a webhook
@@ -284,6 +239,21 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"msg": "webhook deleted successfully"})
 }
 
+// RunWebhook godoc
+//
+//	@Summary		Run webhook
+//	@Description	Execute Kriten job via webhook
+//	@Tags			webhooks
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	    path		string	true	"Webhook ID"
+//	@Param			evars	body		object	false	"Extra vars"
+//	@Success		200		{object}	models.Job
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/webhooks/run/{id} [post]
+//	@Security		Signature
 func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
 	taskID := ctx.MustGet("taskID").(string)

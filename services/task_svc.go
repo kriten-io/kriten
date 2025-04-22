@@ -186,7 +186,6 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 		return nil, err
 	}
 	return configuredTask, err
-
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
@@ -199,7 +198,7 @@ func (t *TaskServiceImpl) DeleteTask(name string) error {
 }
 
 func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
-	var data map[string]interface{}
+	var data map[string]any
 
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
@@ -214,7 +213,6 @@ func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return data, nil
@@ -278,7 +276,7 @@ func ValidateSchema(schema []byte) error {
 		return err
 	}
 
-	output := bytes.Replace(input, []byte("\"%schema%\""), schema, -1)
+	output := bytes.ReplaceAll(input, []byte("\"%schema%\""), schema)
 	doc, err := loads.Analyzed(output, "2.0")
 	if err != nil {
 		log.Printf("error while loading spec: %v\n", err)

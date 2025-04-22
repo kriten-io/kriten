@@ -111,7 +111,6 @@ func (g *GroupServiceImpl) ListUsersInGroup(groupName string) ([]models.GroupsUs
 			Name:     user.Username,
 			Provider: user.Provider,
 		})
-
 	}
 
 	return users, nil

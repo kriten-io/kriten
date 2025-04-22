@@ -122,7 +122,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 }
 
 // TODO: This is very crowded and repetitive
-// might need a refactor in the future
+// might need a refactor in the future.
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 	if role.Resource == "users" {
 		for _, user := range role.Resources_IDs {
