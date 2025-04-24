@@ -207,6 +207,7 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 	// }
 
 	audit.Status = "success"
+	wc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, webhook)
 }
 
