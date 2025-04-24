@@ -66,26 +66,26 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 //	@Router			/api_tokens [get]
 //	@Security		Bearer
 func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	userid := ctx.MustGet("userID").(uuid.UUID)
 	apiTokens, err := uc.ApiTokenService.ListApiTokens(userid)
 
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	// audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(apiTokens)))
 	if len(apiTokens) == 0 {
 		var arr [0]int
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	uc.AuditService.CreateAudit(audit)
+	// uc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, apiTokens)
 }
@@ -104,26 +104,26 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 //	@Router			/api_tokens/all [get]
 //	@Security		Bearer
 func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	apiTokens, err := uc.ApiTokenService.ListAllApiTokens(authList)
 
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	// audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(apiTokens)))
 	if len(apiTokens) == 0 {
 		var arr [0]int
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	uc.AuditService.CreateAudit(audit)
+	// uc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, apiTokens)
 }
@@ -144,17 +144,17 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "get", uc.AuditCategory, apiTokenID)
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "get", uc.AuditCategory, apiTokenID)
 	apiToken, err := uc.ApiTokenService.GetApiToken(apiTokenID)
 
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
+	// audit.Status = "success"
+	// uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, apiToken)
 }
 

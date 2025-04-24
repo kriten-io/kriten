@@ -35,7 +35,7 @@ func NewWebhookService(database *gorm.DB, config config.Config) WebhookService {
 func (w *WebhookServiceImpl) ListWebhooks(userid uuid.UUID) ([]models.Webhook, error) {
 	var webHooks []models.Webhook
 
-	res := w.db.Select("id", "owner", "task", "created_at", "updated_at", "description").
+	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
 		Where("owner = ?", userid).
 		Find(&webHooks)
 
@@ -69,7 +69,7 @@ func (w *WebhookServiceImpl) ListAllWebhooks(authList []string) ([]models.Webhoo
 func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	var webHook models.Webhook
 
-	res := w.db.Select("id", "owner", "task", "created_at", "updated_at", "description").
+	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
 		Where("id = ?", id).
 		Find(&webHook)
 
