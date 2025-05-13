@@ -32,11 +32,11 @@ definitions:
     properties:
       created_at:
         type: string
-      eventCategory:
+      event_category:
         type: string
-      eventTarget:
+      event_target:
         type: string
-      eventType:
+      event_type:
         type: string
       id:
         type: string
@@ -46,10 +46,10 @@ definitions:
         type: string
       updated_at:
         type: string
-      userID:
+      user_id:
         description: Timestamp time.Time  `json:"@timestamp"`
         type: string
-      userName:
+      username:
         type: string
     type: object
   models.Credentials:
@@ -85,7 +85,7 @@ definitions:
     properties:
       created_at:
         type: string
-      group_id:
+      id:
         type: string
       name:
         type: string
@@ -93,12 +93,18 @@ definitions:
         type: string
       updated_at:
         type: string
+      users:
+        items:
+          type: string
+        type: array
     required:
     - name
     - provider
     type: object
-  models.GroupsUser:
+  models.GroupUser:
     properties:
+      id:
+        type: string
       name:
         type: string
       provider:
@@ -108,7 +114,7 @@ definitions:
     properties:
       completed:
         type: integer
-      completionTime:
+      completion_time:
         type: string
       failed:
         type: integer
@@ -119,7 +125,7 @@ definitions:
         type: object
       owner:
         type: string
-      startTime:
+      start_time:
         type: string
       stdout:
         type: string
@@ -130,32 +136,32 @@ definitions:
         type: string
       created_at:
         type: string
+      id:
+        type: string
       name:
         type: string
       resource:
         type: string
-      resources_ids:
+      resource_ids:
         items:
           type: string
         type: array
         uniqueItems: true
-      role_id:
-        type: string
       updated_at:
         type: string
     required:
     - access
     - name
     - resource
-    - resources_ids
+    - resource_ids
     type: object
   models.RoleBinding:
     properties:
       created_at:
         type: string
-      name:
+      id:
         type: string
-      role_binding_id:
+      name:
         type: string
       role_id:
         type: string
@@ -225,20 +231,20 @@ definitions:
         items:
           type: string
         type: array
+      id:
+        type: string
+      name:
+        type: string
       password:
         type: string
       provider:
         type: string
       updated_at:
         type: string
-      user_id:
-        type: string
-      username:
-        type: string
     required:
+    - name
     - password
     - provider
-    - username
     type: object
   models.Webhook:
     properties:
@@ -936,7 +942,7 @@ paths:
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupsUser'
+            $ref: '#/definitions/models.GroupUser'
           type: array
       - description: Group ID
         in: path
@@ -985,7 +991,7 @@ paths:
           schema:
             items:
               items:
-                $ref: '#/definitions/models.GroupsUser'
+                $ref: '#/definitions/models.GroupUser'
               type: array
             type: array
         "400":
@@ -1016,7 +1022,7 @@ paths:
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupsUser'
+            $ref: '#/definitions/models.GroupUser'
           type: array
       - description: Group ID
         in: path

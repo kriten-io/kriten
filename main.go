@@ -151,7 +151,7 @@ func init() {
 	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(conf)
-	ts = services.NewTaskService(conf)
+	ts = services.NewTaskService(ws, conf)
 	js = services.NewJobService(conf)
 	cjs = services.NewCronJobService(conf)
 

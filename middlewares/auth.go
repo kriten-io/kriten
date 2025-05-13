@@ -20,12 +20,15 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 	return func(ctx *gin.Context) {
 		var token string
 		webhookID := ctx.Param("id")
+		// webhook-timestamp, webhook-id and webhook-signature - are specific header fields of Opsmil Infrahub webhook
 		webhookTimestamp := ctx.GetHeader("webhook-timestamp")
 		webhookMsgID := ctx.GetHeader("webhook-id")
-		signature := ctx.GetHeader("webhook-signature")
+		webhookSig := ctx.GetHeader("webhook-signature")
+		// X-Hook-Signature header field is common webhook signature field, supported by Netbox and Nautobot
+		signature := ctx.GetHeader("X-Hook-Signature")
 		token = ctx.GetHeader("Token")
 		if strings.Contains(ctx.Request.URL.String(), "/api/v1/webhooks/run") {
-			if signature == "" {
+			if signature == "" && webhookSig == "" {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
 				return
 			}
@@ -36,15 +39,39 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
 				return
 			}
-			owner, taskID, err := as.ValidateWebhookSignature(webhookID, webhookMsgID, webhookTimestamp, signature, body)
-			if err != nil {
+
+			if webhookMsgID != "" && webhookTimestamp != "" && webhookSig != "" {
+				owner, taskID, err := as.ValidateWebhookSignatureInfraHub(
+					webhookID,
+					webhookMsgID,
+					webhookTimestamp,
+					webhookSig,
+					body)
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+					return
+				}
+				ctx.Set("userID", owner.ID)
+				ctx.Set("username", owner.Username)
+				ctx.Set("provider", owner.Provider)
+				ctx.Set("taskID", taskID)
+			} else if signature != "" {
+				owner, taskID, err := as.ValidateWebhookSignatureCommon(
+					webhookID,
+					signature,
+					body)
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+					return
+				}
+				ctx.Set("userID", owner.ID)
+				ctx.Set("username", owner.Username)
+				ctx.Set("provider", owner.Provider)
+				ctx.Set("taskID", taskID)
+			} else {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
 				return
 			}
-			ctx.Set("userID", owner.ID)
-			ctx.Set("username", owner.Username)
-			ctx.Set("provider", owner.Provider)
-			ctx.Set("taskID", taskID)
 
 			ctx.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 		} else if token != "" {

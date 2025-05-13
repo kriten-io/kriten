@@ -30,12 +30,14 @@ type TaskService interface {
 }
 
 type TaskServiceImpl struct {
-	config config.Config
+	WebhookService WebhookService
+	config         config.Config
 }
 
-func NewTaskService(config config.Config) TaskService {
+func NewTaskService(ws WebhookService, config config.Config) TaskService {
 	return &TaskServiceImpl{
-		config: config,
+		WebhookService: ws,
+		config:         config,
 	}
 }
 
@@ -192,7 +194,12 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
-	err := helpers.DeleteConfigMap(t.config.Kube, name)
+	res, err := t.WebhookService.ListTaskWebhooks(name)
+	if len(res) != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first", name)
+	}
+
+	err = helpers.DeleteConfigMap(t.config.Kube, name)
 	if err != nil {
 		return err
 	}

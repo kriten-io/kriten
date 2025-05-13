@@ -14,6 +14,7 @@ import (
 
 type WebhookService interface {
 	ListWebhooks(uuid.UUID) ([]models.Webhook, error)
+	ListTaskWebhooks(string) ([]models.Webhook, error)
 	ListAllWebhooks([]string) ([]models.Webhook, error)
 	GetWebhook(string) (models.Webhook, error)
 	CreateWebhook(models.Webhook) (models.Webhook, error)
@@ -37,6 +38,20 @@ func (w *WebhookServiceImpl) ListWebhooks(userid uuid.UUID) ([]models.Webhook, e
 
 	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
 		Where("owner = ?", userid).
+		Find(&webHooks)
+
+	if res.Error != nil {
+		return webHooks, res.Error
+	}
+
+	return webHooks, nil
+}
+
+func (w *WebhookServiceImpl) ListTaskWebhooks(taskName string) ([]models.Webhook, error) {
+	var webHooks []models.Webhook
+
+	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
+		Where("task = ?", taskName).
 		Find(&webHooks)
 
 	if res.Error != nil {

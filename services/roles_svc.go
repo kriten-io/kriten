@@ -125,7 +125,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 // might need a refactor in the future.
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 	if role.Resource == "users" {
-		for _, user := range role.Resources_IDs {
+		for _, user := range role.Resource_IDs {
 			us := *r.UserService
 			_, err := us.GetUser(user)
 			if err != nil {
@@ -133,14 +133,14 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 			}
 		}
 	} else if role.Resource == "roles" {
-		for _, role := range role.Resources_IDs {
+		for _, role := range role.Resource_IDs {
 			_, err := r.GetRole(role)
 			if err != nil {
 				return err
 			}
 		}
 	} else if role.Resource == "role_bindings" {
-		for _, roleBindings := range role.Resources_IDs {
+		for _, roleBindings := range role.Resource_IDs {
 			rbs := *r.RoleBindingService
 			_, err := rbs.GetRoleBinding(roleBindings)
 			if err != nil {
@@ -148,7 +148,7 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 			}
 		}
 	} else {
-		for _, c := range role.Resources_IDs {
+		for _, c := range role.Resource_IDs {
 			configMap, err := helpers.GetConfigMap(r.config.Kube, c)
 			if err != nil {
 				return err

@@ -1078,7 +1078,7 @@
                             "items": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/models.GroupsUser"
+                                    "$ref": "#/definitions/models.GroupUser"
                                 }
                             }
                         }
@@ -1129,7 +1129,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupsUser"
+                                "$ref": "#/definitions/models.GroupUser"
                             }
                         }
                     },
@@ -1194,7 +1194,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupsUser"
+                                "$ref": "#/definitions/models.GroupUser"
                             }
                         }
                     },
@@ -3714,13 +3714,13 @@
                 "created_at": {
                     "type": "string"
                 },
-                "eventCategory": {
+                "event_category": {
                     "type": "string"
                 },
-                "eventTarget": {
+                "event_target": {
                     "type": "string"
                 },
-                "eventType": {
+                "event_type": {
                     "type": "string"
                 },
                 "id": {
@@ -3735,11 +3735,11 @@
                 "updated_at": {
                     "type": "string"
                 },
-                "userID": {
+                "user_id": {
                     "description": "Timestamp time.Time  `json:\"@timestamp\"`",
                     "type": "string"
                 },
-                "userName": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -3797,7 +3797,7 @@
                 "created_at": {
                     "type": "string"
                 },
-                "group_id": {
+                "id": {
                     "type": "string"
                 },
                 "name": {
@@ -3808,12 +3808,21 @@
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
-        "models.GroupsUser": {
+        "models.GroupUser": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3828,7 +3837,7 @@
                 "completed": {
                     "type": "integer"
                 },
-                "completionTime": {
+                "completion_time": {
                     "type": "string"
                 },
                 "failed": {
@@ -3844,7 +3853,7 @@
                 "owner": {
                     "type": "string"
                 },
-                "startTime": {
+                "start_time": {
                     "type": "string"
                 },
                 "stdout": {
@@ -3858,7 +3867,7 @@
                 "access",
                 "name",
                 "resource",
-                "resources_ids"
+                "resource_ids"
             ],
             "properties": {
                 "access": {
@@ -3867,21 +3876,21 @@
                 "created_at": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
                 "resource": {
                     "type": "string"
                 },
-                "resources_ids": {
+                "resource_ids": {
                     "type": "array",
                     "uniqueItems": true,
                     "items": {
                         "type": "string"
                     }
-                },
-                "role_id": {
-                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -3901,10 +3910,10 @@
                 "created_at": {
                     "type": "string"
                 },
-                "name": {
+                "id": {
                     "type": "string"
                 },
-                "role_binding_id": {
+                "name": {
                     "type": "string"
                 },
                 "role_id": {
@@ -3990,9 +3999,9 @@
         "models.User": {
             "type": "object",
             "required": [
+                "name",
                 "password",
-                "provider",
-                "username"
+                "provider"
             ],
             "properties": {
                 "created_at": {
@@ -4004,6 +4013,12 @@
                         "type": "string"
                     }
                 },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
                 "password": {
                     "type": "string"
                 },
@@ -4011,12 +4026,6 @@
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }

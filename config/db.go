@@ -34,7 +34,7 @@ func InitDB(db *gorm.DB) {
 	}
 
 	var adminRole = models.Role{
-		Name: "Admin", Resource: "*", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true,
+		Name: "Admin", Resource: "*", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true,
 	}
 	db.FirstOrCreate(&adminRole)
 
@@ -59,12 +59,12 @@ func InitDB(db *gorm.DB) {
 	db.Create(&adminRoleBindings)
 
 	var builtinRoles = []models.Role{
-		{Name: "WriteAllRunners", Resource: "runners", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllTasks", Resource: "tasks", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllJobs", Resource: "jobs", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllUsers", Resource: "users", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllRoles", Resource: "roles", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllRoleBindings", Resource: "role_bindings", Resources_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRunners", Resource: "runners", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllTasks", Resource: "tasks", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllJobs", Resource: "jobs", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllUsers", Resource: "users", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRoles", Resource: "roles", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRoleBindings", Resource: "role_bindings", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
 	}
 	db.Create(&builtinRoles)
 

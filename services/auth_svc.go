@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -27,7 +28,8 @@ type AuthService interface {
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
 	ValidateAPIToken(string) (models.User, error)
-	ValidateWebhookSignature(string, string, string, string, []byte) (models.User, string, error)
+	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, string, error)
+	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, string, error)
 }
 
 type AuthServiceImpl struct {
@@ -175,7 +177,7 @@ func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 	return user, nil
 }
 
-func (a *AuthServiceImpl) ValidateWebhookSignature(
+func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	id string,
 	msgID string,
 	msgTimestamp string,
@@ -220,6 +222,39 @@ func (a *AuthServiceImpl) ValidateWebhookSignature(
 	return user, webhook.Task, nil
 }
 
+func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
+	id string,
+	signature string,
+	body []byte,
+) (models.User, string, error) {
+	var webhook models.Webhook
+	res := a.db.Where("id = ?", id).Find(&webhook)
+	if res.Error != nil {
+		return models.User{}, "", res.Error
+	}
+	// checking if there's any result
+	if res.RowsAffected == 0 {
+		return models.User{}, "", errors.New("invalid webhook")
+	}
+	// checking if the signature is valid
+	// Validating the signature
+
+	h := hmac.New(sha512.New, []byte(webhook.Secret))
+	h.Write(body)
+	expectedSignature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+		return models.User{}, "", errors.New("invalid signature")
+	}
+
+	var user models.User
+	res = a.db.Where("user_id = ?", webhook.Owner).Find(&user)
+	if res.Error != nil {
+		return models.User{}, "", res.Error
+	}
+	return user, webhook.Task, nil
+}
+
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
 	// Checking if the user owns the API token
 	if auth.Resource == "apiTokens" {
@@ -241,8 +276,8 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 	}
 	for _, role := range roles {
 		if role.Resource == "*" || role.Resource == auth.Resource &&
-			(len(role.Resources_IDs) > 0 && role.Resources_IDs[0] == "*" ||
-				slices.Contains(role.Resources_IDs, auth.ResourceID)) &&
+			(len(role.Resource_IDs) > 0 && role.Resource_IDs[0] == "*" ||
+				slices.Contains(role.Resource_IDs, auth.ResourceID)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
 		}
@@ -262,10 +297,10 @@ func (a *AuthServiceImpl) GetAuthorizationList(auth *models.Authorization) ([]st
 	for i := range roles {
 		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource {
-			if role.Resources_IDs[0] == "*" {
+			if role.Resource_IDs[0] == "*" {
 				return []string{"*"}, nil
 			}
-			authList = append(authList, role.Resources_IDs...)
+			authList = append(authList, role.Resource_IDs...)
 		}
 	}
 

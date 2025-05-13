@@ -262,7 +262,7 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"Group ID"
-//	@Success		200	{array}		[]models.GroupsUser
+//	@Success		200	{array}		[]models.GroupUser
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
@@ -301,7 +301,7 @@ func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupsUser	true	"Users to be added"
+//	@Param			group	body		[]models.GroupUser	true	"Users to be added"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -339,7 +339,7 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupsUser	true	"Users to be removed"
+//	@Param			group	body		[]models.GroupUser	true	"Users to be removed"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError

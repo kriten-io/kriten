@@ -1085,7 +1085,7 @@ const docTemplate = `{
                             "items": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/models.GroupsUser"
+                                    "$ref": "#/definitions/models.GroupUser"
                                 }
                             }
                         }
@@ -1136,7 +1136,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupsUser"
+                                "$ref": "#/definitions/models.GroupUser"
                             }
                         }
                     },
@@ -1201,7 +1201,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupsUser"
+                                "$ref": "#/definitions/models.GroupUser"
                             }
                         }
                     },
@@ -3721,13 +3721,13 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "eventCategory": {
+                "event_category": {
                     "type": "string"
                 },
-                "eventTarget": {
+                "event_target": {
                     "type": "string"
                 },
-                "eventType": {
+                "event_type": {
                     "type": "string"
                 },
                 "id": {
@@ -3742,11 +3742,11 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string"
                 },
-                "userID": {
+                "user_id": {
                     "description": "Timestamp time.Time  ` + "`" + `json:\"@timestamp\"` + "`" + `",
                     "type": "string"
                 },
-                "userName": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -3804,7 +3804,7 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "group_id": {
+                "id": {
                     "type": "string"
                 },
                 "name": {
@@ -3815,12 +3815,21 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
-        "models.GroupsUser": {
+        "models.GroupUser": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3835,7 +3844,7 @@ const docTemplate = `{
                 "completed": {
                     "type": "integer"
                 },
-                "completionTime": {
+                "completion_time": {
                     "type": "string"
                 },
                 "failed": {
@@ -3851,7 +3860,7 @@ const docTemplate = `{
                 "owner": {
                     "type": "string"
                 },
-                "startTime": {
+                "start_time": {
                     "type": "string"
                 },
                 "stdout": {
@@ -3865,7 +3874,7 @@ const docTemplate = `{
                 "access",
                 "name",
                 "resource",
-                "resources_ids"
+                "resource_ids"
             ],
             "properties": {
                 "access": {
@@ -3874,21 +3883,21 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
                 "resource": {
                     "type": "string"
                 },
-                "resources_ids": {
+                "resource_ids": {
                     "type": "array",
                     "uniqueItems": true,
                     "items": {
                         "type": "string"
                     }
-                },
-                "role_id": {
-                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -3908,10 +3917,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "name": {
+                "id": {
                     "type": "string"
                 },
-                "role_binding_id": {
+                "name": {
                     "type": "string"
                 },
                 "role_id": {
@@ -3997,9 +4006,9 @@ const docTemplate = `{
         "models.User": {
             "type": "object",
             "required": [
+                "name",
                 "password",
-                "provider",
-                "username"
+                "provider"
             ],
             "properties": {
                 "created_at": {
@@ -4011,6 +4020,12 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
                 "password": {
                     "type": "string"
                 },
@@ -4018,12 +4033,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }
