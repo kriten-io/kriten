@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/middlewares"
@@ -160,14 +161,20 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 
 	runnerData, err := rc.RunnerService.CreateRunner(runner)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
+		switch {
+		case errors.IsAlreadyExists(err):
 			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner already exists, please use a different name"})
 			return
+		case strings.Contains(err.Error(), "invalid runner name"):
+			rc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		default:
+			rc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
 		}
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
 	}
 
 	audit.Status = "success"

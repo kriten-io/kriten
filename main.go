@@ -156,7 +156,7 @@ func init() {
 	cjs = services.NewCronJobService(conf)
 
 	// Controllers
-	uc = controllers.NewUserController(us, as, als, authProviders)
+	uc = controllers.NewUserController(us, gs, as, als, authProviders)
 	wc = controllers.NewWebhookController(ws, js, as, als, authProviders)
 	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
 	gc = controllers.NewGroupController(gs, as, als, authProviders)

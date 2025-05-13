@@ -269,28 +269,28 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [get]
 //	@Security		Bearer
 func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, groupName)
+	id := ctx.Param("id")
+	// audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, id)
 	var err error
 
-	users, err := gc.GroupService.ListUsersInGroup(groupName)
+	users, err := gc.GroupService.ListUsersInGroup(id)
 	if err != nil {
-		gc.AuditService.CreateAudit(audit)
+		// gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	gc.AuditService.CreateAudit(audit)
+	// gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, users)
 }
 
@@ -310,9 +310,9 @@ func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [post]
 //	@Security		Bearer
 func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, groupName)
-	var users []models.GroupsUser
+	id := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, id)
+	var users []models.GroupUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -321,7 +321,7 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := gc.GroupService.AddUsersToGroup(groupName, users)
+	group, err := gc.GroupService.AddUsersToGroup(id, users)
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -348,9 +348,9 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [delete]
 //	@Security		Bearer
 func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, groupName)
-	var users []models.GroupsUser
+	id := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, id)
+	var users []models.GroupUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -359,7 +359,7 @@ func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := gc.GroupService.RemoveUsersFromGroup(groupName, users)
+	group, err := gc.GroupService.RemoveUsersFromGroup(id, users)
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

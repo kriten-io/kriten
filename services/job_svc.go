@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/kriten-io/kriten/config"
@@ -89,6 +90,12 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 	jobs, err := helpers.ListJobs(j.config.Kube, labelSelector)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(jobs.Items) != 0 {
+		sort.SliceStable(jobs.Items, func(i, j int) bool {
+			return jobs.Items[i].Status.StartTime.After(jobs.Items[j].Status.StartTime.Time)
+		})
 	}
 
 	for i := range jobs.Items {

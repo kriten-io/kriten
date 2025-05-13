@@ -106,7 +106,10 @@ func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
 
 func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	var jsonData []byte
-
+	err := helpers.ValidateK8sConfigMapName(task.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
 		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)

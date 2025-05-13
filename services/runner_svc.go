@@ -45,7 +45,7 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 
 	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to validate Kubernetes ConfigMap name: %w", err)
 	}
 
 	for _, configMap := range configMaps.Items {
@@ -103,6 +103,11 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 }
 
 func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
+	err := helpers.ValidateK8sConfigMapName(runner.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
 	b, _ := json.Marshal(runner)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
@@ -113,7 +118,7 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 		data["branch"] = "main"
 	}
 
-	_, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
+	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
 	if err != nil {
 		return nil, err
 	}

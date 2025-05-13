@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/middlewares"
@@ -160,14 +161,20 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 
 	taskConfig, err := tc.TaskService.CreateTask(task)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
+		switch {
+		case errors.IsAlreadyExists(err):
 			tc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "task already exists, please use a different name"})
 			return
+		case strings.Contains(err.Error(), "invalid runner name"):
+			tc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		default:
+			tc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
 		}
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
 	}
 
 	audit.Status = "success"

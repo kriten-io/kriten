@@ -16,15 +16,17 @@ import (
 
 type UserController struct {
 	UserService   services.UserService
+	GroupService  services.GroupService
 	AuthService   services.AuthService
 	providers     []string
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewUserController(userService services.UserService, as services.AuthService, als services.AuditService, p []string) UserController {
+func NewUserController(userService services.UserService, gs services.GroupService, as services.AuthService, als services.AuditService, p []string) UserController {
 	return UserController{
 		UserService:   userService,
+		GroupService:  gs,
 		AuthService:   as,
 		providers:     p,
 		AuditService:  als,
@@ -38,6 +40,7 @@ func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Confi
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "users"), uc.ListUsers)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "users", "read"), uc.GetUser)
+	r.GET("/:id/groups", middlewares.AuthorizationMiddleware(uc.AuthService, "users", "read"), uc.GetUserGroups)
 
 	r.Use(middlewares.AuthorizationMiddleware(uc.AuthService, "users", "write"))
 	{
@@ -111,10 +114,26 @@ func (uc *UserController) GetUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
+	user.Groups = []string{}
 	// audit.Status = "success"
 	// uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, user)
+}
+
+func (uc *UserController) GetUserGroups(ctx *gin.Context) {
+	userID := ctx.Param("id")
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
+	groups, err := uc.GroupService.GetUserGroups(userID)
+
+	if err != nil {
+		// uc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// audit.Status = "success"
+	// uc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, groups)
 }
 
 // CreateUser godoc
