@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -241,7 +242,7 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 
 	h := hmac.New(sha512.New, []byte(webhook.Secret))
 	h.Write(body)
-	expectedSignature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	expectedSignature := hex.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
 		return models.User{}, "", errors.New("invalid signature")
