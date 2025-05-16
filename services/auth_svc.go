@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -192,8 +191,7 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	}
 	signature = split[1]
 	data := []byte(fmt.Sprintf("%s.%s.", msgID, msgTimestamp))
-	newBody := bytes.ReplaceAll(body, []byte(`"`), []byte(`'`))
-	data = append(data, newBody...)
+	data = append(data, body...)
 
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
