@@ -1,13 +1,16 @@
 package middlewares
 
 import (
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
-	"kriten/services"
+	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"
@@ -16,8 +19,62 @@ import (
 func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var token string
+		webhookID := ctx.Param("id")
+		// webhook-timestamp, webhook-id and webhook-signature - are specific header fields of Opsmil Infrahub webhook
+		webhookTimestamp := ctx.GetHeader("webhook-timestamp")
+		webhookMsgID := ctx.GetHeader("webhook-id")
+		webhookSig := ctx.GetHeader("webhook-signature")
+		// X-Hook-Signature header field is common webhook signature field, supported by Netbox and Nautobot
+		signature := ctx.GetHeader("X-Hook-Signature")
 		token = ctx.GetHeader("Token")
-		if token != "" {
+		if strings.Contains(ctx.Request.URL.String(), "/api/v1/webhooks/run") {
+			if signature == "" && webhookSig == "" {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+				return
+			}
+
+			body, err := io.ReadAll(ctx.Request.Body)
+
+			if err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
+				return
+			}
+
+			if webhookMsgID != "" && webhookTimestamp != "" && webhookSig != "" {
+				owner, taskID, err := as.ValidateWebhookSignatureInfraHub(
+					webhookID,
+					webhookMsgID,
+					webhookTimestamp,
+					webhookSig,
+					body)
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+					return
+				}
+				ctx.Set("userID", owner.ID)
+				ctx.Set("username", owner.Username)
+				ctx.Set("provider", owner.Provider)
+				ctx.Set("taskID", taskID)
+			} else if signature != "" {
+				owner, taskID, err := as.ValidateWebhookSignatureCommon(
+					webhookID,
+					signature,
+					body)
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+					return
+				}
+				ctx.Set("userID", owner.ID)
+				ctx.Set("username", owner.Username)
+				ctx.Set("provider", owner.Provider)
+				ctx.Set("taskID", taskID)
+			} else {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
+				return
+			}
+
+			ctx.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+		} else if token != "" {
 			owner, err := as.ValidateAPIToken(token)
 			if err != nil {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})

@@ -2,28 +2,31 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
 
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/gin-gonic/gin"
-	"github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 )
 
 type UserController struct {
 	UserService   services.UserService
+	GroupService  services.GroupService
 	AuthService   services.AuthService
 	providers     []string
 	AuditService  services.AuditService
 	AuditCategory string
 }
 
-func NewUserController(userService services.UserService, as services.AuthService, als services.AuditService, p []string) UserController {
+func NewUserController(userService services.UserService, gs services.GroupService, as services.AuthService, als services.AuditService, p []string) UserController {
 	return UserController{
 		UserService:   userService,
+		GroupService:  gs,
 		AuthService:   as,
 		providers:     p,
 		AuditService:  als,
@@ -37,6 +40,7 @@ func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Confi
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "users"), uc.ListUsers)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "users", "read"), uc.GetUser)
+	r.GET("/:id/groups", middlewares.AuthorizationMiddleware(uc.AuthService, "users", "read"), uc.GetUserGroups)
 
 	r.Use(middlewares.AuthorizationMiddleware(uc.AuthService, "users", "write"))
 	{
@@ -62,26 +66,26 @@ func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Router			/users [get]
 //	@Security		Bearer
 func (uc *UserController) ListUsers(ctx *gin.Context) {
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	users, err := uc.UserService.ListUsers(authList)
 
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	// audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	uc.AuditService.CreateAudit(audit)
+	// uc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, users)
 }
@@ -102,18 +106,34 @@ func (uc *UserController) ListUsers(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *UserController) GetUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 	user, err := uc.UserService.GetUser(userID)
 
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
+		// uc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	user.Groups = []string{}
+	// audit.Status = "success"
+	// uc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, user)
+}
+
+func (uc *UserController) GetUserGroups(ctx *gin.Context) {
+	userID := ctx.Param("id")
+	// audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
+	groups, err := uc.GroupService.GetUserGroups(userID)
+
+	if err != nil {
+		// uc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, user)
+	// audit.Status = "success"
+	// uc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, groups)
 }
 
 // CreateUser godoc

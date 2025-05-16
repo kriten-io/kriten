@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/strfmt"
@@ -18,7 +19,7 @@ import (
 )
 
 type TaskService interface {
-	ListTasks([]string) ([]map[string]string, error)
+	ListTasks([]string) ([]*models.Task, error)
 	GetTask(string) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
 	UpdateTask(models.Task) (*models.Task, error)
@@ -29,20 +30,22 @@ type TaskService interface {
 }
 
 type TaskServiceImpl struct {
-	config config.Config
+	WebhookService WebhookService
+	config         config.Config
 }
 
-func NewTaskService(config config.Config) TaskService {
+func NewTaskService(ws WebhookService, config config.Config) TaskService {
 	return &TaskServiceImpl{
-		config: config,
+		WebhookService: ws,
+		config:         config,
 	}
 }
 
-func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, error) {
-	var tasksList []map[string]string
+func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
+	var tasks []*models.Task
 
 	if len(authList) == 0 {
-		return tasksList, nil
+		return tasks, nil
 	}
 
 	configMaps, err := helpers.ListConfigMaps(t.config.Kube)
@@ -54,14 +57,25 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]map[string]string, err
 		runnerName := configMap.Data["runner"]
 		if runnerName != "" {
 			if authList[0] == "*" || slices.Contains(authList, configMap.Data["name"]) {
-				delete(configMap.Data, "synchronous")
-				delete(configMap.Data, "schema")
-				tasksList = append(tasksList, configMap.Data)
+				var taskData *models.Task
+				b, _ := json.Marshal(configMap.Data)
+
+				_ = json.Unmarshal(b, &taskData)
+				taskData.Synchronous, _ = strconv.ParseBool(configMap.Data["synchronous"])
+				if configMap.Data["schema"] != "" {
+					var jsonData map[string]interface{}
+					err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
+					if err != nil {
+						return nil, err
+					}
+					taskData.Schema = jsonData
+				}
+				tasks = append(tasks, taskData)
 			}
 		}
 	}
 
-	return tasksList, nil
+	return tasks, nil
 }
 
 func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
@@ -94,7 +108,10 @@ func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
 
 func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	var jsonData []byte
-
+	err := helpers.ValidateK8sConfigMapName(task.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil || runner.Data["image"] == "" {
 		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
@@ -174,11 +191,15 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 		return nil, err
 	}
 	return configuredTask, err
-
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
-	err := helpers.DeleteConfigMap(t.config.Kube, name)
+	res, err := t.WebhookService.ListTaskWebhooks(name)
+	if len(res) != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first", name)
+	}
+
+	err = helpers.DeleteConfigMap(t.config.Kube, name)
 	if err != nil {
 		return err
 	}
@@ -187,7 +208,7 @@ func (t *TaskServiceImpl) DeleteTask(name string) error {
 }
 
 func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
-	var data map[string]interface{}
+	var data map[string]any
 
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
@@ -202,7 +223,6 @@ func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return data, nil
@@ -266,7 +286,7 @@ func ValidateSchema(schema []byte) error {
 		return err
 	}
 
-	output := bytes.Replace(input, []byte("\"%schema%\""), schema, -1)
+	output := bytes.ReplaceAll(input, []byte("\"%schema%\""), schema)
 	doc, err := loads.Analyzed(output, "2.0")
 	if err != nil {
 		log.Printf("error while loading spec: %v\n", err)

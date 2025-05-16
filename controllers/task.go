@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"log"
 	"net/http"
+	"strings"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -68,29 +70,29 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Router			/tasks [get]
 //	@Security		Bearer
 func (tc *TaskController) ListTasks(ctx *gin.Context) {
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "list", tc.AuditCategory, "*")
+	//audit := tc.AuditService.InitialiseAuditLog(ctx, "list", tc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
-	tasksList, err := tc.TaskService.ListTasks(authList)
+	tasks, err := tc.TaskService.ListTasks(authList)
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
+		//tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	if len(tasksList) == 0 {
+	//audit.Status = "success"
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasks)))
+	if len(tasks) == 0 {
 		var arr [0]int
-		tc.AuditService.CreateAudit(audit)
+		//tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, tasksList)
+	//tc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, tasks)
 	// ctx.JSON(http.StatusOK, gin.H{"msg": "tasks list retrieved successfully", "tasks": tasksList})
 }
 
@@ -159,14 +161,20 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 
 	taskConfig, err := tc.TaskService.CreateTask(task)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
+		switch {
+		case errors.IsAlreadyExists(err):
 			tc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "task already exists, please use a different name"})
 			return
+		case strings.Contains(err.Error(), "invalid runner name"):
+			tc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		default:
+			tc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
 		}
-		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
 	}
 
 	audit.Status = "success"

@@ -2,11 +2,13 @@ package services
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
+	"sort"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"encoding/json"
 	"strings"
@@ -22,6 +24,7 @@ import (
 type JobService interface {
 	ListJobs([]string) ([]models.Job, error)
 	GetJob(string, string) (models.Job, error)
+	GetLog(string, string) (string, error)
 	CreateJob(string, string, string) (models.Job, error)
 	GetSchema(string) (map[string]interface{}, error)
 }
@@ -61,7 +64,6 @@ func findDelimitedString(str string) ([]byte, error) {
 			match = nil
 			break
 		}
-
 	}
 
 	return match, nil
@@ -90,7 +92,14 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 		return nil, err
 	}
 
-	for _, job := range jobs.Items {
+	if len(jobs.Items) != 0 {
+		sort.SliceStable(jobs.Items, func(i, j int) bool {
+			return jobs.Items[i].Status.StartTime.After(jobs.Items[j].Status.StartTime.Time)
+		})
+	}
+
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
 		var jobRet models.Job
 		jobRet.ID = job.Name
 		jobRet.Owner = job.Labels["owner"]
@@ -109,7 +118,7 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
 	var jobStatus models.Job
 
-	labelSelector := "job-name=" + jobID
+	labelSelector := fmt.Sprintf("job-name=%s", jobID)
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
 	}
@@ -121,6 +130,27 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 
 	if len(pods.Items) == 0 {
 		return jobStatus, errors.New("no pods found - check job ID")
+	}
+
+	for i := range pods.Items {
+		for c := range pods.Items[i].Status.InitContainerStatuses {
+			switch {
+			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
+				return jobStatus, errors.New("failed to pull init container image from container registry.")
+			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "Error":
+				return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
+			}
+		}
+		for c := range pods.Items[i].Status.ContainerStatuses {
+			state := pods.Items[i].Status.ContainerStatuses[c].State
+			// adding check if application container is not running because it cannot pull image
+			// more checks to be added to cover any other cases
+			if state.Waiting != nil {
+				if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
+					return jobStatus, errors.New("failed to pull application container image from container registry.")
+				}
+			}
+		}
 	}
 
 	job, err := helpers.GetJob(j.config.Kube, jobID)
@@ -138,30 +168,12 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	jobStatus.Failed = job.Status.Failed
 	jobStatus.Completed = job.Status.Succeeded
 
-	var logs string
-	for _, pod := range pods.Items {
-		// TODO: this will only retrieve logs for now, can be extended if needed
-		logs += "## init container logs\n"
-		for c := range pod.Spec.InitContainers {
-			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
-			if err != nil {
-				return jobStatus, err
-			}
-			logs += log
-		}
-
-		logs += "##\n\n application container logs \n"
-		for c := range pod.Spec.Containers {
-			log, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
-			if err != nil {
-				return jobStatus, err
-			}
-			logs += log
-		}
-
+	jobLog, err := j.GetLog(username, jobID)
+	if err != nil {
+		jobStatus.Stdout += fmt.Sprintf("failed to read logs from containers: %v", err)
+	} else {
+		jobStatus.Stdout += jobLog
 	}
-
-	jobStatus.Stdout = logs
 
 	if jobStatus.Stdout != "" {
 		json_byte, _ := findDelimitedString(jobStatus.Stdout)
@@ -180,6 +192,49 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	}
 
 	return jobStatus, nil
+}
+
+func (j *JobServiceImpl) GetLog(username string, jobID string) (string, error) {
+	var logs string
+
+	labelSelector := "job-name=" + jobID
+	if username != "" {
+		labelSelector = labelSelector + ",owner=" + username
+	}
+
+	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
+	if err != nil {
+		return logs, err
+	}
+
+	if len(pods.Items) == 0 {
+		return logs, errors.New("no pods found - check job ID")
+	}
+
+	for _, pod := range pods.Items {
+		// TODO: this will only retrieve logs for now, can be extended if needed
+		logs += "\n\n## init container logs\n"
+		for c := range pod.Spec.InitContainers {
+			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
+			if err != nil {
+				logs += fmt.Sprintf("error reading logs from init container: %v", err)
+			} else {
+				logs += jobLog
+			}
+		}
+		// resetting jobLog to avoid duplications
+		logs += "\n\n##application container logs \n"
+		for c := range pod.Spec.Containers {
+			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
+			if err != nil {
+				logs += fmt.Sprintf("error reading logs from application container: %v", err)
+			} else {
+				logs += jobLog
+			}
+		}
+	}
+
+	return logs, nil
 }
 
 func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (models.Job, error) {
@@ -232,7 +287,17 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(j.config.Kube, taskName, runnerName, runnerImage, username, extraVars, task.Data["command"], gitURL, gitBranch)
+	jobID, err := helpers.CreateJob(
+		j.config.Kube,
+		taskName,
+		runnerName,
+		runnerImage,
+		username,
+		extraVars,
+		task.Data["command"],
+		gitURL,
+		gitBranch,
+	)
 
 	jobStatus.ID = jobID
 
@@ -280,7 +345,6 @@ func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) 
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return data, nil

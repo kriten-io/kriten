@@ -6,15 +6,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"kriten/config"
-	"kriten/models"
 	"log"
+	"regexp"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const (
+	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	k8sConfigMapValidationError = "invalid name '%s', should be lowercase alphanumeric characters or '-' and '.'"
+)
+
+func ValidateK8sConfigMapName(name string) error {
+	// Check if the name matches the regex
+	matched, err := regexp.MatchString(k8sConfigMapRegexValidation, name)
+	if err != nil {
+		return fmt.Errorf("failed to validate object name: %w", err)
+	}
+	if !matched {
+		return fmt.Errorf(k8sConfigMapValidationError, name)
+	}
+	return nil
+}
 
 func ListConfigMaps(kube config.KubeConfig) (*corev1.ConfigMapList, error) {
 	configMaps, err := kube.Clientset.CoreV1().ConfigMaps(
@@ -133,7 +152,6 @@ func DeleteSecret(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 
@@ -394,10 +412,9 @@ func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.Cro
 			if jobsList == nil {
 				jobsList = job
 			} else {
-				jobsList.Items = append(jobsList.Items, job.Items[:]...)
+				jobsList.Items = append(jobsList.Items, job.Items...)
 			}
 		}
-
 	}
 
 	return jobsList, nil

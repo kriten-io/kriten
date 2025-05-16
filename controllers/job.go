@@ -3,10 +3,11 @@ package controllers
 import (
 	"fmt"
 	"io"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/services"
 	"net/http"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,28 +59,28 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 //	@Router			/jobs [get]
 //	@Security		Bearer
 func (jc *JobController) ListJobs(ctx *gin.Context) {
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
+	// audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	jobsList, err := jc.JobService.ListJobs(authList)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	// audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
 	if len(jobsList) == 0 {
 		var arr [0]int
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
+	//jc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, jobsList)
 }
@@ -101,17 +102,17 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 func (jc *JobController) GetJob(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get", jc.AuditCategory, jobName)
+	// audit := jc.AuditService.InitialiseAuditLog(ctx, "get", jc.AuditCategory, jobName)
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	jc.AuditService.CreateAudit(audit)
+	// audit.Status = "success"
+	// jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, job)
 }
 
@@ -132,19 +133,18 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
 	jobName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_job_log", jc.AuditCategory, jobName)
-	job, err := jc.JobService.GetJob(username, jobName)
+	// audit := jc.AuditService.InitialiseAuditLog(ctx, "get_job_log", jc.AuditCategory, jobName)
+	log, err := jc.JobService.GetLog(username, jobName)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	log := job.Stdout
+	// audit.Status = "success"
 
-	jc.AuditService.CreateAudit(audit)
+	// jc.AuditService.CreateAudit(audit)
 	ctx.Data(http.StatusOK, "text/plain", []byte(log))
 }
 
@@ -213,22 +213,22 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 //	@Security		Bearer
 func (jc *JobController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_schema", jc.AuditCategory, taskName)
+	// audit := jc.AuditService.InitialiseAuditLog(ctx, "get_schema", jc.AuditCategory, taskName)
 	schema, err := jc.JobService.GetSchema(taskName)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit.Status = "success"
+	// audit.Status = "success"
 
 	if schema == nil {
-		jc.AuditService.CreateAudit(audit)
+		// jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
+	// jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }

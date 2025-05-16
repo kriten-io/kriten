@@ -2,9 +2,10 @@ package services
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	"golang.org/x/exp/slices"
 
@@ -14,12 +15,14 @@ import (
 type GroupService interface {
 	ListGroups([]string) ([]models.Group, error)
 	GetGroup(string) (models.Group, error)
+	GetUserGroups(string) ([]models.UserGroup, error)
+	GetGroupByID(string) (models.Group, error)
 	CreateGroup(models.Group) (models.Group, error)
 	UpdateGroup(models.Group) (models.Group, error)
-	ListUsersInGroup(string) ([]models.GroupsUser, error)
-	AddUsersToGroup(string, []models.GroupsUser) (models.Group, error)
-	RemoveUsersFromGroup(string, []models.GroupsUser) (models.Group, error)
-	UpdateUsers([]models.GroupsUser, string, string) ([]string, error)
+	ListUsersInGroup(string) ([]models.GroupUser, error)
+	AddUsersToGroup(string, []models.GroupUser) (models.Group, error)
+	RemoveUsersFromGroup(string, []models.GroupUser) (models.Group, error)
+	UpdateUsers([]models.GroupUser, string, string) ([]string, error)
 	DeleteGroup(string) error
 	GetGroupRoles(string, string) ([]models.Role, error)
 }
@@ -74,6 +77,18 @@ func (g *GroupServiceImpl) GetGroup(name string) (models.Group, error) {
 	return group, nil
 }
 
+func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
+	var group models.Group
+	res := g.db.Where("group_id = ?", id).Find(&group)
+	if res.Error != nil {
+		return models.Group{}, res.Error
+	}
+	if group.Name == "" {
+		return models.Group{}, fmt.Errorf("group %s not found, please check id", id)
+	}
+	return group, nil
+}
+
 func (g *GroupServiceImpl) CreateGroup(group models.Group) (models.Group, error) {
 	res := g.db.Create(&group)
 
@@ -93,10 +108,37 @@ func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error)
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) ListUsersInGroup(groupName string) ([]models.GroupsUser, error) {
-	var users []models.GroupsUser
+func (g *GroupServiceImpl) GetUserGroups(id string) ([]models.UserGroup, error) {
+	var user models.User
+	var groups []models.UserGroup
+	res := g.db.Where("user_id = ?", id).Find(&user)
+	if res.Error != nil {
+		return []models.UserGroup{}, res.Error
+	}
 
-	group, err := g.GetGroup(groupName)
+	if user.Username == "" {
+		return []models.UserGroup{}, fmt.Errorf("user %s not found, please check uuid", id)
+	}
+
+	for _, groupID := range user.Groups {
+		group, err := g.GetGroupByID(groupID)
+		if err != nil {
+			return []models.UserGroup{}, err
+		}
+		groups = append(groups, models.UserGroup{
+			ID:       group.ID,
+			Name:     group.Name,
+			Provider: group.Provider,
+		})
+	}
+
+	return groups, nil
+}
+
+func (g *GroupServiceImpl) ListUsersInGroup(id string) ([]models.GroupUser, error) {
+	var users []models.GroupUser
+
+	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +148,18 @@ func (g *GroupServiceImpl) ListUsersInGroup(groupName string) ([]models.GroupsUs
 		if err != nil {
 			return nil, err
 		}
-		users = append(users, models.GroupsUser{
-			Name:     user.Username,
+		users = append(users, models.GroupUser{
+			Username: user.Username,
 			Provider: user.Provider,
+			ID:       user.ID,
 		})
-
 	}
 
 	return users, nil
 }
 
-func (g *GroupServiceImpl) AddUsersToGroup(groupName string, users []models.GroupsUser) (models.Group, error) {
-	group, err := g.GetGroup(groupName)
+func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) (models.Group, error) {
+	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, err
 	}
@@ -137,8 +179,8 @@ func (g *GroupServiceImpl) AddUsersToGroup(groupName string, users []models.Grou
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveUsersFromGroup(groupName string, users []models.GroupsUser) (models.Group, error) {
-	group, err := g.GetGroup(groupName)
+func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupUser) (models.Group, error) {
+	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, err
 	}
@@ -159,10 +201,15 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(groupName string, users []models
 }
 
 func (g *GroupServiceImpl) DeleteGroup(id string) error {
-	group, err := g.GetGroup(id)
+	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return err
 	}
+
+	if group.Users != nil {
+		return fmt.Errorf("cannot delete group %s, please remove users first", group.Name)
+	}
+
 	return g.db.Unscoped().Delete(&group).Error
 }
 
@@ -184,11 +231,11 @@ func (g *GroupServiceImpl) GetGroupRoles(subjectID string, provider string) ([]m
 	return roles, nil
 }
 
-func (g *GroupServiceImpl) UpdateUsers(users []models.GroupsUser, groupID string, operation string) ([]string, error) {
+func (g *GroupServiceImpl) UpdateUsers(users []models.GroupUser, groupID string, operation string) ([]string, error) {
 	var usersID []string
 
 	for _, u := range users {
-		user, err := g.UserService.GetByUsernameAndProvider(u.Name, u.Provider)
+		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
 		if err != nil {
 			return nil, err
 		}

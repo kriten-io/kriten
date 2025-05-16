@@ -2,10 +2,11 @@ package services
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"encoding/json"
 	"strings"
@@ -155,7 +156,6 @@ func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, err
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return data, nil
@@ -201,5 +201,4 @@ func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.Co
 	}
 
 	return runner, task.Data["command"], nil
-
 }

@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
 
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/gin-gonic/gin"
-	"github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 )
 
@@ -65,7 +66,7 @@ func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, confi
 //	@Router			/role_bindings [get]
 //	@Security		Bearer
 func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
+	//audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	filters := make(map[string]string)
 	authList := ctx.MustGet("authList").([]string)
 
@@ -81,21 +82,21 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 	roles, err := rc.RoleBindingService.ListRoleBindings(authList, filters)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
+		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
 	if len(roles) == 0 {
 		var arr [0]int
-		rc.AuditService.CreateAudit(audit)
+		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	rc.AuditService.CreateAudit(audit)
+	//rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, roles)
 }

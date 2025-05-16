@@ -1,9 +1,11 @@
 package controllers
 
 import (
-	"kriten/models"
-	"kriten/services"
+	"fmt"
 	"net/http"
+
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
@@ -66,6 +68,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
+		fmt.Println("error:", err)
 		ac.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
 		return

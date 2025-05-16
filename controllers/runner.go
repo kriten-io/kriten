@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
+	"strings"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -67,28 +69,28 @@ func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.C
 //	@Router			/runners [get]
 //	@Security		Bearer
 func (rc *RunnerController) ListRunners(ctx *gin.Context) {
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
+	//audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	runnersList, err := rc.RunnerService.ListRunners(authList)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
+		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(runnersList)))
 	if len(runnersList) == 0 {
 		var arr [0]int
-		rc.AuditService.CreateAudit(audit)
+		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	rc.AuditService.CreateAudit(audit)
+	//rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, runnersList)
 }
@@ -159,14 +161,20 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 
 	runnerData, err := rc.RunnerService.CreateRunner(runner)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
+		switch {
+		case errors.IsAlreadyExists(err):
 			rc.AuditService.CreateAudit(audit)
 			ctx.JSON(http.StatusConflict, gin.H{"error": "runner already exists, please use a different name"})
 			return
+		case strings.Contains(err.Error(), "invalid runner name"):
+			rc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		default:
+			rc.AuditService.CreateAudit(audit)
+			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
 		}
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
 	}
 
 	audit.Status = "success"

@@ -3,9 +3,10 @@ package services
 import (
 	"errors"
 	"fmt"
-	"kriten/config"
-	"kriten/models"
 	"log"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/models"
 
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
@@ -23,10 +24,10 @@ type RoleBindingService interface {
 }
 
 type RoleBindingServiceImpl struct {
-	db           *gorm.DB
-	config       config.Config
 	RoleService  RoleService
 	GroupService GroupService
+	db           *gorm.DB
+	config       config.Config
 }
 
 func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs GroupService) RoleBindingService {
@@ -38,7 +39,10 @@ func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs
 	}
 }
 
-func (r *RoleBindingServiceImpl) ListRoleBindings(authList []string, filters map[string]string) ([]models.RoleBinding, error) {
+func (r *RoleBindingServiceImpl) ListRoleBindings(
+	authList []string,
+	filters map[string]string,
+) ([]models.RoleBinding, error) {
 	var roleBindings []models.RoleBinding
 	var res *gorm.DB
 
@@ -108,7 +112,7 @@ func (r *RoleBindingServiceImpl) DeleteRoleBinding(id string) error {
 		return err
 	}
 
-	if roleBinding.Buitin {
+	if roleBinding.Builtin {
 		return errors.New("cannot delete builtin resource")
 	}
 

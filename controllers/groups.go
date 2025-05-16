@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/models"
-	"kriten/services"
 	"net/http"
 
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
+	"github.com/kriten-io/kriten/services"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/gin-gonic/gin"
-	"github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 )
 
@@ -21,7 +22,9 @@ type GroupController struct {
 	providers     []string
 }
 
-func NewGroupController(groupService services.GroupService, as services.AuthService, als services.AuditService, p []string) GroupController {
+func NewGroupController(groupService services.GroupService,
+	as services.AuthService,
+	als services.AuditService, p []string) GroupController {
 	return GroupController{
 		GroupService:  groupService,
 		AuthService:   as,
@@ -69,27 +72,27 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 //	@Router			/groups [get]
 //	@Security		Bearer
 func (gc *GroupController) ListGroups(ctx *gin.Context) {
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
+	//audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	groups, err := gc.GroupService.ListGroups(authList)
 
 	if err != nil {
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
 	if len(groups) == 0 {
 		var arr [0]int
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	gc.AuditService.CreateAudit(audit)
+	//gc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, groups)
 }
@@ -259,35 +262,35 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"Group ID"
-//	@Success		200	{array}		[]models.GroupsUser
+//	@Success		200	{array}		[]models.GroupUser
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [get]
 //	@Security		Bearer
 func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, groupName)
+	id := ctx.Param("id")
+	// audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, id)
 	var err error
 
-	users, err := gc.GroupService.ListUsersInGroup(groupName)
+	users, err := gc.GroupService.ListUsersInGroup(id)
 	if err != nil {
-		gc.AuditService.CreateAudit(audit)
+		// gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
+	//audit.Status = "success"
 
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
-		gc.AuditService.CreateAudit(audit)
+		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	gc.AuditService.CreateAudit(audit)
+	// gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, users)
 }
 
@@ -298,7 +301,7 @@ func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupsUser	true	"Users to be added"
+//	@Param			group	body		[]models.GroupUser	true	"Users to be added"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -307,9 +310,9 @@ func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [post]
 //	@Security		Bearer
 func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, groupName)
-	var users []models.GroupsUser
+	id := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, id)
+	var users []models.GroupUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -318,7 +321,7 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := gc.GroupService.AddUsersToGroup(groupName, users)
+	group, err := gc.GroupService.AddUsersToGroup(id, users)
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -336,7 +339,7 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupsUser	true	"Users to be removed"
+//	@Param			group	body		[]models.GroupUser	true	"Users to be removed"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -345,9 +348,9 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Router			/groups/{id}/users [delete]
 //	@Security		Bearer
 func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
-	groupName := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, groupName)
-	var users []models.GroupsUser
+	id := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, id)
+	var users []models.GroupUser
 	var err error
 
 	if err := ctx.ShouldBindJSON(&users); err != nil {
@@ -356,7 +359,7 @@ func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 		return
 	}
 
-	group, err := gc.GroupService.RemoveUsersFromGroup(groupName, users)
+	group, err := gc.GroupService.RemoveUsersFromGroup(id, users)
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

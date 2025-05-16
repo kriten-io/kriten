@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"fmt"
-	"kriten/config"
-	"kriten/middlewares"
-	"kriten/services"
 	"net/http"
 	"strconv"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,19 +51,18 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	var err error
 	// Default limit
-	max := 100
+	maxDefault := 100
 	param := ctx.Request.URL.Query().Get("max")
 
 	if param != "" {
-		max, err = strconv.Atoi(param)
+		maxDefault, err = strconv.Atoi(param)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
 	}
 
-	groups, err := ac.AuditService.ListAuditLogs(max)
+	groups, err := ac.AuditService.ListAuditLogs(maxDefault)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

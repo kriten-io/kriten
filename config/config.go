@@ -7,12 +7,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	JobsTTLDefault          = 3600
+	JWTExpirySecondsDefault = 3600
+)
+
 type LDAPConfig struct {
 	BindUser string
 	BindPass string
 	FQDN     string
-	Port     int
 	BaseDN   string
+	Port     int
 }
 
 type KubeConfig struct {
@@ -31,29 +36,22 @@ type DBConfig struct {
 	Host     string
 	User     string
 	Password string
-	Port     int
 	SSL      string
+	Port     int
 }
-
-// type ESConfig struct {
-// 	CloudID string
-// 	APIKey  string
-// 	Index   string
-// }
 
 type Config struct {
 	Environment string
 	RootSecret  string
 	APISecret   string
-	DebugMode   bool // Not currently used
 	LDAP        LDAPConfig
 	Kube        KubeConfig
 	JWT         JWTConfig
 	DB          DBConfig
-	// ElasticSearch    ESConfig
+	DebugMode   bool
 }
 
-// New returns a new Config struct
+// NewConfig returns a new Config struct.
 func NewConfig(gitBranch string) Config {
 	return Config{
 		Environment: getEnv("ENV", "development"),
@@ -70,11 +68,11 @@ func NewConfig(gitBranch string) Config {
 		Kube: KubeConfig{
 			Clientset: nil,
 			Namespace: getEnv("NAMESPACE", "kriten"),
-			JobsTTL:   getEnvAsInt("JOBS_TTL", 3600), // Default 1 hour
+			JobsTTL:   getEnvAsInt("JOBS_TTL", JobsTTLDefault), // Default 1 hour
 		},
 		JWT: JWTConfig{
 			Key:           []byte(getEnv("JWT_KEY", "")),
-			ExpirySeconds: getEnvAsInt("JWT_EXPIRY_SECONDS", 3600), // Default 1 hour expiry
+			ExpirySeconds: getEnvAsInt("JWT_EXPIRY_SECONDS", JWTExpirySecondsDefault), // Default 1 hour expiry
 		},
 		DB: DBConfig{
 			Name:     getEnv("DB_NAME", ""),
@@ -92,7 +90,7 @@ func NewConfig(gitBranch string) Config {
 	}
 }
 
-// Simple helper function to read an environment or return a default value
+// Simple helper function to read an environment or return a default value.
 func getEnv(key string, defaultVal string) string {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
 		return value
@@ -101,7 +99,7 @@ func getEnv(key string, defaultVal string) string {
 	return defaultVal
 }
 
-// Simple helper function to read an environment variable into integer or return a default value
+// Simple helper function to read an environment variable into integer or return a default value.
 func getEnvAsInt(name string, defaultVal int) int {
 	valueStr := getEnv(name, "")
 	if value, err := strconv.Atoi(valueStr); err == nil {
@@ -111,7 +109,7 @@ func getEnvAsInt(name string, defaultVal int) int {
 	return defaultVal
 }
 
-// Helper to read an environment variable into a bool or return default value
+// Helper to read an environment variable into a bool or return default value.
 func getEnvAsBool(name string, defaultVal bool) bool {
 	valStr := getEnv(name, "")
 	if val, err := strconv.ParseBool(valStr); err == nil {

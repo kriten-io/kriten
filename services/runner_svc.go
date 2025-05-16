@@ -3,10 +3,11 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"kriten/config"
-	"kriten/helpers"
-	"kriten/models"
 	"time"
+
+	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
+	"github.com/kriten-io/kriten/models"
 
 	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,7 +45,7 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 
 	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to validate Kubernetes ConfigMap name: %w", err)
 	}
 
 	for _, configMap := range configMaps.Items {
@@ -102,6 +103,11 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 }
 
 func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
+	err := helpers.ValidateK8sConfigMapName(runner.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
 	b, _ := json.Marshal(runner)
 	var data map[string]string
 	_ = json.Unmarshal(b, &data)
@@ -112,7 +118,7 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 		data["branch"] = "main"
 	}
 
-	_, err := helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
+	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +197,6 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	updatedRunner, err := r.GetRunner(runner.Name)
@@ -199,7 +204,6 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 		return nil, err
 	}
 	return updatedRunner, err
-
 }
 
 func (r *RunnerServiceImpl) DeleteRunner(name string) error {
@@ -274,7 +278,6 @@ func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
 
 	for key := range secret.Data {
 		secretCleaned[key] = "************"
-
 	}
 	return secretCleaned, nil
 }
@@ -320,10 +323,8 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 
 		for key := range secretNew.Data {
 			secretCleaned[key] = "************"
-
 		}
 		return secretCleaned, nil
-
 	} else {
 		err := helpers.DeleteSecret(r.config.Kube, name)
 		if err != nil {
