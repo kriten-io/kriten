@@ -37,6 +37,7 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(tc.AuthService, "tasks"), tc.ListTasks)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetTask)
+	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "write"))
 	{
@@ -47,7 +48,6 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 		r.DELETE("/:id", tc.DeleteTask)
 
 		{
-			r.GET("/:id/schema", tc.GetSchema)
 			r.POST("/:id/schema", tc.UpdateSchema)
 			r.PUT("/:id/schema", tc.UpdateSchema)
 			r.DELETE("/:id/schema", tc.DeleteSchema)
