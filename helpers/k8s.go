@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	k8sConfigMapValidationError = "invalid name '%s', should be lowercase alphanumeric characters or '-' and '.'"
 )
 
