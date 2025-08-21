@@ -188,7 +188,7 @@ func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.Co
 		runner.Data["branch"] = "main"
 	}
 
-	secret, err := helpers.GetSecret(kube, task.Data["runner"])
+	secret, err := helpers.GetSecret(kube, task.Data["runner"]+"-token")
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
 			return nil, "", err
