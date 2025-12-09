@@ -282,7 +282,8 @@ func JobObject(name string,
 
 	optionalSecret := true
 
-	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote", gitBranch, gitURL)
+	// Removing output of remote URL to hide git Token
+	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote -q", gitBranch, gitURL)
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
