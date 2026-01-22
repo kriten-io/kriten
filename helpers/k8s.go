@@ -215,7 +215,8 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 }
 
 // TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
+func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string,
+	extraVars string, command string, gitURL string, gitBranch string) (string, error) {
 	job := JobObject(name, kube, runnerName, runnerImage, owner, extraVars, command, gitURL, gitBranch)
 
 	job, err := kube.Clientset.BatchV1().Jobs(
@@ -282,7 +283,8 @@ func JobObject(name string,
 
 	optionalSecret := true
 
-	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote", gitBranch, gitURL)
+	// Removing output of remote URL to hide git Token
+	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote -q", gitBranch, gitURL)
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
