@@ -131,23 +131,27 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	if len(pods.Items) == 0 {
 		return jobStatus, errors.New("no pods found - check job ID")
 	}
-
+	fmt.Printf("num of pods %d", len(pods.Items))
 	for i := range pods.Items {
 		for c := range pods.Items[i].Status.InitContainerStatuses {
-			switch {
-			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
-				return jobStatus, errors.New("failed to pull init container image from container registry.")
-			case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "Error":
-				return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
+			if pods.Items[i].Status.InitContainerStatuses[c].Ready {
+				switch {
+				case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
+					return jobStatus, errors.New("failed to pull init container image from container registry.")
+				case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "Error":
+					return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
+				}
 			}
 		}
 		for c := range pods.Items[i].Status.ContainerStatuses {
-			state := pods.Items[i].Status.ContainerStatuses[c].State
-			// adding check if application container is not running because it cannot pull image
-			// more checks to be added to cover any other cases
-			if state.Waiting != nil {
-				if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
-					return jobStatus, errors.New("failed to pull application container image from container registry.")
+			if pods.Items[i].Status.ContainerStatuses[c].Ready {
+				state := pods.Items[i].Status.ContainerStatuses[c].State
+				// adding check if application container is not running because it cannot pull image
+				// more checks to be added to cover any other cases
+				if state.Waiting != nil {
+					if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
+						return jobStatus, errors.New("failed to pull application container image from container registry.")
+					}
 				}
 			}
 		}

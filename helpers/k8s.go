@@ -215,7 +215,8 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 }
 
 // TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string, extraVars string, command string, gitURL string, gitBranch string) (string, error) {
+func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string,
+	extraVars string, command string, gitURL string, gitBranch string) (string, error) {
 	job := JobObject(name, kube, runnerName, runnerImage, owner, extraVars, command, gitURL, gitBranch)
 
 	job, err := kube.Clientset.BatchV1().Jobs(
