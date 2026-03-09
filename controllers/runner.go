@@ -69,28 +69,21 @@ func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.C
 //	@Router			/runners [get]
 //	@Security		Bearer
 func (rc *RunnerController) ListRunners(ctx *gin.Context) {
-	//audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	runnersList, err := rc.RunnerService.ListRunners(authList)
 
 	if err != nil {
-		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
-
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(runnersList)))
 	if len(runnersList) == 0 {
 		var arr [0]int
-		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	//rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, runnersList)
 }
@@ -111,24 +104,18 @@ func (rc *RunnerController) ListRunners(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RunnerController) GetRunner(ctx *gin.Context) {
 	runnerName := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory, runnerName)
 
 	runner, err := rc.RunnerService.GetRunner(runnerName)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if runner == nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "runner not found"})
 		return
 	}
 
-	audit.Status = "success"
-
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, runner)
 }
 
@@ -147,7 +134,6 @@ func (rc *RunnerController) GetRunner(ctx *gin.Context) {
 //	@Router			/runners [post]
 //	@Security		Bearer
 func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
-	// timestamp := time.Now().UTC()
 	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory, "*")
 	var runner models.Runner
 
@@ -198,7 +184,6 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 //	@Router			/runners/{rname} [patch]
 //	@Security		Bearer
 func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
-	// timestamp := time.Now().UTC()
 	runnerName := ctx.Param("id")
 	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory, runnerName)
 	var runner models.Runner
@@ -241,7 +226,6 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 //	@Router			/runners/{rname} [delete]
 //	@Security		Bearer
 func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
-	// timestamp := time.Now().UTC()
 	runnerName := ctx.Param("id")
 	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory, runnerName)
 
@@ -278,11 +262,9 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RunnerController) GetSecret(ctx *gin.Context) {
 	runnerName := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "get_secret", rc.AuditCategory, runnerName)
 	secret, err := rc.RunnerService.GetSecret(runnerName)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -292,8 +274,6 @@ func (rc *RunnerController) GetSecret(ctx *gin.Context) {
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, secret)
 }
 

@@ -77,12 +77,10 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 //	@Router			/webhooks [get]
 //	@Security		Bearer
 func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
-	// audit := wc.AuditService.InitialiseAuditLog(ctx, "list", wc.AuditCategory, "*")
 	userid := ctx.MustGet("userID").(uuid.UUID)
 	webHooks, err := wc.WebhookService.ListWebhooks(userid)
 
 	if err != nil {
-		// wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -91,12 +89,10 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(webHooks)))
 	if len(webHooks) == 0 {
 		var arr [0]int
-		// wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	// wc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, webHooks)
 }
@@ -115,26 +111,21 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 //	@Router			/webhooks/all [get]
 //	@Security		Bearer
 func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
-	// audit := wc.AuditService.InitialiseAuditLog(ctx, "list", wc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	webHooks, err := wc.WebhookService.ListAllWebhooks(authList)
 
 	if err != nil {
-		// wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(webHooks)))
 	if len(webHooks) == 0 {
 		var arr [0]int
-		// wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	// wc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, webHooks)
 }
@@ -155,17 +146,13 @@ func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
 //	@Security		Bearer
 func (wc *WebhookController) GetWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
-	// audit := wc.AuditService.InitialiseAuditLog(ctx, "get", wc.AuditCategory, webhookID)
 	webhook, err := wc.WebhookService.GetWebhook(webhookID)
 
 	if err != nil {
-		// wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// audit.Status = "success"
-	// wc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, webhook)
 }
 
@@ -202,9 +189,6 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// if audit.EventTarget == "" {
-	// 	audit.EventTarget = apiToken.Key
-	// }
 
 	audit.Status = "success"
 	wc.AuditService.CreateAudit(audit)

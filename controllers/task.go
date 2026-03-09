@@ -70,30 +70,23 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Router			/tasks [get]
 //	@Security		Bearer
 func (tc *TaskController) ListTasks(ctx *gin.Context) {
-	//audit := tc.AuditService.InitialiseAuditLog(ctx, "list", tc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	tasks, err := tc.TaskService.ListTasks(authList)
 
 	if err != nil {
-		//tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasks)))
 	if len(tasks) == 0 {
 		var arr [0]int
-		//tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	// ctx.Header("Content-range", fmt.Sprintf("%v", len(tasksList)))
-	//tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, tasks)
-	// ctx.JSON(http.StatusOK, gin.H{"msg": "tasks list retrieved successfully", "tasks": tasksList})
 }
 
 // GetTask godoc
@@ -112,25 +105,18 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 //	@Security		Bearer
 func (tc *TaskController) GetTask(ctx *gin.Context) {
 	taskName := ctx.Param("id")
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "get", tc.AuditCategory, taskName)
-	// username := ctx.MustGet("username").(string)
 	task, err := tc.TaskService.GetTask(taskName)
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if task == nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "task not found"})
 		return
 	}
-	audit.Status = "success"
 
-	// ctx.JSON(http.StatusOK, gin.H{"msg": "task retrieved successfully", "value": task, "secret": secret})
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, task)
 }
 
@@ -274,23 +260,18 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 //	@Security		Bearer
 func (tc *TaskController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "get_schema", tc.AuditCategory, taskName)
 	schema, err := tc.TaskService.GetSchema(taskName)
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit.Status = "success"
 
 	if schema == nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
 		return
 	}
 
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }
 

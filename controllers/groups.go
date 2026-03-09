@@ -72,27 +72,21 @@ func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Con
 //	@Router			/groups [get]
 //	@Security		Bearer
 func (gc *GroupController) ListGroups(ctx *gin.Context) {
-	//audit := gc.AuditService.InitialiseAuditLog(ctx, "list", gc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 	groups, err := gc.GroupService.ListGroups(authList)
 
 	if err != nil {
-		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
-
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
 	if len(groups) == 0 {
 		var arr [0]int
-		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	//gc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, groups)
 }
@@ -113,18 +107,13 @@ func (gc *GroupController) ListGroups(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) GetGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	audit := gc.AuditService.InitialiseAuditLog(ctx, "get", gc.AuditCategory, groupID)
 	group, err := gc.GroupService.GetGroup(groupID)
 
 	if err != nil {
-		gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-
-	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
 }
 
@@ -270,27 +259,21 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) ListUsersInGroup(ctx *gin.Context) {
 	id := ctx.Param("id")
-	// audit := gc.AuditService.InitialiseAuditLog(ctx, "list_users", gc.AuditCategory, id)
 	var err error
 
 	users, err := gc.GroupService.ListUsersInGroup(id)
 	if err != nil {
-		// gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
-
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
 	if len(users) == 0 {
 		var arr [0]int
-		//gc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	// gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, users)
 }
 
