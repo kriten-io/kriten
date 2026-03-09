@@ -65,28 +65,22 @@ func (jc *CronJobController) SetCronJobRoutes(rg *gin.RouterGroup, config config
 //	@Router			/cronjobs [get]
 //	@Security		Bearer
 func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
-	//audit := jc.AuditService.InitialiseAuditLog(ctx, "list", jc.AuditCategory, "*")
 	authList := ctx.MustGet("authList").([]string)
 
 	jobsList, err := jc.CronJobService.ListCronJobs(authList)
 
 	if err != nil {
-		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
-
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
 	if len(jobsList) == 0 {
 		var arr [0]int
-		//jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	//jc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, jobsList)
 }
@@ -107,17 +101,13 @@ func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
 //	@Security		Bearer
 func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 	jobName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get", jc.AuditCategory, jobName)
 	job, err := jc.CronJobService.GetCronJob(jobName)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	audit.Status = "success"
-	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, job)
 }
 
@@ -253,22 +243,17 @@ func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
 //	@Security		Bearer
 func (jc *CronJobController) GetSchema(ctx *gin.Context) {
 	taskName := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "get_schema", jc.AuditCategory, taskName)
 	schema, err := jc.CronJobService.GetSchema(taskName)
 
 	if err != nil {
-		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit.Status = "success"
 
 	if schema == nil {
-		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }

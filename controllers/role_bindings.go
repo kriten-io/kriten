@@ -66,7 +66,6 @@ func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, confi
 //	@Router			/role_bindings [get]
 //	@Security		Bearer
 func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
-	//audit := rc.AuditService.InitialiseAuditLog(ctx, "list", rc.AuditCategory, "*")
 	filters := make(map[string]string)
 	authList := ctx.MustGet("authList").([]string)
 
@@ -82,21 +81,17 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 	roles, err := rc.RoleBindingService.ListRoleBindings(authList, filters)
 
 	if err != nil {
-		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	//audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
 	if len(roles) == 0 {
 		var arr [0]int
-		//rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
-	//rc.AuditService.CreateAudit(audit)
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.JSON(http.StatusOK, roles)
 }
@@ -117,17 +112,13 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleBindingController) GetRoleBinding(ctx *gin.Context) {
 	roleBindingID := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory, roleBindingID)
 	role, err := rc.RoleBindingService.GetRoleBinding(roleBindingID)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit.Status = "success"
 
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
