@@ -164,6 +164,14 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 		return models.Group{}, err
 	}
 
+	groupProvider := group.Provider
+
+	for _, u := range users {
+		if u.Provider != groupProvider {
+			return models.Group{}, fmt.Errorf("provider type must match for user and group")
+		}
+	}
+
 	usersID, err := g.UpdateUsers(users, group.ID.String(), "add")
 	if err != nil {
 		return models.Group{}, err
