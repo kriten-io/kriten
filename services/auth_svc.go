@@ -270,10 +270,11 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 
 	roles, err := a.UserService.GetUserRoles(auth.UserID.String(), auth.Provider)
 	if err != nil {
-		log.Println(err)
 		return false, err
 	}
-	for _, role := range roles {
+
+	for i := range roles {
+		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource &&
 			(len(role.Resource_IDs) > 0 && role.Resource_IDs[0] == "*" ||
 				slices.Contains(role.Resource_IDs, auth.ResourceID)) &&
