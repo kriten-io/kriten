@@ -7,6 +7,7 @@ import (
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
@@ -48,11 +49,16 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 // ListJobs godoc
 //
 //	@Summary		List all jobs
-//	@Description	List all jobs
+//	@Description	List all jobs with optional filtering and pagination
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{array}		string
+//	@Param			limit	query		int		false	"Maximum number of jobs to return (default 100)"
+//	@Param			offset	query		int		false	"Number of jobs to skip (default 0)"
+//	@Param			owner	query		string	false	"Filter by job owner"
+//	@Param			status	query		string	false	"Filter by status: running, completed, failed"
+//	@Param			job_name	query		string	false	"Filter by task/job name"
+//	@Success		200	{array}		models.Job
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
@@ -61,14 +67,24 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 func (jc *JobController) ListJobs(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
 
-	jobsList, err := jc.JobService.ListJobs(authList)
+	var params models.JobQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if params.Limit == 0 {
+		params.Limit = 100
+	}
+
+	jobsList, total, err := jc.JobService.ListJobs(authList, params)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(jobsList)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(jobsList) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)

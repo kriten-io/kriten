@@ -22,7 +22,7 @@ import (
 )
 
 type JobService interface {
-	ListJobs([]string) ([]models.Job, error)
+	ListJobs([]string, models.JobQueryParams) ([]models.Job, int, error)
 	GetJob(string, string) (models.Job, error)
 	GetLog(string, string) (string, error)
 	CreateJob(string, string, string) (models.Job, error)
@@ -69,12 +69,12 @@ func findDelimitedString(str string) ([]byte, error) {
 	return match, nil
 }
 
-func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
+func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParams) ([]models.Job, int, error) {
 	var jobsList []models.Job
 	var labelSelector []string
 
 	if len(authList) == 0 {
-		return jobsList, nil
+		return jobsList, 0, nil
 	}
 
 	if authList[0] != "*" {
@@ -82,14 +82,10 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 			labelSelector = append(labelSelector, "task-name="+s)
 		}
 	}
-	// labelSelector := "task-name=" + taskName
-	// if username != "" {
-	// 	labelSelector = labelSelector + ",owner=" + username
-	// }
 
 	jobs, err := helpers.ListJobs(j.config.Kube, labelSelector)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if len(jobs.Items) != 0 {
@@ -112,7 +108,48 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 		jobsList = append(jobsList, jobRet)
 	}
 
-	return jobsList, nil
+	var filtered []models.Job
+	for _, job := range jobsList {
+		if params.Owner != "" && !strings.Contains(strings.ToLower(job.Owner), strings.ToLower(params.Owner)) {
+			continue
+		}
+		if params.JobName != "" && !strings.Contains(strings.ToLower(job.ID), strings.ToLower(params.JobName)) {
+			continue
+		}
+		if params.Status != "" {
+			switch params.Status {
+			case "completed":
+				if job.Completed == 0 {
+					continue
+				}
+			case "failed":
+				if job.Failed == 0 {
+					continue
+				}
+			case "running":
+				if job.Completed != 0 || job.Failed != 0 {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, job)
+	}
+
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, total, nil
 }
 
 func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
