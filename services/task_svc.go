@@ -113,7 +113,10 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 		return nil, fmt.Errorf("%w", err)
 	}
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
-	if err != nil || runner.Data["image"] == "" {
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving runner %s: %w", task.Runner, err)
+	}
+	if runner.Data["image"] == "" {
 		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 
@@ -158,7 +161,10 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 	}
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
-	if err != nil || runner.Data["image"] == "" {
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving runner %s: %w", task.Runner, err)
+	}
+	if runner.Data["image"] == "" {
 		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
 	}
 

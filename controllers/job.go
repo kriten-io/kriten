@@ -6,11 +6,13 @@ import (
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type JobController struct {
@@ -69,7 +71,7 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 
 	var params models.JobQueryParams
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -80,7 +82,7 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 	jobsList, total, err := jc.JobService.ListJobs(authList, params)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -115,7 +117,11 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "job not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -142,7 +148,11 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	log, err := jc.JobService.GetLog(username, jobName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "job not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -173,7 +183,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err})
+		helpers.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -181,7 +191,11 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -216,12 +230,11 @@ func (jc *JobController) GetSchema(ctx *gin.Context) {
 	schema, err := jc.JobService.GetSchema(taskName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if schema == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 

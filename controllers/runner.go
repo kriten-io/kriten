@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -73,7 +74,7 @@ func (rc *RunnerController) ListRunners(ctx *gin.Context) {
 	runnersList, err := rc.RunnerService.ListRunners(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -107,12 +108,11 @@ func (rc *RunnerController) GetRunner(ctx *gin.Context) {
 
 	runner, err := rc.RunnerService.GetRunner(runnerName)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if runner == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "runner not found"})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "runner not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -150,15 +150,15 @@ func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
 		switch {
 		case errors.IsAlreadyExists(err):
 			rc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusConflict, gin.H{"error": "runner already exists, please use a different name"})
+			helpers.ConflictError(ctx, "runner already exists, please use a different name")
 			return
 		case strings.Contains(err.Error(), "invalid runner name"):
 			rc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			helpers.BadRequestError(ctx, err.Error())
 			return
 		default:
 			rc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			helpers.BadGatewayError(ctx, err)
 			return
 		}
 	}
@@ -198,11 +198,11 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			rc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "runner doesn't exist"})
+			helpers.NotFoundError(ctx, "runner doesn't exist")
 			return
 		}
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadGatewayError(ctx, err)
 		return
 	}
 
@@ -233,11 +233,11 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			rc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusConflict, gin.H{"error": "runner doesn't exist"})
+			helpers.NotFoundError(ctx, "runner doesn't exist")
 			return
 		}
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadGatewayError(ctx, err)
 		return
 	}
 
@@ -265,12 +265,11 @@ func (rc *RunnerController) GetSecret(ctx *gin.Context) {
 	secret, err := rc.RunnerService.GetSecret(runnerName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if secret == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "secret not found"})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "secret not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -306,7 +305,7 @@ func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
 
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -337,7 +336,11 @@ func (rc *RunnerController) DeleteSecret(ctx *gin.Context) {
 
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "secret not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 

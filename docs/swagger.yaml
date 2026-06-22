@@ -3,10 +3,8 @@ definitions:
   helpers.HTTPError:
     properties:
       code:
-        example: 400
         type: integer
       message:
-        example: status bad request
         type: string
     type: object
   models.ApiToken:
@@ -233,18 +231,18 @@ definitions:
         type: array
       id:
         type: string
-      name:
-        type: string
       password:
         type: string
       provider:
         type: string
       updated_at:
         type: string
+      username:
+        type: string
     required:
-    - name
     - password
     - provider
+    - username
     type: object
   models.Webhook:
     properties:
@@ -1057,7 +1055,28 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all jobs
+      description: List all jobs with optional filtering and pagination
+      parameters:
+      - description: Maximum number of jobs to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of jobs to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by job owner
+        in: query
+        name: owner
+        type: string
+      - description: 'Filter by status: running, completed, failed'
+        in: query
+        name: status
+        type: string
+      - description: Filter by task/job name
+        in: query
+        name: job_name
+        type: string
       produces:
       - application/json
       responses:
@@ -1065,7 +1084,7 @@ paths:
           description: OK
           schema:
             items:
-              type: string
+              $ref: '#/definitions/models.Job'
             type: array
         "400":
           description: Bad Request

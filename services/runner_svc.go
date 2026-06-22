@@ -66,17 +66,17 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 }
 
 func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
-	var runnerData models.Runner
 	configMap, err := helpers.GetConfigMap(r.config.Kube, name)
 
 	if err != nil {
-		return &runnerData, err
+		return nil, err
 	}
 
 	if configMap.Data["image"] == "" {
 		return nil, fmt.Errorf("runner %s not found", name)
 	}
 
+	var runnerData models.Runner
 	b, _ := json.Marshal(configMap.Data)
 	_ = json.Unmarshal(b, &runnerData)
 
@@ -84,7 +84,7 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 	token, err := r.GetSecret(tokenObjName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return &runnerData, err
+			return nil, err
 		}
 	} else {
 		runnerData.Token = token["token"]
@@ -93,7 +93,7 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 	secretCleared, err := r.GetSecret(name)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return &runnerData, err
+			return nil, err
 		}
 	} else {
 		runnerData.Secret = secretCleared

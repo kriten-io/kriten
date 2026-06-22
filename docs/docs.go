@@ -1248,7 +1248,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "List all jobs",
+                "description": "List all jobs with optional filtering and pagination",
                 "consumes": [
                     "application/json"
                 ],
@@ -1259,13 +1259,45 @@ const docTemplate = `{
                     "jobs"
                 ],
                 "summary": "List all jobs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of jobs to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of jobs to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by job owner",
+                        "name": "owner",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status: running, completed, failed",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task/job name",
+                        "name": "job_name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "type": "string"
+                                "$ref": "#/definitions/models.Job"
                             }
                         }
                     },
@@ -3677,12 +3709,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "code": {
-                    "type": "integer",
-                    "example": 400
+                    "type": "integer"
                 },
                 "message": {
-                    "type": "string",
-                    "example": "status bad request"
+                    "type": "string"
                 }
             }
         },
@@ -4006,9 +4036,9 @@ const docTemplate = `{
         "models.User": {
             "type": "object",
             "required": [
-                "name",
                 "password",
-                "provider"
+                "provider",
+                "username"
             ],
             "properties": {
                 "created_at": {
@@ -4023,9 +4053,6 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "name": {
-                    "type": "string"
-                },
                 "password": {
                     "type": "string"
                 },
@@ -4033,6 +4060,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

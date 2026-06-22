@@ -5,11 +5,13 @@ import (
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type CronJobController struct {
@@ -70,7 +72,7 @@ func (jc *CronJobController) ListCronJobs(ctx *gin.Context) {
 	jobsList, err := jc.CronJobService.ListCronJobs(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -104,7 +106,11 @@ func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 	job, err := jc.CronJobService.GetCronJob(jobName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "cronjob not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -132,7 +138,7 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, err.Error())
 		return
 	}
 	audit.EventTarget = cronjob.Task
@@ -142,7 +148,11 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -181,7 +191,7 @@ func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -189,7 +199,11 @@ func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
 	cronjob, err = jc.CronJobService.UpdateCronJob(cronjob)
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "cronjob not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -218,7 +232,11 @@ func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
 	err := jc.CronJobService.DeleteCronJob(groupID)
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "cronjob not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -246,12 +264,11 @@ func (jc *CronJobController) GetSchema(ctx *gin.Context) {
 	schema, err := jc.CronJobService.GetSchema(taskName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if schema == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
+		if kerrors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 

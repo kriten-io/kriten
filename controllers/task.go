@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -75,7 +76,7 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	tasks, err := tc.TaskService.ListTasks(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -108,12 +109,11 @@ func (tc *TaskController) GetTask(ctx *gin.Context) {
 	task, err := tc.TaskService.GetTask(taskName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if task == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "task not found"})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -150,15 +150,15 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 		switch {
 		case errors.IsAlreadyExists(err):
 			tc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusConflict, gin.H{"error": "task already exists, please use a different name"})
+			helpers.ConflictError(ctx, "task already exists, please use a different name")
 			return
 		case strings.Contains(err.Error(), "invalid runner name"):
 			tc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			helpers.BadRequestError(ctx, err.Error())
 			return
 		default:
 			tc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			helpers.BadGatewayError(ctx, err)
 			return
 		}
 	}
@@ -198,11 +198,11 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			tc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusConflict, gin.H{"error": "task doesn't exist"})
+			helpers.NotFoundError(ctx, "task doesn't exist")
 			return
 		}
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadGatewayError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -232,11 +232,11 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			tc.AuditService.CreateAudit(audit)
-			ctx.JSON(http.StatusConflict, gin.H{"error": "task doesn't exist"})
+			helpers.NotFoundError(ctx, "task doesn't exist")
 			return
 		}
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadGatewayError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -263,12 +263,11 @@ func (tc *TaskController) GetSchema(ctx *gin.Context) {
 	schema, err := tc.TaskService.GetSchema(taskName)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if schema == nil {
-		ctx.JSON(http.StatusOK, gin.H{"msg": "schema not found"})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -305,7 +304,11 @@ func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 	schema, err := tc.TaskService.UpdateSchema(taskName, schema)
 	if err != nil {
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -335,7 +338,11 @@ func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 
 	if err != nil {
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.IsNotFound(err) {
+			helpers.NotFoundError(ctx, "task not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
