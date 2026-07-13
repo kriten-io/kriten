@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
+	"gorm.io/gorm"
 )
 
 type UserController struct {
@@ -104,7 +107,11 @@ func (uc *UserController) GetUser(ctx *gin.Context) {
 	user, err := uc.UserService.GetUser(userID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "user not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	user.Groups = []string{}
@@ -237,7 +244,11 @@ func (uc *UserController) DeleteUser(ctx *gin.Context) {
 	err := uc.UserService.DeleteUser(userID)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "group not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"

@@ -72,8 +72,17 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Security		Bearer
 func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
+	var params models.TaskQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		helpers.BadRequestError(ctx, err.Error())
+		return
+	}
 
-	tasks, err := tc.TaskService.ListTasks(authList)
+	if params.Limit == 0 {
+		params.Limit = 100
+	}
+
+	tasks, err := tc.TaskService.ListTasks(authList, params)
 
 	if err != nil {
 		helpers.InternalError(ctx, err)
@@ -202,7 +211,7 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 			return
 		}
 		tc.AuditService.CreateAudit(audit)
-		helpers.BadGatewayError(ctx, err)
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -236,7 +245,7 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 			return
 		}
 		tc.AuditService.CreateAudit(audit)
-		helpers.BadGatewayError(ctx, err)
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"

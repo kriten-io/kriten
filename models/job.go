@@ -12,9 +12,9 @@ type Job struct {
 }
 
 type JobQueryParams struct {
-	Limit   int    `form:"limit" binding:"omitempty,min=0"`
-	Offset  int    `form:"offset" binding:"omitempty,min=0"`
-	Owner   string `form:"owner" binding:"omitempty"`
-	Status  string `form:"status" binding:"omitempty,oneof=running completed failed"`
-	JobName string `form:"job_name" binding:"omitempty"`
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Owner  string `form:"owner" binding:"omitempty"`
+	Status string `form:"status" binding:"omitempty,oneof=running completed failed"`
+	ID     string `form:"id" binding:"omitempty"`
 }

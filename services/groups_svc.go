@@ -70,8 +70,8 @@ func (g *GroupServiceImpl) GetGroup(name string) (models.Group, error) {
 		return models.Group{}, res.Error
 	}
 
-	if group.Name == "" {
-		return models.Group{}, fmt.Errorf("group %s not found, please check name", name)
+	if res.RowsAffected == 0 {
+		return models.Group{}, gorm.ErrRecordNotFound
 	}
 
 	return group, nil
@@ -79,13 +79,15 @@ func (g *GroupServiceImpl) GetGroup(name string) (models.Group, error) {
 
 func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 	var group models.Group
-	res := g.db.Where("group_id = ?", id).Find(&group)
+	res := g.db.Where("id = ?", id).Find(&group)
 	if res.Error != nil {
 		return models.Group{}, res.Error
 	}
-	if group.Name == "" {
-		return models.Group{}, fmt.Errorf("group %s not found, please check id", id)
+
+	if res.RowsAffected == 0 {
+		return models.Group{}, gorm.ErrRecordNotFound
 	}
+
 	return group, nil
 }
 
@@ -111,7 +113,7 @@ func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error)
 func (g *GroupServiceImpl) GetUserGroups(id string) ([]models.UserGroup, error) {
 	var user models.User
 	var groups []models.UserGroup
-	res := g.db.Where("user_id = ?", id).Find(&user)
+	res := g.db.Where("id = ?", id).Find(&user)
 	if res.Error != nil {
 		return []models.UserGroup{}, res.Error
 	}

@@ -14,7 +14,7 @@ type Group struct {
 	Builtin   bool           `json:"-"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	ID        uuid.UUID      `gorm:"column:group_id;type:uuid;default:gen_random_uuid()" json:"id"`
+	ID        uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
 }
 
 type GroupUser struct {

@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kriten-io/kriten/config"
@@ -14,7 +15,7 @@ import (
 )
 
 type RunnerService interface {
-	ListRunners([]string) ([]map[string]string, error)
+	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, error)
 	GetRunner(string) (*models.Runner, error)
 	CreateRunner(models.Runner) (*models.Runner, error)
 	UpdateRunner(models.Runner) (*models.Runner, error)
@@ -36,8 +37,8 @@ func NewRunnerService(config config.Config) RunnerService {
 	}
 }
 
-func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string, error) {
-	var runnersList []map[string]string
+func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQueryParams) ([]models.Runner, error) {
+	var runnersList []models.Runner
 
 	if len(authList) == 0 {
 		return runnersList, nil
@@ -52,17 +53,45 @@ func (r *RunnerServiceImpl) ListRunners(authList []string) ([]map[string]string,
 		// TODO: we don't currently have a way to identify what is a Runner configmap so I'm checking if it has an Image field
 		// This will be changed when runners will live in a separate namespace
 		if configMap.Data["image"] != "" {
+			cm := models.Runner{
+				Name:   configMap.Data["name"],
+				Image:  configMap.Data["image"],
+				GitURL: configMap.Data["gitURL"],
+				Branch: configMap.Data["branch"],
+			}
 			if authList[0] != "*" {
 				if slices.Contains(authList, configMap.Data["name"]) {
-					runnersList = append(runnersList, configMap.Data)
+					runnersList = append(runnersList, cm)
 				}
 				continue
 			}
-			runnersList = append(runnersList, configMap.Data)
+			runnersList = append(runnersList, cm)
 		}
 	}
 
-	return runnersList, nil
+	var filtered []models.Runner
+	for _, runner := range runnersList {
+		if params.Name != "" && !strings.Contains(strings.ToLower(runner.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		filtered = append(filtered, runner)
+	}
+
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, nil
 }
 
 func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {

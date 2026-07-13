@@ -7,7 +7,7 @@ import (
 )
 
 type RoleBinding struct {
-	ID              uuid.UUID `gorm:"column:role_binding_id;type:uuid;default:gen_random_uuid()" json:"id"`
+	ID              uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
 	Name            string    `gorm:"uniqueIndex;<-:create" json:"name" binding:"required"`
 	RoleID          uuid.UUID `gorm:"column:role_id;type:uuid" json:"role_id"`
 	RoleName        string    `gorm:"column:role_name" json:"role_name" binding:"required"`

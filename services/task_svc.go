@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/helpers"
@@ -19,7 +20,7 @@ import (
 )
 
 type TaskService interface {
-	ListTasks([]string) ([]*models.Task, error)
+	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, error)
 	GetTask(string) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
 	UpdateTask(models.Task) (*models.Task, error)
@@ -41,7 +42,7 @@ func NewTaskService(ws WebhookService, config config.Config) TaskService {
 	}
 }
 
-func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
+func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryParams) ([]*models.Task, error) {
 	var tasks []*models.Task
 
 	if len(authList) == 0 {
@@ -73,9 +74,32 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
 				tasks = append(tasks, taskData)
 			}
 		}
+
+	}
+	var filtered []*models.Task
+	for _, task := range tasks {
+		if params.Name != "" && !strings.Contains(strings.ToLower(task.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		filtered = append(filtered, task)
 	}
 
-	return tasks, nil
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, nil
+
 }
 
 func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {

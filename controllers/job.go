@@ -12,7 +12,7 @@ import (
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type JobController struct {
@@ -117,7 +117,7 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			helpers.NotFoundError(ctx, "job not found")
 			return
 		}
@@ -148,7 +148,7 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	log, err := jc.JobService.GetLog(username, jobName)
 
 	if err != nil {
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			helpers.NotFoundError(ctx, "job not found")
 			return
 		}
@@ -191,7 +191,7 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			helpers.NotFoundError(ctx, "task not found")
 			return
 		}
@@ -230,7 +230,7 @@ func (jc *JobController) GetSchema(ctx *gin.Context) {
 	schema, err := jc.JobService.GetSchema(taskName)
 
 	if err != nil {
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			helpers.NotFoundError(ctx, "task not found")
 			return
 		}

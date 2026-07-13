@@ -1,8 +1,6 @@
 package services
 
 import (
-	"fmt"
-
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
@@ -60,13 +58,13 @@ func (u *UserServiceImpl) ListUsers(authList []string) ([]models.User, error) {
 
 func (u *UserServiceImpl) GetUser(id string) (models.User, error) {
 	var user models.User
-	res := u.db.Where("user_id = ?", id).Find(&user)
+	res := u.db.Where("id = ?", id).Find(&user)
 	if res.Error != nil {
 		return models.User{}, res.Error
 	}
 
-	if user.Username == "" {
-		return models.User{}, fmt.Errorf("user %s not found, please check uuid", id)
+	if res.RowsAffected == 0 {
+		return models.User{}, gorm.ErrRecordNotFound
 	}
 
 	return user, nil
@@ -189,10 +187,10 @@ func (u *UserServiceImpl) GetUserRoles(userID string, provider string) ([]models
 	// SELECT *
 	// FROM roles
 	// INNER JOIN role_bindings
-	// ON roles.role_id = role_bindings.role_id
+	// ON roles.id = role_bindings.role_id
 	// WHERE role_bindings.subject_provider = provider AND role_bindings.subject_id = subjectID;
 	res := u.db.Model(&models.Role{}).Joins(
-		"left join role_bindings on roles.role_id = role_bindings.role_id").Where(
+		"left join role_bindings on roles.id = role_bindings.role_id").Where(
 		"role_bindings.subject_provider = ? AND role_bindings.subject_id IN ?", provider, groups).Find(&roles)
 	if res.Error != nil {
 		return []models.Role{}, res.Error

@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
+	"gorm.io/gorm"
 )
 
 // TODO: This is currently hardcoded but needs to be fetched from somewhere else
@@ -105,17 +108,17 @@ func (rc *RoleController) ListRoles(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) GetRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "get", rc.AuditCategory, roleID)
 	role, err := rc.RoleService.GetRole(roleID)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "token not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -158,7 +161,7 @@ func (rc *RoleController) CreateRole(ctx *gin.Context) {
 	role, err := rc.RoleService.CreateRole(role)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -204,7 +207,11 @@ func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 	role, err = rc.RoleService.UpdateRole(role)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "role not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"
@@ -233,7 +240,11 @@ func (rc *RoleController) DeleteRole(ctx *gin.Context) {
 	err := rc.RoleService.DeleteRole(roleID)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "role not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"

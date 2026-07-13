@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
+	"gorm.io/gorm"
 )
 
 type GroupController struct {
@@ -107,10 +110,14 @@ func (gc *GroupController) ListGroups(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) GetGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	group, err := gc.GroupService.GetGroup(groupID)
+	group, err := gc.GroupService.GetGroupByID(groupID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "group not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -234,7 +241,11 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 	err := gc.GroupService.DeleteGroup(groupID)
 	if err != nil {
 		gc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "group not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 

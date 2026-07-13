@@ -71,7 +71,18 @@ func (rc *RunnerController) SetRunnerRoutes(rg *gin.RouterGroup, config config.C
 //	@Security		Bearer
 func (rc *RunnerController) ListRunners(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
-	runnersList, err := rc.RunnerService.ListRunners(authList)
+
+	var params models.RunnerQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		helpers.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	if params.Limit == 0 {
+		params.Limit = 100
+	}
+
+	runnersList, err := rc.RunnerService.ListRunners(authList, params)
 
 	if err != nil {
 		helpers.InternalError(ctx, err)
@@ -237,7 +248,7 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 			return
 		}
 		rc.AuditService.CreateAudit(audit)
-		helpers.BadGatewayError(ctx, err)
+		helpers.InternalError(ctx, err)
 		return
 	}
 

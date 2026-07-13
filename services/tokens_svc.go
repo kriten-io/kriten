@@ -2,7 +2,6 @@ package services
 
 import (
 	"crypto/rand"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -83,7 +82,7 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	}
 
 	if res.RowsAffected == 0 {
-		return models.ApiToken{}, fmt.Errorf("token %s not found, please check uuid", id)
+		return models.ApiToken{}, gorm.ErrRecordNotFound
 	}
 
 	return apiToken, nil

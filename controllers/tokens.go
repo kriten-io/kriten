@@ -1,16 +1,19 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"
+	"gorm.io/gorm"
 )
 
 type ApiTokenController struct {
@@ -60,8 +63,6 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.ApiToken
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api_tokens [get]
 //	@Security		Bearer
@@ -70,7 +71,7 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 	apiTokens, err := uc.ApiTokenService.ListApiTokens(userid)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -93,8 +94,6 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.ApiToken
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api_tokens/all [get]
 //	@Security		Bearer
@@ -103,7 +102,7 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 	apiTokens, err := uc.ApiTokenService.ListAllApiTokens(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -127,7 +126,6 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 //	@Produce		json
 //	@Param			id	path		string	true	"ApiToken ID"
 //	@Success		200	{object}	models.ApiToken
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api_tokens/{id} [get]
@@ -137,7 +135,11 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 	apiToken, err := uc.ApiTokenService.GetApiToken(apiTokenID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "token not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -154,7 +156,6 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 //	@Param			apiToken	body		models.ApiToken	true	"New apiToken"
 //	@Success		200		{object}	models.ApiToken
 //	@Failure		400		{object}	helpers.HTTPError
-//	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/api_tokens [post]
 //	@Security		Bearer
@@ -165,7 +166,7 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
 		atc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, "bad request")
 		return
 	}
 	audit.EventTarget = apiToken.Key
@@ -174,7 +175,7 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 	apiToken, err := atc.ApiTokenService.CreateApiToken(apiToken)
 	if err != nil {
 		atc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 	if audit.EventTarget == "" {
@@ -215,14 +216,18 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 	apiToken.ID, err = uuid.FromString(apiTokenID)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, "bad request")
 		return
 	}
 
 	apiToken, err = uc.ApiTokenService.UpdateApiToken(apiToken)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "token not found")
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	audit.Status = "success"
@@ -238,8 +243,7 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"ApiToken ID"
-//	@Success		204	{object}	models.ApiToken
-//	@Failure		400	{object}	helpers.HTTPError
+//	@Success		200	{object}	models.ApiToken
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api_tokens/{id} [delete]
@@ -251,7 +255,11 @@ func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 	err := uc.ApiTokenService.DeleteApiToken(apiTokenID)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "token not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 	audit.Status = "success"

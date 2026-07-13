@@ -85,7 +85,7 @@ func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParam
 
 	jobs, err := helpers.ListJobs(j.config.Kube, labelSelector)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
 	if len(jobs.Items) != 0 {
@@ -113,7 +113,7 @@ func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParam
 		if params.Owner != "" && !strings.Contains(strings.ToLower(job.Owner), strings.ToLower(params.Owner)) {
 			continue
 		}
-		if params.JobName != "" && !strings.Contains(strings.ToLower(job.ID), strings.ToLower(params.JobName)) {
+		if params.ID != "" && !strings.Contains(strings.ToLower(job.ID), strings.ToLower(params.ID)) {
 			continue
 		}
 		if params.Status != "" {
@@ -155,6 +155,12 @@ func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParam
 func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
 	var jobStatus models.Job
 
+	job, err := helpers.GetJob(j.config.Kube, jobID)
+
+	if err != nil {
+		return jobStatus, err
+	}
+
 	labelSelector := fmt.Sprintf("job-name=%s", jobID)
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
@@ -168,7 +174,7 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	if len(pods.Items) == 0 {
 		return jobStatus, errors.New("no pods found - check job ID")
 	}
-	fmt.Printf("num of pods %d", len(pods.Items))
+
 	for i := range pods.Items {
 		for c := range pods.Items[i].Status.InitContainerStatuses {
 			if pods.Items[i].Status.InitContainerStatuses[c].Ready {
@@ -192,12 +198,6 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 				}
 			}
 		}
-	}
-
-	job, err := helpers.GetJob(j.config.Kube, jobID)
-
-	if err != nil {
-		return jobStatus, err
 	}
 
 	jobStatus.ID = job.Name
@@ -237,6 +237,13 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 
 func (j *JobServiceImpl) GetLog(username string, jobID string) (string, error) {
 	var logs string
+
+	// Validation if job exists
+	_, err := helpers.GetJob(j.config.Kube, jobID)
+
+	if err != nil {
+		return logs, err
+	}
 
 	labelSelector := "job-name=" + jobID
 	if username != "" {

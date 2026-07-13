@@ -57,13 +57,13 @@ func (r *RoleServiceImpl) ListRoles(authList []string) ([]models.Role, error) {
 
 func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {
 	var role models.Role
-	res := r.db.Where("name = ?", id).Find(&role)
+	res := r.db.Where("id = ?", id).Find(&role)
 	if res.Error != nil {
 		return models.Role{}, res.Error
 	}
 
-	if role.Name == "" {
-		return models.Role{}, fmt.Errorf("role %s not found, please check id", id)
+	if res.RowsAffected == 0 {
+		return models.Role{}, gorm.ErrRecordNotFound
 	}
 
 	return role, nil

@@ -1,17 +1,20 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
 	uuid "github.com/satori/go.uuid"
+	"gorm.io/gorm"
 )
 
 type WebhookController struct {
@@ -71,7 +74,6 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks [get]
@@ -81,7 +83,7 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 	webHooks, err := wc.WebhookService.ListWebhooks(userid)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -105,8 +107,6 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/all [get]
 //	@Security		Bearer
@@ -115,7 +115,7 @@ func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
 	webHooks, err := wc.WebhookService.ListAllWebhooks(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -139,7 +139,6 @@ func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
 //	@Produce		json
 //	@Param			id	path		string	true	"Webhook ID"
 //	@Success		200	{object}	models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/{id} [get]
@@ -149,7 +148,11 @@ func (wc *WebhookController) GetWebhook(ctx *gin.Context) {
 	webhook, err := wc.WebhookService.GetWebhook(webhookID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "webhook not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -177,7 +180,7 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&webhook); err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, "bad request")
 		return
 	}
 
@@ -186,7 +189,7 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 	webhook, err := wc.WebhookService.CreateWebhook(webhook)
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 
@@ -203,8 +206,7 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"Webhook ID"
-//	@Success		204	{object}	models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
+//	@Success		200	{object}	models.Webhook
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/{id} [delete]
@@ -216,8 +218,11 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 	err := wc.WebhookService.DeleteWebhook(webhookID)
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			helpers.NotFoundError(ctx, "webhook not found")
+			return
+		}
+		helpers.InternalError(ctx, err)
 	}
 	audit.Status = "success"
 	wc.AuditService.CreateAudit(audit)
@@ -252,7 +257,7 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err})
+		helpers.BadRequestError(ctx, "bad request")
 		return
 	}
 
@@ -260,7 +265,7 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		helpers.InternalError(ctx, err)
 		return
 	}
 

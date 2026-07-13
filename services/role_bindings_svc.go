@@ -62,7 +62,7 @@ func (r *RoleBindingServiceImpl) ListRoleBindings(
 
 func (r *RoleBindingServiceImpl) GetRoleBinding(id string) (models.RoleBinding, error) {
 	var role models.RoleBinding
-	res := r.db.Where("name = ?", id).Find(&role)
+	res := r.db.Where("id = ?", id).Find(&role)
 	if res.Error != nil {
 		return models.RoleBinding{}, res.Error
 	}

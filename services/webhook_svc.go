@@ -1,8 +1,6 @@
 package services
 
 import (
-	"fmt"
-
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
@@ -93,7 +91,7 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	}
 
 	if res.RowsAffected == 0 {
-		return models.Webhook{}, fmt.Errorf("webhook %s not found, please check uuid", id)
+		return models.Webhook{}, gorm.ErrRecordNotFound
 	}
 
 	return webHook, nil
