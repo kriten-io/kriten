@@ -7,15 +7,17 @@ import (
 )
 
 type RoleBinding struct {
-	ID              uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
-	Name            string    `gorm:"uniqueIndex;<-:create" json:"name" binding:"required"`
-	RoleID          uuid.UUID `gorm:"column:role_id;type:uuid" json:"role_id"`
-	RoleName        string    `gorm:"column:role_name" json:"role_name" binding:"required"`
-	SubjectKind     string    `json:"subject_kind" binding:"required"`
-	SubjectProvider string    `gorm:"index" json:"subject_provider" binding:"required"`
-	SubjectID       uuid.UUID `json:"subject_id"`
-	SubjectName     string    `gorm:"column:subject_name" json:"subject_name" binding:"required"`
-	Builtin         bool      `json:"-"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID        uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
+	Name      string    `gorm:"uniqueIndex;<-:create" json:"name" binding:"required"`
+	RoleID    uuid.UUID `gorm:"column:role_id;type:uuid" json:"role_id"`
+	GroupID   uuid.UUID `gorm:"column:group_id;type:uuid" json:"group_id"`
+	Builtin   bool      `json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type RoleBindingQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
 }

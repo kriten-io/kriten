@@ -1,19 +1,16 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"strings"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
-	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type TaskController struct {
@@ -37,21 +34,21 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 		middlewares.AuthenticationMiddleware(tc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(tc.AuthService, "tasks"), tc.ListTasks)
-	r.GET("/:id", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetTask)
-	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetSchema)
+	r.GET("/:name", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetTask)
+	r.GET("/:name/schema", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "write"))
 	{
 		r.POST("", tc.CreateTask)
 		r.PUT("", tc.CreateTask)
-		r.PATCH("/:id", tc.UpdateTask)
-		r.PUT("/:id", tc.UpdateTask)
-		r.DELETE("/:id", tc.DeleteTask)
+		r.PATCH("/:name", tc.UpdateTask)
+		r.PUT("/:name", tc.UpdateTask)
+		r.DELETE("/:name", tc.DeleteTask)
 
 		{
-			r.POST("/:id/schema", tc.UpdateSchema)
-			r.PUT("/:id/schema", tc.UpdateSchema)
-			r.DELETE("/:id/schema", tc.DeleteSchema)
+			r.POST("/:name/schema", tc.UpdateSchema)
+			r.PUT("/:name/schema", tc.UpdateSchema)
+			r.DELETE("/:name/schema", tc.DeleteSchema)
 		}
 	}
 
@@ -64,6 +61,9 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
+//	@Param			limit	query		int		false	"Maximum number of tasks to return (default 100)"
+//	@Param			offset	query		int		false	"Number of tasks to skip (default 0)"
+//	@Param			name	query		string	false	"Filter by task name"
 //	@Success		200	{array}		models.Task
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
@@ -74,7 +74,8 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
 	var params models.TaskQueryParams
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		helpers.BadRequestError(ctx, err.Error())
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
@@ -85,7 +86,7 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 	tasks, err := tc.TaskService.ListTasks(authList, params)
 
 	if err != nil {
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -106,23 +107,19 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task name"
+//	@Param			name	path	string	true	"Task name"
 //	@Success		200	{object}	models.Task
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id} [get]
+//	@Router			/tasks/{name} [get]
 //	@Security		Bearer
 func (tc *TaskController) GetTask(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	task, err := tc.TaskService.GetTask(taskName)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -149,27 +146,16 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid task payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 	audit.EventTarget = task.Name
 
 	taskConfig, err := tc.TaskService.CreateTask(task)
 	if err != nil {
-		switch {
-		case errors.IsAlreadyExists(err):
-			tc.AuditService.CreateAudit(audit)
-			helpers.ConflictError(ctx, "task already exists, please use a different name")
-			return
-		case strings.Contains(err.Error(), "invalid runner name"):
-			tc.AuditService.CreateAudit(audit)
-			helpers.BadRequestError(ctx, err.Error())
-			return
-		default:
-			tc.AuditService.CreateAudit(audit)
-			helpers.BadGatewayError(ctx, err)
-			return
-		}
+		ctx.Error(err)
+		return
 	}
 
 	audit.Status = "success"
@@ -184,34 +170,29 @@ func (tc *TaskController) CreateTask(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path		string		true	"Task name"
+//	@Param			name	path		string		true	"Task name"
 //	@Param			task	body		models.Task	true	"Update task"
 //	@Success		200		{object}	models.Task
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/tasks/{id} [patch]
+//	@Router			/tasks/{name} [patch]
 //	@Security		Bearer
 func (tc *TaskController) UpdateTask(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	audit := tc.AuditService.InitialiseAuditLog(ctx, "update", tc.AuditCategory, taskName)
 	var task models.Task
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid task payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	taskConfig, err := tc.TaskService.UpdateTask(task)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			tc.AuditService.CreateAudit(audit)
-			helpers.NotFoundError(ctx, "task doesn't exist")
-			return
-		}
-		tc.AuditService.CreateAudit(audit)
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 	audit.Status = "success"
@@ -226,31 +207,26 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task name"
-//	@Success		204	{object}	models.Task
+//	@Param			name	path	string	true	"Task name"
+//	@Success		204	{object}	models.ResponseMessage
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id} [delete]
+//	@Router			/tasks/{name} [delete]
 //	@Security		Bearer
 func (tc *TaskController) DeleteTask(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete", tc.AuditCategory, taskName)
 
 	err := tc.TaskService.DeleteTask(taskName)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			tc.AuditService.CreateAudit(audit)
-			helpers.NotFoundError(ctx, "task doesn't exist")
-			return
-		}
-		tc.AuditService.CreateAudit(audit)
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
+
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "task deleted successfully"})
+	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "task deleted successfully"})
 }
 
 // GetSchema godoc
@@ -260,23 +236,19 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task name"
+//	@Param			name	path	string	true	"Task name"
 //	@Success		200	{object}	map[string]interface{}
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/schema [get]
+//	@Router			/tasks/{name}/schema [get]
 //	@Security		Bearer
 func (tc *TaskController) GetSchema(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	schema, err := tc.TaskService.GetSchema(taskName)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -290,36 +262,33 @@ func (tc *TaskController) GetSchema(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task name"
+//	@Param			name	path	string	true	"Task name"
 //	@Param			schema	body	map[string]interface{}	true	"New schema"
 //	@Success		200	{object}	map[string]interface{}
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/schema [post]
+//	@Router			/tasks/{name}/schema [post]
 //	@Security		Bearer
 func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	audit := tc.AuditService.InitialiseAuditLog(ctx, "update_schema", tc.AuditCategory, taskName)
 	var schema map[string]interface{}
 
 	if err := ctx.BindJSON(&schema); err != nil {
-		log.Println(err)
 		tc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid schema payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	schema, err := tc.TaskService.UpdateSchema(taskName, schema)
 	if err != nil {
 		tc.AuditService.CreateAudit(audit)
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
+
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
@@ -332,30 +301,26 @@ func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 //	@Tags			tasks
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task name"
+//	@Param			name	path	string	true	"Task name"
 //	@Success		200	{object}	map[string]interface{}
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/tasks/{id}/schema [delete]
+//	@Router			/tasks/{name}/schema [delete]
 //	@Security		Bearer
 func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete_schema", tc.AuditCategory, taskName)
 
 	err := tc.TaskService.DeleteSchema(taskName)
 
 	if err != nil {
 		tc.AuditService.CreateAudit(audit)
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "schema deleted successfully"})
+	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "schema deleted successfully"})
 }

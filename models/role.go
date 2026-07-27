@@ -17,3 +17,9 @@ type Role struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 }
+
+type RoleQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
+}

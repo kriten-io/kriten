@@ -26,3 +26,7 @@ type Authorization struct {
 	ResourceID string    `json:"resource_id"`
 	Access     string    `json:"access"`
 }
+
+type LoginToken struct {
+	Token string `json:"token"`
+}

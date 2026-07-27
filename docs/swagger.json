@@ -5,9 +5,9 @@
         "title": "Swagger Kriten",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
-            "name": "Evolvere Support",
-            "url": "https://www.evolvere-tech.co.uk/contact",
-            "email": "info@evolvere-tech.co.uk"
+            "name": "Kubecode Support",
+            "url": "https://www.kubecode.io/contact",
+            "email": "info@kubecode.io"
         },
         "license": {
             "name": "Apache 2.0",
@@ -43,18 +43,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.ApiToken"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -106,12 +94,6 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -147,18 +129,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.ApiToken"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -251,10 +221,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ApiToken"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -374,12 +344,6 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -423,12 +387,6 @@
                             "$ref": "#/definitions/models.AuditLog"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -470,18 +428,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.CronJob"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -548,7 +494,101 @@
                 }
             }
         },
-        "/cronjobs/": {
+        "/cronjobs/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get information about a specific job",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cronjobs"
+                ],
+                "summary": "Get job info",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "CronJob  name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.CronJob"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete by CronJob ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cronjobs"
+                ],
+                "summary": "Delete a CronJob",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "CronJob name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ResponseMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
             "patch": {
                 "security": [
                     {
@@ -605,14 +645,14 @@
                 }
             }
         },
-        "/cronjobs/{id}": {
+        "/cronjobs/{name}/schema": {
             "get": {
                 "security": [
                     {
                         "Bearer": []
                     }
                 ],
-                "description": "Get information about a specific job",
+                "description": "Get task schema for the job info and input parameters",
                 "consumes": [
                     "application/json"
                 ],
@@ -620,122 +660,14 @@
                     "application/json"
                 ],
                 "tags": [
-                    "cronjobs"
+                    "jobs"
                 ],
-                "summary": "Get job info",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob  id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Delete by CronJob ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Delete a CronJob",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/cronjobs/{id}/schema": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get schema for the job info and input parameters",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Get schema",
+                "summary": "Get task schema",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "Task  name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -746,12 +678,6 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "404": {
@@ -787,6 +713,26 @@
                     "groups"
                 ],
                 "summary": "List all groups",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of groups to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of groups to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by group name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -795,18 +741,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.Group"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -854,12 +788,6 @@
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -954,10 +882,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Group"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -1280,7 +1208,7 @@
                     {
                         "type": "string",
                         "description": "Filter by task/job name",
-                        "name": "job_name",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -1300,12 +1228,6 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1315,7 +1237,7 @@
                 }
             }
         },
-        "/jobs/{id}": {
+        "/jobs/{name}": {
             "get": {
                 "security": [
                     {
@@ -1336,8 +1258,8 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job  id",
-                        "name": "id",
+                        "description": "Job Name",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -1390,7 +1312,7 @@
                     {
                         "type": "string",
                         "description": "Task  name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
@@ -1407,7 +1329,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/models.JobMessage"
                         }
                     },
                     "400": {
@@ -1431,7 +1353,7 @@
                 }
             }
         },
-        "/jobs/{id}/log": {
+        "/jobs/{name}/log": {
             "get": {
                 "security": [
                     {
@@ -1452,8 +1374,8 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job  id",
-                        "name": "id",
+                        "description": "Job  name",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -1463,62 +1385,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.Task"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/jobs/{id}/schema": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get task schema for the job info and input parameters",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "jobs"
-                ],
-                "summary": "Get task schema",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task  name",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     },
                     "400": {
@@ -1570,7 +1436,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.LoginToken"
                         }
                     },
                     "400": {
@@ -1581,12 +1447,6 @@
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -1633,20 +1493,8 @@
                             "type": "string"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -1678,6 +1526,26 @@
                     "rolebindings"
                 ],
                 "summary": "List all role bindings",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of role bindings to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of role bindings to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by role binding name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1745,12 +1613,6 @@
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -1845,10 +1707,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -1952,6 +1814,26 @@
                     "roles"
                 ],
                 "summary": "List all roles",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of roles to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of roles to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by role name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2119,10 +2001,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Role"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -2226,6 +2108,26 @@
                     "runners"
                 ],
                 "summary": "List all runners",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of runners to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of runners to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by runner name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2238,12 +2140,6 @@
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -2303,58 +2199,8 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/runners/{id}/schema": {
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Remove secret associated with runner",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "runners"
-                ],
-                "summary": "Delete secret",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Runner name",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -2368,63 +2214,7 @@
                 }
             }
         },
-        "/runners/{id}/secret": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update secret associated with runner",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "runners"
-                ],
-                "summary": "Update secret",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "runner name",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/runners/{rname}": {
+        "/runners/{name}": {
             "get": {
                 "security": [
                     {
@@ -2446,7 +2236,7 @@
                     {
                         "type": "string",
                         "description": "Runner name",
-                        "name": "rname",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -2456,12 +2246,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.Runner"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "404": {
@@ -2499,26 +2283,26 @@
                     {
                         "type": "string",
                         "description": "Runner name",
-                        "name": "rname",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Runner"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -2552,7 +2336,7 @@
                     {
                         "type": "string",
                         "description": "Runner name",
-                        "name": "rname",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
@@ -2594,6 +2378,112 @@
                 }
             }
         },
+        "/runners/{name}/schema": {
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Remove secret associated with runner",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runners"
+                ],
+                "summary": "Delete secret",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Runner name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/runners/{name}/secret": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update secret associated with runner",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runners"
+                ],
+                "summary": "Update secret",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Runner name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks": {
             "get": {
                 "security": [
@@ -2612,6 +2502,26 @@
                     "tasks"
                 ],
                 "summary": "List all tasks",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of tasks to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of tasks to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by task name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2698,7 +2608,7 @@
                 }
             }
         },
-        "/tasks/{id}": {
+        "/tasks/{name}": {
             "get": {
                 "security": [
                     {
@@ -2720,7 +2630,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -2773,7 +2683,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -2782,7 +2692,7 @@
                     "204": {
                         "description": "No Content",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -2826,7 +2736,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
@@ -2868,7 +2778,7 @@
                 }
             }
         },
-        "/tasks/{id}/schema": {
+        "/tasks/{name}/schema": {
             "get": {
                 "security": [
                     {
@@ -2890,7 +2800,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -2944,7 +2854,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
@@ -3008,63 +2918,7 @@
                     {
                         "type": "string",
                         "description": "Task name",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/{id}/secret": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get secret associated with runner (passwords are obfuscated)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "runners"
-                ],
-                "summary": "Get secret",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Runner name",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
@@ -3116,6 +2970,26 @@
                     "users"
                 ],
                 "summary": "List all users",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of users to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of users to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by user name",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -3124,18 +2998,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.User"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -3187,12 +3049,6 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3209,7 +3065,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Get information about a specific user",
+                "description": "Get groups memberships for a user",
                 "consumes": [
                     "application/json"
                 ],
@@ -3219,7 +3075,7 @@
                 "tags": [
                     "users"
                 ],
-                "summary": "Get a user",
+                "summary": "Get user groups",
                 "parameters": [
                     {
                         "type": "string",
@@ -3233,7 +3089,10 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.UserGroup"
+                            }
                         }
                     },
                     "400": {
@@ -3283,10 +3142,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "400": {
@@ -3297,6 +3156,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -3400,12 +3265,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -3461,12 +3320,6 @@
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3502,18 +3355,6 @@
                             "items": {
                                 "$ref": "#/definitions/models.Webhook"
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "500": {
@@ -3622,12 +3463,6 @@
                             "$ref": "#/definitions/models.Webhook"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -3656,7 +3491,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "webhook"
+                    "webhooks"
                 ],
                 "summary": "Delete a webhook",
                 "parameters": [
@@ -3669,16 +3504,10 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Webhook"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
+                            "$ref": "#/definitions/models.ResponseMessage"
                         }
                     },
                     "404": {
@@ -3704,7 +3533,7 @@
                 "code": {
                     "type": "integer"
                 },
-                "message": {
+                "error": {
                     "type": "string"
                 }
             }
@@ -3873,12 +3702,15 @@
                 "failed": {
                     "type": "integer"
                 },
-                "id": {
+                "failed_reason": {
                     "type": "string"
                 },
                 "json_data": {
                     "type": "object",
                     "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
                 },
                 "owner": {
                     "type": "string"
@@ -3886,8 +3718,39 @@
                 "start_time": {
                     "type": "string"
                 },
+                "status": {
+                    "type": "string"
+                },
                 "stdout": {
                     "type": "string"
+                }
+            }
+        },
+        "models.JobMessage": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.LoginToken": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ResponseMessage": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "runner successfully deleted"
                 }
             }
         },
@@ -3930,14 +3793,13 @@
         "models.RoleBinding": {
             "type": "object",
             "required": [
-                "name",
-                "role_name",
-                "subject_kind",
-                "subject_name",
-                "subject_provider"
+                "name"
             ],
             "properties": {
                 "created_at": {
+                    "type": "string"
+                },
+                "group_id": {
                     "type": "string"
                 },
                 "id": {
@@ -3947,21 +3809,6 @@
                     "type": "string"
                 },
                 "role_id": {
-                    "type": "string"
-                },
-                "role_name": {
-                    "type": "string"
-                },
-                "subject_id": {
-                    "type": "string"
-                },
-                "subject_kind": {
-                    "type": "string"
-                },
-                "subject_name": {
-                    "type": "string"
-                },
-                "subject_provider": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -4060,6 +3907,20 @@
                 }
             }
         },
+        "models.UserGroup": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Webhook": {
             "type": "object",
             "properties": {
@@ -4094,5 +3955,8 @@
             "name": "Authorization",
             "in": "header"
         }
+    },
+    "externalDocs": {
+        "url": "https://kriten.io"
     }
 }

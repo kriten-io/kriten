@@ -1,8 +1,9 @@
 package services
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
@@ -13,13 +14,13 @@ import (
 )
 
 type GroupService interface {
-	ListGroups([]string) ([]models.Group, error)
+	ListGroups([]string, models.GroupQueryParams) ([]models.Group, error)
 	GetGroup(string) (models.Group, error)
 	GetUserGroups(string) ([]models.UserGroup, error)
 	GetGroupByID(string) (models.Group, error)
 	CreateGroup(models.Group) (models.Group, error)
 	UpdateGroup(models.Group) (models.Group, error)
-	ListUsersInGroup(string) ([]models.GroupUser, error)
+	ListGroupUsers(string) ([]models.GroupUser, error)
 	AddUsersToGroup(string, []models.GroupUser) (models.Group, error)
 	RemoveUsersFromGroup(string, []models.GroupUser) (models.Group, error)
 	UpdateUsers([]models.GroupUser, string, string) ([]string, error)
@@ -41,11 +42,9 @@ func NewGroupService(database *gorm.DB, us UserService, config config.Config) Gr
 	}
 }
 
-func (g *GroupServiceImpl) ListGroups(authList []string) ([]models.Group, error) {
+func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQueryParams) ([]models.Group, error) {
 	var groups []models.Group
 	var res *gorm.DB
-
-	log.Println(authList)
 
 	if len(authList) == 0 {
 		return groups, nil
@@ -57,21 +56,44 @@ func (g *GroupServiceImpl) ListGroups(authList []string) ([]models.Group, error)
 		res = g.db.Find(&groups, authList)
 	}
 	if res.Error != nil {
-		return groups, res.Error
+		return groups, fmt.Errorf("groups: %w", res.Error)
 	}
 
-	return groups, nil
+	var filtered []models.Group
+	for _, group := range groups {
+		if params.Name != "" && !strings.Contains(strings.ToLower(group.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		filtered = append(filtered, group)
+	}
+
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, nil
+
 }
 
 func (g *GroupServiceImpl) GetGroup(name string) (models.Group, error) {
 	var group models.Group
 	res := g.db.Where("name = ?", name).Find(&group)
 	if res.Error != nil {
-		return models.Group{}, res.Error
+		return models.Group{}, fmt.Errorf("group '%s': %w", name, res.Error)
 	}
 
 	if res.RowsAffected == 0 {
-		return models.Group{}, gorm.ErrRecordNotFound
+		return models.Group{}, fmt.Errorf("group '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	return group, nil
@@ -81,11 +103,11 @@ func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 	var group models.Group
 	res := g.db.Where("id = ?", id).Find(&group)
 	if res.Error != nil {
-		return models.Group{}, res.Error
+		return models.Group{}, fmt.Errorf("group '%s': %w", id, res.Error)
 	}
 
 	if res.RowsAffected == 0 {
-		return models.Group{}, gorm.ErrRecordNotFound
+		return models.Group{}, fmt.Errorf("group '%s': %w", id, ErrSvcObjNotFound)
 	}
 
 	return group, nil
@@ -93,19 +115,28 @@ func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 
 func (g *GroupServiceImpl) CreateGroup(group models.Group) (models.Group, error) {
 	res := g.db.Create(&group)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
+			return models.Group{}, fmt.Errorf("error creating group '%s': %w", group.Name, ErrSvcDBDuplicatedKey)
+		}
+		return models.Group{}, fmt.Errorf("error creating group '%s': %w", group.Name, res.Error)
+	}
 
-	return group, res.Error
+	return group, nil
 }
 
 func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error) {
 	res := g.db.Updates(group)
 	if res.Error != nil {
-		return models.Group{}, res.Error
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return models.Group{}, fmt.Errorf("group '%s': %w", group.Name, ErrSvcObjNotFound)
+		}
+		return models.Group{}, fmt.Errorf("group '%s': %w", group.Name, res.Error)
 	}
 
 	newGroup, err := g.GetGroup(group.Name)
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("group '%s': %w", group.Name, err)
 	}
 	return newGroup, nil
 }
@@ -115,17 +146,17 @@ func (g *GroupServiceImpl) GetUserGroups(id string) ([]models.UserGroup, error) 
 	var groups []models.UserGroup
 	res := g.db.Where("id = ?", id).Find(&user)
 	if res.Error != nil {
-		return []models.UserGroup{}, res.Error
+		return []models.UserGroup{}, fmt.Errorf("user '%s': %w", id, res.Error)
 	}
 
-	if user.Username == "" {
-		return []models.UserGroup{}, fmt.Errorf("user %s not found, please check uuid", id)
+	if res.RowsAffected == 0 {
+		return []models.UserGroup{}, fmt.Errorf("user '%s': %w", id, ErrSvcObjNotFound)
 	}
 
 	for _, groupID := range user.Groups {
 		group, err := g.GetGroupByID(groupID)
 		if err != nil {
-			return []models.UserGroup{}, err
+			return []models.UserGroup{}, fmt.Errorf("user '%s' groups: %w", id, err)
 		}
 		groups = append(groups, models.UserGroup{
 			ID:       group.ID,
@@ -137,18 +168,18 @@ func (g *GroupServiceImpl) GetUserGroups(id string) ([]models.UserGroup, error) 
 	return groups, nil
 }
 
-func (g *GroupServiceImpl) ListUsersInGroup(id string) ([]models.GroupUser, error) {
+func (g *GroupServiceImpl) ListGroupUsers(id string) ([]models.GroupUser, error) {
 	var users []models.GroupUser
 
 	group, err := g.GetGroupByID(id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get group: %w", err)
 	}
 
 	for _, userID := range group.Users {
 		user, err := g.UserService.GetUser(userID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
 		users = append(users, models.GroupUser{
 			Username: user.Username,
@@ -163,27 +194,31 @@ func (g *GroupServiceImpl) ListUsersInGroup(id string) ([]models.GroupUser, erro
 func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
 	groupProvider := group.Provider
 
 	for _, u := range users {
 		if u.Provider != groupProvider {
-			return models.Group{}, fmt.Errorf("provider type must match for user and group")
+			return models.Group{}, fmt.Errorf("group provider '%s', user provider '%s': %w",
+				groupProvider,
+				u.Provider,
+				ErrSvcAuthProviderMismatch,
+			)
 		}
 	}
 
 	usersID, err := g.UpdateUsers(users, group.ID.String(), "add")
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("update users: %w", err)
 	}
 
 	group.Users = RemoveDuplicates(append(group.Users, usersID...))
 
 	newGroup, err := g.UpdateGroup(group)
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("update group: %w", err)
 	}
 
 	return newGroup, nil
@@ -192,19 +227,19 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupUser) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
 	usersID, err := g.UpdateUsers(users, group.ID.String(), "remove")
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("update users: %w", err)
 	}
 
 	group.Users = RemoveFromSlice(group.Users, usersID)
 
 	newGroup, err := g.UpdateGroup(group)
 	if err != nil {
-		return models.Group{}, err
+		return models.Group{}, fmt.Errorf("update groups: %w", err)
 	}
 
 	return newGroup, nil
@@ -213,14 +248,18 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupU
 func (g *GroupServiceImpl) DeleteGroup(id string) error {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get group: %w", err)
 	}
 
 	if group.Users != nil {
-		return fmt.Errorf("cannot delete group %s, please remove users first", group.Name)
+		return fmt.Errorf("group '%s' in use, remove users first: %w", id, ErrSvcObjInUse)
 	}
 
-	return g.db.Unscoped().Delete(&group).Error
+	res := g.db.Unscoped().Delete(&group)
+	if res.Error != nil {
+		return fmt.Errorf("group '%s': %w", id, res.Error)
+	}
+	return nil
 }
 
 func (g *GroupServiceImpl) GetGroupRoles(subjectID string, provider string) ([]models.Role, error) {
@@ -235,7 +274,7 @@ func (g *GroupServiceImpl) GetGroupRoles(subjectID string, provider string) ([]m
 		"left join role_bindings on roles.role_id = role_bindings.role_id").Where(
 		"role_bindings.subject_provider = ? AND role_bindings.subject_id = ?", provider, subjectID).Find(&roles)
 	if res.Error != nil {
-		return []models.Role{}, res.Error
+		return []models.Role{}, fmt.Errorf("group '%s': %w", subjectID, res.Error)
 	}
 
 	return roles, nil
@@ -247,7 +286,7 @@ func (g *GroupServiceImpl) UpdateUsers(users []models.GroupUser, groupID string,
 	for _, u := range users {
 		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
 		usersID = append(usersID, user.ID.String())
 
@@ -257,7 +296,7 @@ func (g *GroupServiceImpl) UpdateUsers(users []models.GroupUser, groupID string,
 			_, err = g.UserService.RemoveGroup(user, groupID)
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error updating users: %w", err)
 		}
 	}
 

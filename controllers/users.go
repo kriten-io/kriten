@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
-	"gorm.io/gorm"
 )
 
 type UserController struct {
@@ -62,18 +60,31 @@ func (uc *UserController) SetUserRoutes(rg *gin.RouterGroup, config config.Confi
 //	@Tags			users
 //	@Accept			json
 //	@Produce		json
+//	@Param			limit	query		int		false	"Maximum number of users to return (default 100)"
+//	@Param			offset	query		int		false	"Number of users to skip (default 0)"
+//	@Param			name	query		string	false	"Filter by user name"
 //	@Success		200	{array}		models.User
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/users [get]
 //	@Security		Bearer
 func (uc *UserController) ListUsers(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
-	users, err := uc.UserService.ListUsers(authList)
+
+	var params models.UserQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if params.Limit == 0 {
+		params.Limit = 100
+	}
+
+	users, err := uc.UserService.ListUsers(authList, params)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -104,26 +115,49 @@ func (uc *UserController) ListUsers(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *UserController) GetUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
+
+	_, err := uuid.FromString(userID)
+	if err != nil {
+		ctx.Error(errors.New("invalid user id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
 	user, err := uc.UserService.GetUser(userID)
 
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			helpers.NotFoundError(ctx, "user not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 	user.Groups = []string{}
 	ctx.JSON(http.StatusOK, user)
 }
 
+// GetUser godoc
+//
+//	@Summary		Get user groups
+//	@Description	Get groups memberships for a user
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"User ID"
+//	@Success		200	{array}		models.UserGroup
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/users/{id} [get]
+//	@Security		Bearer
 func (uc *UserController) GetUserGroups(ctx *gin.Context) {
 	userID := ctx.Param("id")
-	groups, err := uc.GroupService.GetUserGroups(userID)
 
+	_, err := uuid.FromString(userID)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid user id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+	groups, err := uc.GroupService.GetUserGroups(userID)
+	if err != nil {
+		ctx.Error(err)
 		return
 	}
 
@@ -140,7 +174,6 @@ func (uc *UserController) GetUserGroups(ctx *gin.Context) {
 //	@Param			user	body		models.User	true	"New user"
 //	@Success		200		{object}	models.User
 //	@Failure		400		{object}	helpers.HTTPError
-//	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/users [post]
 //	@Security		Bearer
@@ -150,21 +183,23 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid user payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 	audit.EventTarget = user.Username
 
 	if !slices.Contains(uc.providers, user.Provider) {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
+		ctx.Error(fmt.Errorf("invalid provider, supported providers: %s", uc.providers))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	user, err := uc.UserService.CreateUser(user)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -195,27 +230,30 @@ func (uc *UserController) UpdateUser(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid user payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if !slices.Contains(uc.providers, user.Provider) {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": uc.providers})
+		ctx.Error(fmt.Errorf("invalid provider, supported providers: %s", uc.providers))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	user.ID, err = uuid.FromString(userID)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid user id format"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	user, err = uc.UserService.UpdateUser(user)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 	audit.Status = "success"
@@ -231,9 +269,10 @@ func (uc *UserController) UpdateUser(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"User ID"
-//	@Success		204	{object}	models.User
+//	@Success		200	{object}	models.ResponseMessage
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		409	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/users/{id} [delete]
 //	@Security		Bearer
@@ -241,17 +280,19 @@ func (uc *UserController) DeleteUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
 	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 
-	err := uc.UserService.DeleteUser(userID)
+	_, err := uuid.FromString(userID)
+	if err != nil {
+		ctx.Error(errors.New("invalid user id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+	err = uc.UserService.DeleteUser(userID)
 	if err != nil {
 		uc.AuditService.CreateAudit(audit)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			helpers.NotFoundError(ctx, "group not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 	audit.Status = "success"
 	uc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "user deleted successfully"})
+	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "user deleted successfully"})
 }

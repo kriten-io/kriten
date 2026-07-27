@@ -22,3 +22,9 @@ type GroupUser struct {
 	Provider string    `json:"provider"`
 	ID       uuid.UUID `json:"id,omitempty"`
 }
+
+type GroupQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
+}

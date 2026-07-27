@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/kriten-io/kriten/config"
@@ -48,8 +47,8 @@ func (a *AuditServiceImpl) GetAuditLog(id string) (models.AuditLog, error) {
 		return models.AuditLog{}, res.Error
 	}
 
-	if log.UserName == "" {
-		return models.AuditLog{}, fmt.Errorf("audit log %s not found, please check uuid", id)
+	if res.RowsAffected == 0 {
+		return models.AuditLog{}, gorm.ErrRecordNotFound
 	}
 
 	return log, nil

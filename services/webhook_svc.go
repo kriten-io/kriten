@@ -1,6 +1,8 @@
 package services
 
 import (
+	"fmt"
+
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
@@ -39,7 +41,7 @@ func (w *WebhookServiceImpl) ListWebhooks(userid uuid.UUID) ([]models.Webhook, e
 		Find(&webHooks)
 
 	if res.Error != nil {
-		return webHooks, res.Error
+		return webHooks, fmt.Errorf("failed to get user webhooks: %w", res.Error)
 	}
 
 	return webHooks, nil
@@ -53,7 +55,7 @@ func (w *WebhookServiceImpl) ListTaskWebhooks(taskName string) ([]models.Webhook
 		Find(&webHooks)
 
 	if res.Error != nil {
-		return webHooks, res.Error
+		return webHooks, fmt.Errorf("failed to get task webhooks: %w", res.Error)
 	}
 
 	return webHooks, nil
@@ -73,7 +75,7 @@ func (w *WebhookServiceImpl) ListAllWebhooks(authList []string) ([]models.Webhoo
 		res = w.db.Find(&webHooks, authList)
 	}
 	if res.Error != nil {
-		return webHooks, res.Error
+		return webHooks, fmt.Errorf("failed to get all webhooks: %w", res.Error)
 	}
 
 	return webHooks, nil
@@ -87,11 +89,11 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 		Find(&webHook)
 
 	if res.Error != nil {
-		return models.Webhook{}, res.Error
+		return models.Webhook{}, fmt.Errorf("failed to find webhook '%s': %w", id, res.Error)
 	}
 
 	if res.RowsAffected == 0 {
-		return models.Webhook{}, gorm.ErrRecordNotFound
+		return models.Webhook{}, fmt.Errorf("webhook '%s': %w", id, ErrSvcObjNotFound)
 	}
 
 	return webHook, nil
@@ -99,14 +101,20 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 
 func (w *WebhookServiceImpl) CreateWebhook(webHook models.Webhook) (models.Webhook, error) {
 	res := w.db.Create(&webHook)
-
-	return webHook, res.Error
+	if res.Error != nil {
+		return models.Webhook{}, fmt.Errorf("failed to create webhook: %w", res.Error)
+	}
+	return webHook, nil
 }
 
 func (w *WebhookServiceImpl) DeleteWebhook(id string) error {
 	webHook, err := w.GetWebhook(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get webhook '%s': %w", id, err)
 	}
-	return w.db.Unscoped().Delete(&webHook).Error
+	res := w.db.Unscoped().Delete(&webHook)
+	if res.Error != nil {
+		return fmt.Errorf("failed to delete webhook '%s': %w", id, res.Error)
+	}
+	return nil
 }

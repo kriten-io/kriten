@@ -1,14 +1,16 @@
 package models
 
 type Job struct {
-	ID             string                 `json:"id"`
+	Name           string                 `json:"name"`
 	Owner          string                 `json:"owner"`
 	StartTime      string                 `json:"start_time,omitempty"`
 	CompletionTime string                 `json:"completion_time,omitempty"`
 	Failed         int32                  `json:"failed"`
 	Completed      int32                  `json:"completed"`
-	Stdout         string                 `json:"stdout"`
-	JsonData       map[string]interface{} `json:"json_data"`
+	Status         string                 `json:"status,omitempty"`
+	FailReason     string                 `json:"failed_reason,omitempty"`
+	Stdout         string                 `json:"stdout,omitempty"`
+	JsonData       map[string]interface{} `json:"json_data,omitempty"`
 }
 
 type JobQueryParams struct {
@@ -16,5 +18,10 @@ type JobQueryParams struct {
 	Offset int    `form:"offset" binding:"omitempty,min=0"`
 	Owner  string `form:"owner" binding:"omitempty"`
 	Status string `form:"status" binding:"omitempty,oneof=running completed failed"`
-	ID     string `form:"id" binding:"omitempty"`
+	Name   string `form:"name" binding:"omitempty"`
+}
+
+type JobMessage struct {
+	Message string `json:"message"`
+	JobName string `json:"name"`
 }

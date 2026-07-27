@@ -23,3 +23,9 @@ type UserGroup struct {
 	Provider string    `json:"provider"`
 	ID       uuid.UUID `json:"id"`
 }
+
+type UserQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
+}

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -44,7 +45,6 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Produce		json
 //	@Success		200	{array}		models.AuditLog
 //	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/audit_logs [get]
 //	@Security		Bearer
@@ -57,15 +57,15 @@ func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	if param != "" {
 		maxDefault, err = strconv.Atoi(param)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+			ctx.Error(errors.New("invalid query parameters"))
+			ctx.Status(http.StatusBadRequest)
 		}
 	}
 
 	groups, err := ac.AuditService.ListAuditLogs(maxDefault)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -89,19 +89,18 @@ func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 //	@Produce		json
 //	@Param			id	path		string	true	"Audit Log ID"
 //	@Success		200	{object}	models.AuditLog
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/audit_logs/{id} [get]
 //	@Security		Bearer
 func (ac *AuditController) GetAuditLog(ctx *gin.Context) {
 	auditLogID := ctx.Param("id")
-	role, err := ac.AuditService.GetAuditLog(auditLogID)
+	auditRecord, err := ac.AuditService.GetAuditLog(auditLogID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, role)
+	ctx.JSON(http.StatusOK, auditRecord)
 }

@@ -19,7 +19,6 @@ import (
 
 const (
 	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
-	k8sConfigMapValidationError = "invalid name '%s', should be lowercase alphanumeric characters or '-' and '.'"
 )
 
 func ValidateK8sConfigMapName(name string) error {
@@ -29,7 +28,7 @@ func ValidateK8sConfigMapName(name string) error {
 		return fmt.Errorf("failed to validate object name: %w", err)
 	}
 	if !matched {
-		return fmt.Errorf(k8sConfigMapValidationError, name)
+		return fmt.Errorf("object name %s does not meet k8s config naming policy", name)
 	}
 	return nil
 }

@@ -1,18 +1,17 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
-	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type JobController struct {
@@ -36,14 +35,14 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 		middlewares.AuthenticationMiddleware(jc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
-	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
-	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
-	r.GET("/:id/schema", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetSchema)
+	r.GET("/:name", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
+	r.GET("/:name/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
+	r.GET("/:name/schema", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetSchema)
 
 	r.Use(middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "write"))
 	{
-		r.POST(":id", jc.CreateJob)
-		r.PUT(":id", jc.CreateJob)
+		r.POST(":name", jc.CreateJob)
+		r.PUT(":name", jc.CreateJob)
 	}
 
 }
@@ -59,10 +58,9 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 //	@Param			offset	query		int		false	"Number of jobs to skip (default 0)"
 //	@Param			owner	query		string	false	"Filter by job owner"
 //	@Param			status	query		string	false	"Filter by status: running, completed, failed"
-//	@Param			job_name	query		string	false	"Filter by task/job name"
+//	@Param			name	query		string	false	"Filter by task/job name"
 //	@Success		200	{array}		models.Job
 //	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/jobs [get]
 //	@Security		Bearer
@@ -71,7 +69,8 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 
 	var params models.JobQueryParams
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		helpers.BadRequestError(ctx, err.Error())
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
@@ -82,7 +81,7 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 	jobsList, total, err := jc.JobService.ListJobs(authList, params)
 
 	if err != nil {
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -104,24 +103,20 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Job  id"
+//	@Param			name	path		string	true	"Job Name"
 //	@Success		200	{object}	models.Task
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id} [get]
+//	@Router			/jobs/{name} [get]
 //	@Security		Bearer
 func (jc *JobController) GetJob(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("id")
+	jobName := ctx.Param("name")
 	job, err := jc.JobService.GetJob(username, jobName)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "job not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -135,24 +130,20 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Job  id"
+//	@Param			name	path		string	true	"Job  name"
 //	@Success		200	{object}	models.Task
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id}/log [get]
+//	@Router			/jobs/{name}/log [get]
 //	@Security		Bearer
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
 	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("id")
+	jobName := ctx.Param("name")
 	log, err := jc.JobService.GetLog(username, jobName)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "job not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
@@ -166,49 +157,46 @@ func (jc *JobController) GetJobLog(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task  name"
+//	@Param			name	path		string	true	"Task  name"
 //	@Param			evars	body		object	false	"Extra vars"
-//	@Success		200		{object}	models.Task
+//	@Success		200		{object}	models.JobMessage
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/jobs/{id} [post]
+//	@Router			/jobs/{name} [post]
 //	@Security		Bearer
 func (jc *JobController) CreateJob(ctx *gin.Context) {
-	taskID := ctx.Param("id")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, taskID)
+	taskName := ctx.Param("name")
+	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, taskName)
 	username := ctx.MustGet("username").(string)
 
 	extraVars, err := io.ReadAll(ctx.Request.Body)
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		helpers.BadRequestError(ctx, err.Error())
+		ctx.Error(errors.New("invalid job payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	job, err := jc.JobService.CreateJob(username, taskID, string(extraVars))
+	job, err := jc.JobService.CreateJob(username, taskName, string(extraVars))
 
 	if err != nil {
 		jc.AuditService.CreateAudit(audit)
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 
 	audit.Status = "success"
 
-	if (job.ID != "") && (job.Completed != 0) {
+	if (job.Name != "") && (job.Completed != 0) {
 		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
 	jc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
+	ctx.JSON(http.StatusOK, models.JobMessage{Message: "job created successfully", JobName: job.Name})
 }
 
 // GetSchema godoc
@@ -218,23 +206,18 @@ func (jc *JobController) CreateJob(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"Task  name"
+//	@Param			name	path		string	true	"Task  name"
 //	@Success		200	{object}	map[string]interface{}
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{id}/schema [get]
+//	@Router			/cronjobs/{name}/schema [get]
 //	@Security		Bearer
 func (jc *JobController) GetSchema(ctx *gin.Context) {
-	taskName := ctx.Param("id")
+	taskName := ctx.Param("name")
 	schema, err := jc.JobService.GetSchema(taskName)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
-			helpers.NotFoundError(ctx, "task not found")
-			return
-		}
-		helpers.InternalError(ctx, err)
+		ctx.Error(err)
 		return
 	}
 

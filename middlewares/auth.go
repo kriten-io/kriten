@@ -118,7 +118,13 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 		provider := ctx.MustGet("provider").(string)
 		requestUrl := ctx.Request.URL.String()
 
-		resourceID := ctx.Param("id")
+		resourceID := ""
+		if ctx.Param("name") != "" {
+			resourceID = ctx.Param("name")
+		} else {
+			resourceID = ctx.Param("id")
+		}
+
 		if resourceID == "" {
 			resourceID = "*"
 		}
