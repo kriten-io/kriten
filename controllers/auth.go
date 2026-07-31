@@ -1,8 +1,9 @@
 package controllers
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
@@ -40,10 +41,9 @@ func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			credentials	body		models.Credentials	true	"Your credentials"
-//	@Success		200			{object}	string
+//	@Success		200			{object}	models.LoginToken
 //	@Failure		400			{object}	helpers.HTTPError
 //	@Failure		401			{object}	helpers.HTTPError
-//	@Failure		404			{object}	helpers.HTTPError
 //	@Failure		500			{object}	helpers.HTTPError
 //	@Router			/login [post]
 func (ac *AuthController) Login(ctx *gin.Context) {
@@ -53,7 +53,8 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&credentials); err != nil {
 		ac.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid login payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
@@ -62,15 +63,16 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	if !slices.Contains(ac.providers, credentials.Provider) {
 		ac.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": ac.providers})
+		ctx.Error(errors.New("invalid authentication provider"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
-		fmt.Println("error:", err)
 		ac.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials."})
+		ctx.Error(errors.New("invalid credentials"))
+		ctx.Status(http.StatusUnauthorized)
 		return
 	}
 
@@ -79,7 +81,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	ctx.SetSameSite(http.SameSiteNoneMode)
 	ctx.SetCookie("token", token, expiry, "", "", false, true)
-	ctx.JSON(http.StatusOK, gin.H{"token": token})
+	ctx.JSON(http.StatusOK, models.LoginToken{Token: token})
 }
 
 // Refresh godoc
@@ -91,22 +93,30 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 //	@Produce		json
 //	@Param			token	header		string	false	"JWT Token can be provided as Cookie"
 //	@Success		200		{object}	string
-//	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		401		{object}	helpers.HTTPError
-//	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/refresh [get]
 //	@Security		Bearer
 func (ac *AuthController) Refresh(ctx *gin.Context) {
-	token, err := ctx.Request.Cookie("token")
-	if err == http.ErrNoCookie {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "please authenticate."})
-		return
+	var token string
+	bearer := strings.Split(ctx.GetHeader("Authorization"), "Bearer ")
+	if len(bearer) > 1 {
+		token = bearer[1]
+	}
+	cookie, err := ctx.Request.Cookie("token")
+	if token == "" {
+		if err != nil {
+			ctx.Error(errors.New("please authenticate"))
+			ctx.Status(http.StatusUnauthorized)
+			return
+		}
+		token = cookie.Value
 	}
 
-	newToken, expiry, err := ac.AuthService.Refresh(token.Value)
+	newToken, expiry, err := ac.AuthService.Refresh(token)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
+		ctx.Error(errors.New("invalid token"))
+		ctx.Status(http.StatusUnauthorized)
 		return
 	}
 

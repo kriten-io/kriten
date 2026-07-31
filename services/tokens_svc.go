@@ -45,7 +45,7 @@ func (u *ApiTokenServiceImpl) ListApiTokens(userid uuid.UUID) ([]models.ApiToken
 		Find(&apiTokens)
 
 	if res.Error != nil {
-		return apiTokens, res.Error
+		return apiTokens, fmt.Errorf("error getting user API tokens: %w", res.Error)
 	}
 
 	return apiTokens, nil
@@ -65,7 +65,7 @@ func (u *ApiTokenServiceImpl) ListAllApiTokens(authList []string) ([]models.ApiT
 		res = u.db.Find(&apiTokens, authList)
 	}
 	if res.Error != nil {
-		return apiTokens, res.Error
+		return apiTokens, fmt.Errorf("error getting all API tokens: %w", res.Error)
 	}
 
 	return apiTokens, nil
@@ -79,11 +79,11 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 		Find(&apiToken)
 
 	if res.Error != nil {
-		return models.ApiToken{}, res.Error
+		return models.ApiToken{}, fmt.Errorf("error getting API token '%s': %w", id, res.Error)
 	}
 
 	if res.RowsAffected == 0 {
-		return models.ApiToken{}, fmt.Errorf("token %s not found, please check uuid", id)
+		return models.ApiToken{}, fmt.Errorf("API token '%s': %w", id, ErrSvcObjNotFound)
 	}
 
 	return apiToken, nil
@@ -92,7 +92,7 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
 	key, err := GenerateToken(40)
 	if err != nil {
-		return models.ApiToken{}, err
+		return models.ApiToken{}, fmt.Errorf("error generating API token: %w", err)
 	}
 	var tokenEnabled = true
 	apiToken.Key = helpers.GenerateHMAC(u.config.APISecret, key)
@@ -108,17 +108,20 @@ func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.A
 	}
 
 	res := u.db.Create(&apiToken)
+	if res.Error != nil {
+		return models.ApiToken{}, fmt.Errorf("error creating API token: %w", res.Error)
+	}
 
 	// Passing unencripted key on creation
 	apiToken.Key = key
 
-	return apiToken, res.Error
+	return apiToken, nil
 }
 
 func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
 	oldToken, err := u.GetApiToken(apiToken.ID.String())
 	if err != nil {
-		return models.ApiToken{}, err
+		return models.ApiToken{}, fmt.Errorf("error getting API token: %w", err)
 	}
 
 	if apiToken.Enabled != nil {
@@ -133,12 +136,12 @@ func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.A
 
 	res := u.db.Updates(oldToken)
 	if res.Error != nil {
-		return models.ApiToken{}, res.Error
+		return models.ApiToken{}, fmt.Errorf("error updating API token: %w", res.Error)
 	}
 
 	newToken, err := u.GetApiToken(apiToken.ID.String())
 	if err != nil {
-		return models.ApiToken{}, err
+		return models.ApiToken{}, fmt.Errorf("error getting token: %w", err)
 	}
 	return newToken, nil
 }
@@ -146,9 +149,14 @@ func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.A
 func (u *ApiTokenServiceImpl) DeleteApiToken(id string) error {
 	apiToken, err := u.GetApiToken(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting API token: %w", err)
 	}
-	return u.db.Unscoped().Delete(&apiToken).Error
+
+	res := u.db.Unscoped().Delete(&apiToken)
+	if res.Error != nil {
+		return fmt.Errorf("error deleting API token '%s': %w", id, res.Error)
+	}
+	return nil
 }
 
 func GenerateToken(n int) (string, error) {
@@ -159,7 +167,7 @@ func GenerateToken(n int) (string, error) {
 	for i := 0; i < n; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error generating new token: %w", err)
 		}
 		ret[i] = letters[num.Int64()]
 	}

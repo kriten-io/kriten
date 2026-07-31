@@ -13,16 +13,15 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/go-errors/errors"
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type JobService interface {
-	ListJobs([]string) ([]models.Job, error)
+	ListJobs([]string, models.JobQueryParams) ([]models.Job, int, error)
 	GetJob(string, string) (models.Job, error)
 	GetLog(string, string) (string, error)
 	CreateJob(string, string, string) (models.Job, error)
@@ -69,12 +68,12 @@ func findDelimitedString(str string) ([]byte, error) {
 	return match, nil
 }
 
-func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
+func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParams) ([]models.Job, int, error) {
 	var jobsList []models.Job
 	var labelSelector []string
 
 	if len(authList) == 0 {
-		return jobsList, nil
+		return jobsList, 0, nil
 	}
 
 	if authList[0] != "*" {
@@ -82,14 +81,10 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 			labelSelector = append(labelSelector, "task-name="+s)
 		}
 	}
-	// labelSelector := "task-name=" + taskName
-	// if username != "" {
-	// 	labelSelector = labelSelector + ",owner=" + username
-	// }
 
 	jobs, err := helpers.ListJobs(j.config.Kube, labelSelector)
 	if err != nil {
-		return nil, err
+		return nil, 0, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
 	if len(jobs.Items) != 0 {
@@ -101,7 +96,7 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 	for i := range jobs.Items {
 		job := &jobs.Items[i]
 		var jobRet models.Job
-		jobRet.ID = job.Name
+		jobRet.Name = job.Name
 		jobRet.Owner = job.Labels["owner"]
 		jobRet.StartTime = job.Status.StartTime.Format(time.UnixDate)
 		if job.Status.CompletionTime != nil {
@@ -109,61 +104,75 @@ func (j *JobServiceImpl) ListJobs(authList []string) ([]models.Job, error) {
 		}
 		jobRet.Failed = job.Status.Failed
 		jobRet.Completed = job.Status.Succeeded
+		if jobRet.Failed == 0 && jobRet.Completed == 0 {
+			jobRet.Status = "running"
+		} else if jobRet.Completed != 0 {
+			jobRet.Status = "completed"
+		} else if jobRet.Failed != 0 {
+			jobRet.Status = "failed"
+		} else {
+			jobRet.Status = ""
+		}
 		jobsList = append(jobsList, jobRet)
 	}
 
-	return jobsList, nil
+	var filtered []models.Job
+	for _, job := range jobsList {
+		if params.Owner != "" && !strings.Contains(strings.ToLower(job.Owner), strings.ToLower(params.Owner)) {
+			continue
+		}
+		if params.Name != "" && !strings.Contains(strings.ToLower(job.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		if params.Status != "" {
+			switch params.Status {
+			case "completed":
+				if job.Completed == 0 {
+					continue
+				}
+			case "failed":
+				if job.Failed == 0 {
+					continue
+				}
+			case "running":
+				if job.Completed != 0 || job.Failed != 0 {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, job)
+	}
+
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, total, nil
 }
 
-func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, error) {
+func (j *JobServiceImpl) GetJob(username string, jobName string) (models.Job, error) {
 	var jobStatus models.Job
 
-	labelSelector := fmt.Sprintf("job-name=%s", jobID)
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
-
-	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
-	if err != nil {
-		return jobStatus, err
-	}
-
-	if len(pods.Items) == 0 {
-		return jobStatus, errors.New("no pods found - check job ID")
-	}
-	fmt.Printf("num of pods %d", len(pods.Items))
-	for i := range pods.Items {
-		for c := range pods.Items[i].Status.InitContainerStatuses {
-			if pods.Items[i].Status.InitContainerStatuses[c].Ready {
-				switch {
-				case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "ImagePullBackOff":
-					return jobStatus, errors.New("failed to pull init container image from container registry.")
-				case pods.Items[i].Status.InitContainerStatuses[c].State.Terminated.Reason == "Error":
-					return jobStatus, errors.New("failed to clone repo: wrong repo url or incorrect credentials.")
-				}
-			}
-		}
-		for c := range pods.Items[i].Status.ContainerStatuses {
-			if pods.Items[i].Status.ContainerStatuses[c].Ready {
-				state := pods.Items[i].Status.ContainerStatuses[c].State
-				// adding check if application container is not running because it cannot pull image
-				// more checks to be added to cover any other cases
-				if state.Waiting != nil {
-					if pods.Items[i].Status.ContainerStatuses[c].State.Waiting.Reason == "ImagePullBackOff" {
-						return jobStatus, errors.New("failed to pull application container image from container registry.")
-					}
-				}
-			}
-		}
-	}
-
-	job, err := helpers.GetJob(j.config.Kube, jobID)
+	job, err := helpers.GetJob(j.config.Kube, jobName)
 
 	if err != nil {
-		return jobStatus, err
+		if k8sErrors.IsNotFound(err) {
+			return jobStatus, fmt.Errorf("job '%s': %w", jobName, ErrSvcObjNotFound)
+		}
+		return jobStatus, fmt.Errorf("failed to get job '%s': %w", jobName, err)
 	}
 
-	jobStatus.ID = job.Name
+	jobStatus.Name = job.Name
 	jobStatus.Owner = job.Labels["owner"]
 	jobStatus.StartTime = job.Status.StartTime.Format(time.UnixDate)
 	if job.Status.CompletionTime != nil {
@@ -172,7 +181,66 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	jobStatus.Failed = job.Status.Failed
 	jobStatus.Completed = job.Status.Succeeded
 
-	jobLog, err := j.GetLog(username, jobID)
+	if jobStatus.Failed == 0 && jobStatus.Completed == 0 {
+		jobStatus.Status = "running"
+	} else if jobStatus.Completed != 0 {
+		jobStatus.Status = "completed"
+	} else if jobStatus.Failed != 0 {
+		jobStatus.Status = "failed"
+	} else {
+		jobStatus.Status = ""
+	}
+	labelSelector := fmt.Sprintf("job-name=%s", jobName)
+	if username != "" {
+		labelSelector = labelSelector + ",owner=" + username
+	}
+
+	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
+	if err != nil {
+		return jobStatus, fmt.Errorf("failed to get job '%s' status: %w", jobName, err)
+	}
+
+	if len(pods.Items) == 0 {
+		return jobStatus, fmt.Errorf("job '%s' - no running containers", jobName)
+	}
+
+	for i := range pods.Items {
+		for c := range pods.Items[i].Status.InitContainerStatuses {
+			if !pods.Items[i].Status.InitContainerStatuses[c].Ready {
+				state := pods.Items[i].Status.InitContainerStatuses[c].State
+				if state.Waiting != nil {
+					if state.Waiting.Reason == "ImagePullBackOff" {
+						jobStatus.FailReason = "failed to pull init container image from container registry."
+						return jobStatus, nil
+					}
+				}
+				if state.Terminated != nil && state.Terminated.ExitCode != 0 {
+					if state.Terminated.Reason == "Error" {
+						jobStatus.FailReason = "failed to clone repo: wrong repo url or incorrect credentials."
+						return jobStatus, nil
+					}
+					return jobStatus, fmt.Errorf("init container failed with exit code %d (reason: %s)", state.Terminated.ExitCode, state.Terminated.Reason)
+				}
+			}
+		}
+		for c := range pods.Items[i].Status.ContainerStatuses {
+			if !pods.Items[i].Status.ContainerStatuses[c].Ready {
+				state := pods.Items[i].Status.ContainerStatuses[c].State
+				if state.Waiting != nil {
+					if state.Waiting.Reason == "ImagePullBackOff" {
+						jobStatus.FailReason = "failed to pull application container image from container registry."
+						return jobStatus, nil
+					}
+				}
+				if state.Terminated != nil && state.Terminated.ExitCode != 0 {
+					jobStatus.FailReason = fmt.Sprintf("application container failed with exit code %d (reason: %s)", state.Terminated.ExitCode, state.Terminated.Reason)
+					return jobStatus, nil
+				}
+			}
+		}
+	}
+
+	jobLog, err := j.GetLog(username, jobName)
 	if err != nil {
 		jobStatus.Stdout += fmt.Sprintf("failed to read logs from containers: %v", err)
 	} else {
@@ -198,10 +266,20 @@ func (j *JobServiceImpl) GetJob(username string, jobID string) (models.Job, erro
 	return jobStatus, nil
 }
 
-func (j *JobServiceImpl) GetLog(username string, jobID string) (string, error) {
+func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error) {
 	var logs string
 
-	labelSelector := "job-name=" + jobID
+	// Validation if job exists
+	_, err := helpers.GetJob(j.config.Kube, jobName)
+
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return logs, fmt.Errorf("job '%s': %w", jobName, ErrSvcObjNotFound)
+		}
+		return logs, fmt.Errorf("failed to get logs for job '%s': %w", jobName, err)
+	}
+
+	labelSelector := "job-name=" + jobName
 	if username != "" {
 		labelSelector = labelSelector + ",owner=" + username
 	}
@@ -212,7 +290,7 @@ func (j *JobServiceImpl) GetLog(username string, jobID string) (string, error) {
 	}
 
 	if len(pods.Items) == 0 {
-		return logs, errors.New("no pods found - check job ID")
+		return logs, fmt.Errorf("job '%s' - no running containers", jobName)
 	}
 
 	for _, pod := range pods.Items {
@@ -281,7 +359,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	tokenObjName := runnerName + "-token"
 	token, err := helpers.GetSecret(j.config.Kube, tokenObjName)
 	if err != nil {
-		if !kerrors.IsNotFound(err) {
+		if !k8sErrors.IsNotFound(err) {
 			return jobStatus, err
 		}
 	} else {
@@ -291,7 +369,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		}
 	}
 
-	jobID, err := helpers.CreateJob(
+	jobName, err := helpers.CreateJob(
 		j.config.Kube,
 		taskName,
 		runnerName,
@@ -303,7 +381,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 		gitBranch,
 	)
 
-	jobStatus.ID = jobID
+	jobStatus.Name = jobName
 
 	if err != nil {
 		return jobStatus, err
@@ -312,7 +390,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 	if task.Data["synchronous"] == "true" {
 		_ = wait.Poll(100*time.Millisecond, 20*time.Second, func() (done bool, err error) {
 
-			job, err := helpers.GetJob(j.config.Kube, jobID)
+			job, err := helpers.GetJob(j.config.Kube, jobName)
 
 			if err != nil {
 				fmt.Println(err)
@@ -326,7 +404,7 @@ func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars s
 			return false, nil
 		})
 
-		ret, err := j.GetJob(username, jobID)
+		ret, err := j.GetJob(username, jobName)
 		return ret, err
 	}
 
@@ -338,16 +416,19 @@ func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) 
 
 	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("failed to get task '%s': %w", name, err)
 	}
 	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task %s not found", name)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	if configMap.Data["schema"] != "" {
 		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("task '%s': failed to convert schema to json format: %w", name, err)
 		}
 	}
 

@@ -16,7 +16,7 @@ import (
 	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
-	"github.com/golang-jwt/jwt"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
@@ -123,7 +123,7 @@ func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
 
 	expirationTime := time.Now().Add(time.Second * time.Duration(a.config.JWT.ExpirySeconds))
 
-	claims.ExpiresAt = expirationTime.Unix()
+	claims.ExpiresAt = jwt.NewNumericDate(expirationTime)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err = token.SignedString(a.config.JWT.Key)
@@ -247,7 +247,7 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 	}
 
 	var user models.User
-	res = a.db.Where("user_id = ?", webhook.Owner).Find(&user)
+	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
 		return models.User{}, "", res.Error
 	}

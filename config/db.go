@@ -47,14 +47,10 @@ func InitDB(db *gorm.DB) {
 	db.Updates(&root)
 
 	var adminRoleBindings = models.RoleBinding{
-		Name:            "RootAdminAccess",
-		RoleID:          adminRole.ID,
-		RoleName:        "Admin",
-		SubjectID:       adminGroup.ID,
-		SubjectName:     "root",
-		SubjectKind:     "root",
-		SubjectProvider: "local",
-		Builtin:         true,
+		Name:    "RootAdminAccess",
+		RoleID:  adminRole.ID,
+		GroupID: adminGroup.ID,
+		Builtin: true,
 	}
 	db.Create(&adminRoleBindings)
 

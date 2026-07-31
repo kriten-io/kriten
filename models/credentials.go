@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -15,7 +15,7 @@ type Claims struct {
 	Username string    `json:"username"`
 	UserID   uuid.UUID `json:"user_id"`
 	Provider string    `json:"provider"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 type Authorization struct {
@@ -25,4 +25,8 @@ type Authorization struct {
 	Resource   string    `json:"resource"`
 	ResourceID string    `json:"resource_id"`
 	Access     string    `json:"access"`
+}
+
+type LoginToken struct {
+	Token string `json:"token"`
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/controllers"
+	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/services"
 
 	docs "github.com/kriten-io/kriten/docs"
@@ -109,7 +110,8 @@ func init() {
 			DSN:                  dsn,
 			PreferSimpleProtocol: true, // disables implicit prepared statement usage
 		}), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Silent),
+			Logger:         logger.Default.LogMode(logger.Silent),
+			TranslateError: true,
 		})
 		if err != nil {
 			log.Println("Error while connecting to Postgres")
@@ -171,17 +173,18 @@ func init() {
 	cjc = controllers.NewCronJobController(cjs, as, als)
 }
 
-//	@title			Swagger Kriten
-//	@version		v0.3
-//	@description	API Gateway for your kubernetes services.
-//	@termsOfService	http://swagger.io/terms/
+//	@title			  Swagger Kriten
+//	@version		  v0.3
+//	@description	  API Gateway for your kubernetes services.
+//  @externalDocs.url https://kriten.io
+//	@termsOfService	  http://swagger.io/terms/
 
-//	@contact.name	Evolvere Support
-//	@contact.url	https://www.evolvere-tech.co.uk/contact
-//	@contact.email	info@evolvere-tech.co.uk
+//	@contact.name	  Kubecode Support
+//	@contact.url	  https://www.kubecode.io/contact
+//	@contact.email	  info@kubecode.io
 
-//	@license.name	Apache 2.0
-//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+//	@license.name	  Apache 2.0
+//	@license.url	  http://www.apache.org/licenses/LICENSE-2.0.html
 
 //	@BasePath	/api/v1
 
@@ -193,15 +196,17 @@ func init() {
 func main() {
 	// API endpoints definition, fields starting with ':' are not fixed and can contain any string
 	// Expected path: /api/v1/runner/:rname/task/:tname
+	// Debug mode is default, below switches to ReleaseMode to reduce verbosity
+	// gin.SetMode(gin.ReleaseMode)
 	router = gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Range", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Range"},
 		AllowCredentials: true,
 	}))
-
+	router.Use(middlewares.ErrorHandler())
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
@@ -235,4 +240,5 @@ func main() {
 	}
 
 	log.Fatal(router.Run())
+
 }

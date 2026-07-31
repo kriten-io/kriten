@@ -8,7 +8,7 @@ import (
 	"github.com/kriten-io/kriten/config"
 
 	"github.com/go-errors/errors"
-	"github.com/go-ldap/ldap/v3"
+	ldap "github.com/go-ldap/ldap/v3"
 )
 
 const Filter = "(&(objectClass=organizationalPerson)(sAMAccountName=%s))"

@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/helpers"
@@ -15,7 +14,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type CronJobService interface {
@@ -53,7 +52,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 
 	jobs, err := helpers.ListCronJobs(j.config.Kube, labelSelector)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cronjobs: %w", err)
 	}
 
 	for _, job := range jobs.Items {
@@ -63,7 +62,7 @@ func (j *CronJobServiceImpl) ListCronJobs(authList []string) ([]models.CronJob, 
 		if len(containerEnv) > 0 {
 			err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("cronjobs: %w", err)
 			}
 		}
 		jobRet := models.CronJob{
@@ -85,6 +84,9 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 
 	job, err := helpers.GetCronJob(j.config.Kube, name)
 	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return cronjob, fmt.Errorf("cronjob '%s': %w", name, ErrSvcObjNotFound)
+		}
 		return cronjob, err
 	}
 
@@ -94,7 +96,7 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 	if len(containerEnv) > 0 {
 		err = json.Unmarshal([]byte(containerEnv[0].Value), &data)
 		if err != nil {
-			return cronjob, err
+			return cronjob, fmt.Errorf("cronjob '%s': %w", name, err)
 		}
 	}
 	cronjob = models.CronJob{
@@ -112,29 +114,48 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 	if err != nil {
-		return models.CronJob{}, err
+		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w, %v", cronjob.Name, ErrSvcCronJobPrecheck, err)
 	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "create")
+	if err != nil {
+		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, err)
+	}
 
-	return cronjob, err
+	return cronjob, nil
 }
 
 func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJob, error) {
+	_, err := helpers.GetCronJob(j.config.Kube, cronjob.Name)
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, ErrSvcObjNotFound)
+		}
+	}
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 	if err != nil {
-		return models.CronJob{}, err
+		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w, %v", cronjob.Name, ErrSvcCronJobPrecheck, err)
 	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "update")
-
+	if err != nil {
+		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, err)
+	}
 	return cronjob, err
 }
 
-func (j *CronJobServiceImpl) DeleteCronJob(id string) error {
-	err := helpers.DeleteCronJob(j.config.Kube, id)
+func (j *CronJobServiceImpl) DeleteCronJob(name string) error {
+	_, err := helpers.GetCronJob(j.config.Kube, name)
 	if err != nil {
-		return err
+		if k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("cronjob '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return fmt.Errorf("failed to get cronjob '%s': %w", name, err)
+	}
+
+	err = helpers.DeleteCronJob(j.config.Kube, name)
+	if err != nil {
+		return fmt.Errorf("failed to delete cronjob %s: %w", name, err)
 	}
 
 	return nil
@@ -145,16 +166,19 @@ func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, err
 
 	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("failed to get task '%s': %w", name, err)
 	}
 	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task %s not found", name)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	if configMap.Data["schema"] != "" {
 		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse task '%s' schema: %w", name, err)
 		}
 	}
 
@@ -164,7 +188,7 @@ func (j *CronJobServiceImpl) GetSchema(name string) (map[string]interface{}, err
 func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.ConfigMap, string, error) {
 	task, err := helpers.GetConfigMap(kube, cronjob.Task)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("task '%s' not found", cronjob.Task)
 	}
 
 	if task.Data["schema"] != "" {
@@ -174,14 +198,13 @@ func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.Co
 		// strfmt.Default is the registry of recognized formats
 		err = validate.AgainstSchema(schema, cronjob.ExtraVars, strfmt.Default)
 		if err != nil {
-			log.Printf("JSON does not validate against schema: %v", err)
-			return nil, "", err
+			return nil, "", fmt.Errorf("validation failed against schema: %v", err)
 		}
 	}
 
 	runner, err := helpers.GetConfigMap(kube, task.Data["runner"])
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("runner '%s' not found: %v", task.Data["runner"], err)
 	}
 
 	if runner.Data["branch"] == "" {
@@ -190,8 +213,8 @@ func PreFlightChecks(kube config.KubeConfig, cronjob models.CronJob) (*corev1.Co
 
 	secret, err := helpers.GetSecret(kube, task.Data["runner"]+"-token")
 	if err != nil {
-		if !kerrors.IsNotFound(err) {
-			return nil, "", err
+		if !k8sErrors.IsNotFound(err) {
+			return nil, "", fmt.Errorf("failed to fetch secrets: %v", err)
 		}
 	} else {
 		gitToken := string(secret.Data["token"])

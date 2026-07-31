@@ -7,3 +7,9 @@ type Task struct {
 	Command     string         `json:"command" binding:"required"`
 	Synchronous bool           `json:"synchronous"`
 }
+
+type TaskQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
+}

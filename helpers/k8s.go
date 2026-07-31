@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 
 	"github.com/kriten-io/kriten/config"
@@ -20,7 +19,6 @@ import (
 
 const (
 	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
-	k8sConfigMapValidationError = "invalid name '%s', should be lowercase alphanumeric characters or '-' and '.'"
 )
 
 func ValidateK8sConfigMapName(name string) error {
@@ -30,7 +28,7 @@ func ValidateK8sConfigMapName(name string) error {
 		return fmt.Errorf("failed to validate object name: %w", err)
 	}
 	if !matched {
-		return fmt.Errorf(k8sConfigMapValidationError, name)
+		return fmt.Errorf("object name %s does not meet k8s config naming policy", name)
 	}
 	return nil
 }
@@ -41,10 +39,10 @@ func ListConfigMaps(kube config.KubeConfig) (*corev1.ConfigMapList, error) {
 		context.TODO(), metav1.ListOptions{})
 
 	if err != nil {
-		log.Println(err)
+		return nil, fmt.Errorf("failed to list configmaps: %w", err)
 	}
 
-	return configMaps, err
+	return configMaps, nil
 }
 
 func GetConfigMap(kube config.KubeConfig, name string) (*corev1.ConfigMap, error) {
@@ -53,8 +51,7 @@ func GetConfigMap(kube config.KubeConfig, name string) (*corev1.ConfigMap, error
 		context.TODO(), name, metav1.GetOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get configmap %s: %w", name, err)
 	}
 
 	return configMap, nil
@@ -65,7 +62,6 @@ func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, ope
 	var ret *corev1.ConfigMap
 	var err error
 
-	// Operations permetter : "create" and "update"
 	if operation == "create" {
 		ret, err = kube.Clientset.CoreV1().ConfigMaps(
 			kube.Namespace).Create(
@@ -77,7 +73,7 @@ func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, ope
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to %s configmap: %w", operation, err)
 	}
 
 	return ret, nil
@@ -89,8 +85,7 @@ func DeleteConfigMap(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return err
+		return fmt.Errorf("failed to delete configmap %s: %w", name, err)
 	}
 
 	return nil
@@ -115,7 +110,7 @@ func GetSecret(kube config.KubeConfig, secretName string) (*corev1.Secret, error
 		context.TODO(), secretName, metav1.GetOptions{})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
 	}
 
 	return secret, nil
@@ -127,7 +122,6 @@ func CreateOrUpdateSecret(kube config.KubeConfig, name string, data map[string]s
 	var ret *corev1.Secret
 	var err error
 
-	// Operations permetter : "create" and "update"
 	if operation == "create" {
 		ret, err = kube.Clientset.CoreV1().Secrets(
 			kube.Namespace).Create(
@@ -139,8 +133,7 @@ func CreateOrUpdateSecret(kube config.KubeConfig, name string, data map[string]s
 	}
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to %s secret: %w", operation, err)
 	}
 
 	return ret, nil
@@ -152,7 +145,7 @@ func DeleteSecret(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete secret %s: %w", name, err)
 	}
 
 	return nil
@@ -177,8 +170,7 @@ func ListJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.JobList
 			kube.Namespace).List(
 			context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			log.Println(err)
-			return nil, err
+			return nil, fmt.Errorf("failed to list jobs: %w", err)
 		}
 	} else {
 		for _, labelSelector := range labelSelectors {
@@ -186,8 +178,7 @@ func ListJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.JobList
 				kube.Namespace).List(
 				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
 			if err != nil {
-				log.Println(err)
-				return nil, err
+				return nil, fmt.Errorf("failed to list jobs with selector %s: %w", labelSelector, err)
 			}
 			if jobsList == nil {
 				jobsList = job
@@ -195,7 +186,6 @@ func ListJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.JobList
 				jobsList.Items = append(jobsList.Items, job.Items[:]...)
 			}
 		}
-
 	}
 
 	return jobsList, nil
@@ -207,8 +197,7 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 		context.TODO(), name, metav1.GetOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get job %s: %w", name, err)
 	}
 
 	return job, nil
@@ -224,8 +213,7 @@ func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerIma
 		context.TODO(), job, metav1.CreateOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return "", err
+		return "", fmt.Errorf("failed to create job: %w", err)
 	}
 
 	return job.Name, nil
@@ -237,11 +225,10 @@ func ListPods(kube config.KubeConfig, labelSelector string) (*corev1.PodList, er
 		v1.ListOptions{LabelSelector: labelSelector})
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to list pods with selector %s: %w", labelSelector, err)
 	}
 
-	return pods, err
+	return pods, nil
 }
 
 // TODO: Need to implement logs for init-containers
@@ -254,7 +241,7 @@ func GetLogs(kube config.KubeConfig, podName string, containerName string) (stri
 
 	podLogs, err := req.Stream(context.TODO())
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get logs for pod %s container %s: %w", podName, containerName, err)
 	}
 
 	defer podLogs.Close()
@@ -263,7 +250,7 @@ func GetLogs(kube config.KubeConfig, podName string, containerName string) (stri
 
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read logs for pod %s: %w", podName, err)
 	}
 
 	return buf.String(), nil
@@ -399,8 +386,7 @@ func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.Cro
 			kube.Namespace).List(
 			context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			log.Println(err)
-			return nil, err
+			return nil, fmt.Errorf("failed to list cronjobs: %w", err)
 		}
 	} else {
 		for _, labelSelector := range labelSelectors {
@@ -408,8 +394,7 @@ func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.Cro
 				kube.Namespace).List(
 				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
 			if err != nil {
-				log.Println(err)
-				return nil, err
+				return nil, fmt.Errorf("failed to list cronjobs with selector %s: %w", labelSelector, err)
 			}
 			if jobsList == nil {
 				jobsList = job
@@ -428,8 +413,7 @@ func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
 		context.TODO(), name, metav1.GetOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get cronjob %s: %w", name, err)
 	}
 
 	return job, nil
@@ -470,8 +454,7 @@ func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runne
 	}
 
 	if err != nil {
-		log.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("failed to %s cronjob: %w", operation, err)
 	}
 
 	return cron, nil
@@ -483,8 +466,7 @@ func DeleteCronJob(kube config.KubeConfig, name string) error {
 		context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
-		log.Println(err)
-		return err
+		return fmt.Errorf("failed to delete cronjob %s: %w", name, err)
 	}
 
 	return nil

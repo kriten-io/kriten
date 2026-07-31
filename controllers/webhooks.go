@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,8 +58,6 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 
 	r.Use(middlewares.AuthorizationMiddleware(wc.AuthService, "webHooks", "write"))
 	{
-		//r.PATCH("/:id", wc.UpdateWebhooks)
-		//r.PUT("/:id", wc.UpdateWebhooks)
 		r.DELETE("/:id", wc.DeleteWebhook)
 	}
 }
@@ -71,7 +70,6 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks [get]
@@ -81,11 +79,10 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 	webHooks, err := wc.WebhookService.ListWebhooks(userid)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
-	// audit.Status = "success"
 	ctx.Header("Content-range", fmt.Sprintf("%v", len(webHooks)))
 	if len(webHooks) == 0 {
 		var arr [0]int
@@ -105,8 +102,6 @@ func (wc *WebhookController) ListWebhooks(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
-//	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/all [get]
 //	@Security		Bearer
@@ -115,7 +110,7 @@ func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
 	webHooks, err := wc.WebhookService.ListAllWebhooks(authList)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -139,7 +134,6 @@ func (wc *WebhookController) ListAllWebhooks(ctx *gin.Context) {
 //	@Produce		json
 //	@Param			id	path		string	true	"Webhook ID"
 //	@Success		200	{object}	models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/{id} [get]
@@ -149,7 +143,7 @@ func (wc *WebhookController) GetWebhook(ctx *gin.Context) {
 	webhook, err := wc.WebhookService.GetWebhook(webhookID)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -166,7 +160,6 @@ func (wc *WebhookController) GetWebhook(ctx *gin.Context) {
 //	@Param			webhook	body		models.Webhook	true	"New Webhook"
 //	@Success		200		{object}	models.Webhook
 //	@Failure		400		{object}	helpers.HTTPError
-//	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/webhooks [post]
 //	@Security		Bearer
@@ -177,7 +170,8 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&webhook); err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid webhook payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
@@ -186,7 +180,7 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 	webhook, err := wc.WebhookService.CreateWebhook(webhook)
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -199,12 +193,11 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 //
 //	@Summary		Delete a webhook
 //	@Description	Delete by webhook ID
-//	@Tags			webhook
+//	@Tags			webhooks
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"Webhook ID"
-//	@Success		204	{object}	models.Webhook
-//	@Failure		400	{object}	helpers.HTTPError
+//	@Success		200	{object}	models.ResponseMessage
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/webhooks/{id} [delete]
@@ -213,15 +206,22 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
 	audit := wc.AuditService.InitialiseAuditLog(ctx, "delete", wc.AuditCategory, webhookID)
 
-	err := wc.WebhookService.DeleteWebhook(webhookID)
+	_, err := uuid.FromString(webhookID)
+	if err != nil {
+		ctx.Error(errors.New("invalid webhook id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+	err = wc.WebhookService.DeleteWebhook(webhookID)
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
+
 	}
 	audit.Status = "success"
 	wc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "webhook deleted successfully"})
+	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "webhook deleted successfully"})
 }
 
 // RunWebhook godoc
@@ -244,6 +244,12 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	taskID := ctx.MustGet("taskID").(string)
 	username := ctx.MustGet("username").(string)
 
+	_, err := uuid.FromString(webhookID)
+	if err != nil {
+		ctx.Error(errors.New("invalid webhook id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
 	audit := wc.AuditService.InitialiseAuditLog(ctx, "run", wc.AuditCategory, webhookID)
 	audit.Status = "success"
 	wc.AuditService.CreateAudit(audit)
@@ -252,7 +258,8 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err})
+		ctx.Error(errors.New("failure to parse body"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
@@ -260,19 +267,18 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
 	audit.Status = "success"
 
-	if (job.ID != "") && (job.Completed != 0) {
-		//ctx.JSON(http.StatusOK, gin.H{"id": jobID, "json_data": sync.JsonData})
+	if (job.Name != "") && (job.Completed != 0) {
 		wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
 	wc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.Name})
 }

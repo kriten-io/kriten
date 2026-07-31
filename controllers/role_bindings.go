@@ -1,17 +1,18 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
+	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/middlewares"
 	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/exp/slices"
 )
 
 // TODO: This is currently hardcoded but needs to be fetched from somewhere else
@@ -59,6 +60,9 @@ func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, confi
 //	@Tags			rolebindings
 //	@Accept			json
 //	@Produce		json
+//	@Param			limit	query	    int		false	"Maximum number of role bindings to return (default 100)"
+//	@Param			offset	query		int		false	"Number of role bindings to skip (default 0)"
+//	@Param			name	query		string	false	"Filter by role binding name"
 //	@Success		200	{array}		models.RoleBinding
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
@@ -66,22 +70,23 @@ func (rc *RoleBindingController) SetRoleBindingRoutes(rg *gin.RouterGroup, confi
 //	@Router			/role_bindings [get]
 //	@Security		Bearer
 func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
-	filters := make(map[string]string)
 	authList := ctx.MustGet("authList").([]string)
 
-	urlParams := ctx.Request.URL.Query()
-
-	// urlParams contains a map[string][]string
-	// we need to parse it into a map[string]string
-	// so we will only take the first value
-	for key, value := range urlParams {
-		filters[key] = value[0]
+	var params models.RoleBindingQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
+		return
 	}
 
-	roles, err := rc.RoleBindingService.ListRoleBindings(authList, filters)
+	if params.Limit == 0 {
+		params.Limit = 100
+	}
+
+	roles, err := rc.RoleBindingService.ListRoleBindings(authList, params)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -112,14 +117,22 @@ func (rc *RoleBindingController) ListRoleBindings(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleBindingController) GetRoleBinding(ctx *gin.Context) {
 	roleBindingID := ctx.Param("id")
-	role, err := rc.RoleBindingService.GetRoleBinding(roleBindingID)
 
+	_, err := uuid.FromString(roleBindingID)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid role binding id format"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, role)
+	roleBinding, err := rc.RoleBindingService.GetRoleBinding(roleBindingID)
+
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, roleBinding)
 }
 
 // CreateRoleBinding godoc
@@ -132,7 +145,6 @@ func (rc *RoleBindingController) GetRoleBinding(ctx *gin.Context) {
 //	@Param			roleBinding	body		models.RoleBinding	true	"New role binding"
 //	@Success		200			{object}	models.RoleBinding
 //	@Failure		400			{object}	helpers.HTTPError
-//	@Failure		404			{object}	helpers.HTTPError
 //	@Failure		500			{object}	helpers.HTTPError
 //	@Router			/role_bindings [post]
 //	@Security		Bearer
@@ -142,27 +154,17 @@ func (rc *RoleBindingController) CreateRoleBinding(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&roleBinding); err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.Error(errors.New("invalid role binding payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	audit.EventTarget = roleBinding.Name
 
-	if !slices.Contains(subjectKinds, roleBinding.SubjectKind) {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "subject kind does not exist", "subject_kinds": subjectKinds})
-		return
-	}
-	if !slices.Contains(rc.providers, roleBinding.SubjectProvider) {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": rc.providers})
-		return
-	}
-
 	rolebinding, err := rc.RoleBindingService.CreateRoleBinding(roleBinding)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 
@@ -194,33 +196,25 @@ func (rc *RoleBindingController) UpdateRoleBinding(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&roleBinding); err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if !slices.Contains(subjectKinds, roleBinding.SubjectKind) {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "subject kind does not exist", "subject_kinds": subjectKinds})
-		return
-	}
-	if !slices.Contains(rc.providers, roleBinding.SubjectProvider) {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "provider does not exist", "providers": rc.providers})
+		ctx.Error(errors.New("invalid role binding payload"))
+		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	roleBinding.ID, err = uuid.FromString(roleBindingID)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		helpers.BadRequestError(ctx, err)
 		return
 	}
 
 	roleBinding, err = rc.RoleBindingService.UpdateRoleBinding(roleBinding)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
 	}
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
@@ -235,7 +229,7 @@ func (rc *RoleBindingController) UpdateRoleBinding(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"RoleBinding ID"
-//	@Success		204	{object}	models.RoleBinding
+//	@Success		200	{object}	models.ResponseMessage
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
@@ -247,11 +241,10 @@ func (rc *RoleBindingController) DeleteRoleBinding(ctx *gin.Context) {
 
 	err := rc.RoleBindingService.DeleteRoleBinding(roleBindingID)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		ctx.Error(err)
 		return
 	}
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "role binding deleted successfully"})
+	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "role binding deleted successfully"})
 }

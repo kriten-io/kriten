@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/helpers"
@@ -16,10 +16,12 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
+
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type TaskService interface {
-	ListTasks([]string) ([]*models.Task, error)
+	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, error)
 	GetTask(string) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
 	UpdateTask(models.Task) (*models.Task, error)
@@ -41,7 +43,7 @@ func NewTaskService(ws WebhookService, config config.Config) TaskService {
 	}
 }
 
-func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
+func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryParams) ([]*models.Task, error) {
 	var tasks []*models.Task
 
 	if len(authList) == 0 {
@@ -50,7 +52,7 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
 
 	configMaps, err := helpers.ListConfigMaps(t.config.Kube)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch list of tasks: %w", err)
 	}
 
 	for _, configMap := range configMaps.Items {
@@ -66,26 +68,52 @@ func (t *TaskServiceImpl) ListTasks(authList []string) ([]*models.Task, error) {
 					var jsonData map[string]interface{}
 					err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("task '%s' schema: %w", configMap.Data["name"], err)
 					}
 					taskData.Schema = jsonData
 				}
 				tasks = append(tasks, taskData)
 			}
 		}
+
+	}
+	var filtered []*models.Task
+	for _, task := range tasks {
+		if params.Name != "" && !strings.Contains(strings.ToLower(task.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		filtered = append(filtered, task)
 	}
 
-	return tasks, nil
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, nil
+
 }
 
 func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
 	var taskData models.Task
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("task '%s': %w", name, err)
 	}
 	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task %s not found", name)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	// TODO: this is a temporary solution to return synchronous as a boolean
@@ -98,7 +126,7 @@ func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
 		var jsonData map[string]interface{}
 		err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 		}
 		taskData.Schema = jsonData
 	}
@@ -110,22 +138,31 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	var jsonData []byte
 	err := helpers.ValidateK8sConfigMapName(task.Name)
 	if err != nil {
-		return nil, fmt.Errorf("%w", err)
+		return nil, fmt.Errorf("task '%s': %w",
+			task.Name,
+			ErrSvcObjNameK8sConfMap)
 	}
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
-	if err != nil || runner.Data["image"] == "" {
-		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		}
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
+	}
+	if runner.Data["image"] == "" {
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
-			return nil, err
+			errString := strings.ReplaceAll(err.Error(), "\"", "'")
+			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 		}
 	}
 
@@ -139,14 +176,17 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjExists)
+		}
+		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
 	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
-	return configuredTask, err
+	return configuredTask, nil
 }
 
 func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
@@ -154,23 +194,34 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 
 	_, err := helpers.GetConfigMap(t.config.Kube, task.Name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
-	if err != nil || runner.Data["image"] == "" {
-		return nil, fmt.Errorf("error retrieving runner %s, please specify an existing runner", task.Runner)
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		}
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
+	}
+
+	if runner.Data["image"] == "" {
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
-			return nil, err
+			errString := strings.ReplaceAll(err.Error(), "\"", "'")
+			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 		}
 	}
 
@@ -183,25 +234,28 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
 	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
-	return configuredTask, err
+	return configuredTask, nil
 }
 
 func (t *TaskServiceImpl) DeleteTask(name string) error {
 	res, err := t.WebhookService.ListTaskWebhooks(name)
 	if len(res) != 0 {
-		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first", name)
+		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", name, ErrSvcObjInUse)
 	}
 
 	err = helpers.DeleteConfigMap(t.config.Kube, name)
 	if err != nil {
-		return err
+		if k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return fmt.Errorf("task '%s': %w", name, err)
 	}
 
 	return nil
@@ -212,45 +266,53 @@ func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error)
 
 	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("task '%s': %w", name, err)
 	}
 	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task %s not found", name)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	if configMap.Data["schema"] != "" {
 		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 		}
 	}
 
 	return data, nil
 }
 
-func (t *TaskServiceImpl) UpdateSchema(taskName string, schema map[string]interface{}) (map[string]interface{}, error) {
-	task, err := helpers.GetConfigMap(t.config.Kube, taskName)
+func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{}) (map[string]interface{}, error) {
+	task, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
-		return nil, err
+		if k8sErrors.IsNotFound(err) {
+			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("task '%s': %w", name, err)
+
 	}
 	if task.Data["runner"] == "" {
-		return nil, fmt.Errorf("task %s not found", taskName)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	data, err := json.Marshal(schema)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
 	err = ValidateSchema(data)
 	if err != nil {
-		return nil, err
+		errString := strings.ReplaceAll(err.Error(), "\"", "'")
+		return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 	}
 
 	task.Data["schema"] = string(data)
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, task.Data, "update")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
 	return schema, nil
@@ -259,7 +321,7 @@ func (t *TaskServiceImpl) UpdateSchema(taskName string, schema map[string]interf
 func (t *TaskServiceImpl) DeleteSchema(name string) error {
 	task, err := t.GetTask(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w", err)
 	}
 
 	if task.Schema == nil {
@@ -273,7 +335,7 @@ func (t *TaskServiceImpl) DeleteSchema(name string) error {
 	delete(data, "schema")
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
-		return err
+		return fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
 	return nil
@@ -282,23 +344,20 @@ func (t *TaskServiceImpl) DeleteSchema(name string) error {
 func ValidateSchema(schema []byte) error {
 	input, err := os.ReadFile("spec.json")
 	if err != nil {
-		log.Println(err)
-		return err
+		return fmt.Errorf("failed to read schema spec.json file: %w", err)
 	}
 
 	output := bytes.ReplaceAll(input, []byte("\"%schema%\""), schema)
 	doc, err := loads.Analyzed(output, "2.0")
 	if err != nil {
-		log.Printf("error while loading spec: %v\n", err)
-		return err
+		return fmt.Errorf("failed to load schema spec: %w", err)
 	}
 
 	validate.SetContinueOnErrors(true)       // Set global options
 	err = validate.Spec(doc, strfmt.Default) // Validates spec with default Swagger 2.0 format definitions
 
 	if err != nil {
-		log.Printf("This spec has some validation errors: %v\n", err)
-		return err
+		return fmt.Errorf("%v", err)
 	}
 
 	return nil

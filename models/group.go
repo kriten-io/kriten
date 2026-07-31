@@ -14,11 +14,17 @@ type Group struct {
 	Builtin   bool           `json:"-"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	ID        uuid.UUID      `gorm:"column:group_id;type:uuid;default:gen_random_uuid()" json:"id"`
+	ID        uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
 }
 
 type GroupUser struct {
 	Username string    `json:"name"`
 	Provider string    `json:"provider"`
 	ID       uuid.UUID `json:"id,omitempty"`
+}
+
+type GroupQueryParams struct {
+	Limit  int    `form:"limit" binding:"omitempty,min=0"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	Name   string `form:"name" binding:"omitempty"`
 }

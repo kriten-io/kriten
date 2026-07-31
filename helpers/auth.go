@@ -11,7 +11,7 @@ import (
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
-	"github.com/golang-jwt/jwt"
+	jwt "github.com/golang-jwt/jwt/v5"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -22,8 +22,8 @@ func CreateJWTToken(credentials *models.Credentials, userID uuid.UUID, jwtConf c
 		Username: credentials.Username,
 		UserID:   userID,
 		Provider: credentials.Provider,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 

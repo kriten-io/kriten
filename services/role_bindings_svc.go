@@ -3,7 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
-	"log"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
@@ -15,7 +15,7 @@ import (
 )
 
 type RoleBindingService interface {
-	ListRoleBindings([]string, map[string]string) ([]models.RoleBinding, error)
+	ListRoleBindings([]string, models.RoleBindingQueryParams) ([]models.RoleBinding, error)
 	GetRoleBinding(string) (models.RoleBinding, error)
 	CreateRoleBinding(models.RoleBinding) (models.RoleBinding, error)
 	UpdateRoleBinding(models.RoleBinding) (models.RoleBinding, error)
@@ -41,7 +41,7 @@ func NewRoleBindingService(db *gorm.DB, config config.Config, rs RoleService, gs
 
 func (r *RoleBindingServiceImpl) ListRoleBindings(
 	authList []string,
-	filters map[string]string,
+	params models.RoleBindingQueryParams,
 ) ([]models.RoleBinding, error) {
 	var roleBindings []models.RoleBinding
 	var res *gorm.DB
@@ -49,59 +49,94 @@ func (r *RoleBindingServiceImpl) ListRoleBindings(
 	if len(authList) == 0 {
 		return roleBindings, nil
 	} else if slices.Contains(authList, "*") {
-		res = r.db.Where(filters).Find(&roleBindings)
+		res = r.db.Find(&roleBindings)
 	} else {
-		res = r.db.Where(filters).Find(&roleBindings, authList)
+		res = r.db.Find(&roleBindings, authList)
 	}
 	if res.Error != nil {
-		return roleBindings, res.Error
+		return roleBindings, fmt.Errorf("error getting role bindings: %w", res.Error)
 	}
 
-	return roleBindings, nil
+	var filtered []models.RoleBinding
+	for _, roleBinding := range roleBindings {
+		if params.Name != "" && !strings.Contains(strings.ToLower(roleBinding.Name), strings.ToLower(params.Name)) {
+			continue
+		}
+		filtered = append(filtered, roleBinding)
+	}
+
+	total := len(filtered)
+
+	if params.Limit > 0 {
+		start := params.Offset
+		if start > total {
+			start = total
+		}
+		end := start + params.Limit
+		if end > total {
+			end = total
+		}
+		filtered = filtered[start:end]
+	}
+
+	return filtered, nil
+
 }
 
 func (r *RoleBindingServiceImpl) GetRoleBinding(id string) (models.RoleBinding, error) {
-	var role models.RoleBinding
-	res := r.db.Where("name = ?", id).Find(&role)
+	var roleBinding models.RoleBinding
+	res := r.db.Where("id = ?", id).Find(&roleBinding)
 	if res.Error != nil {
-		return models.RoleBinding{}, res.Error
+		return models.RoleBinding{}, fmt.Errorf("error getting role binding '%s': %w", id, res.Error)
 	}
 
-	if role.Name == "" {
-		return models.RoleBinding{}, fmt.Errorf("role_binding %s not found, please check id", id)
+	if res.RowsAffected == 0 {
+		return models.RoleBinding{}, fmt.Errorf("error getting role binding '%s': %w", id, ErrSvcObjNotFound)
 	}
 
-	return role, nil
+	return roleBinding, nil
 }
 
 func (r *RoleBindingServiceImpl) CreateRoleBinding(roleBinding models.RoleBinding) (models.RoleBinding, error) {
-	roleID, subjectID, err := r.CheckRoleBinding(roleBinding)
+	roleID, groupID, err := r.CheckRoleBinding(roleBinding)
 	if err != nil {
-		return roleBinding, err
+		return models.RoleBinding{}, fmt.Errorf("role binding '%s': %w, %s", roleBinding.Name, ErrSvcRoleBindingValidation, err.Error())
 	}
 	roleBinding.RoleID = roleID
-	roleBinding.SubjectID = subjectID
+	roleBinding.GroupID = groupID
 
 	res := r.db.Create(&roleBinding)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
+			return models.RoleBinding{}, fmt.Errorf("error creating role binding'%s': %w", roleBinding.Name, ErrSvcDBDuplicatedKey)
+		}
+		return models.RoleBinding{}, fmt.Errorf("error creating role binding '%s': %w", roleBinding.Name, res.Error)
+	}
 
 	return roleBinding, res.Error
 }
 
 func (r *RoleBindingServiceImpl) UpdateRoleBinding(roleBinding models.RoleBinding) (models.RoleBinding, error) {
-	roleID, subjectID, err := r.CheckRoleBinding(roleBinding)
+
+	_, err := r.GetRoleBinding(roleBinding.ID.String())
 	if err != nil {
-		return roleBinding, err
+		return roleBinding, fmt.Errorf("error getting role binding: %w", err)
+	}
+
+	roleID, groupID, err := r.CheckRoleBinding(roleBinding)
+	if err != nil {
+		return models.RoleBinding{}, fmt.Errorf("role binding '%s': %w, %s", roleBinding.Name, ErrSvcRoleBindingValidation, err.Error())
 	}
 	roleBinding.RoleID = roleID
-	roleBinding.SubjectID = subjectID
+	roleBinding.GroupID = groupID
 	res := r.db.Updates(roleBinding)
 	if res.Error != nil {
-		return models.RoleBinding{}, res.Error
+		return models.RoleBinding{}, fmt.Errorf("error updating role binding '%s': %w", roleBinding.ID.String(), res.Error)
 	}
 
 	newRoleBinding, err := r.GetRoleBinding(roleBinding.ID.String())
 	if err != nil {
-		return models.RoleBinding{}, err
+		return models.RoleBinding{}, fmt.Errorf("error getting role binding '%s': %w", roleBinding.ID.String(), err)
 	}
 	return newRoleBinding, nil
 }
@@ -109,32 +144,32 @@ func (r *RoleBindingServiceImpl) UpdateRoleBinding(roleBinding models.RoleBindin
 func (r *RoleBindingServiceImpl) DeleteRoleBinding(id string) error {
 	roleBinding, err := r.GetRoleBinding(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting role binding: %w", err)
 	}
 
 	if roleBinding.Builtin {
-		return errors.New("cannot delete builtin resource")
+		return fmt.Errorf("error deleting role binding '%s': %w", id, ErrSvcDeleteBuiltin)
 	}
 
-	return r.db.Unscoped().Delete(&roleBinding).Error
+	res := r.db.Unscoped().Delete(&roleBinding)
+	if res.Error != nil {
+		return fmt.Errorf("error deleting role binding '%s': %w", id, res.Error)
+	}
+	return nil
 }
 
 func (r *RoleBindingServiceImpl) CheckRoleBinding(roleBinding models.RoleBinding) (uuid.UUID, uuid.UUID, error) {
-	role, err := r.RoleService.GetRole(roleBinding.RoleName)
+
+	role, err := r.RoleService.GetRole(roleBinding.RoleID.String())
 	if err != nil {
-		log.Println(err)
-		return uuid.UUID{}, uuid.UUID{}, err
+		return uuid.UUID{}, uuid.UUID{}, fmt.Errorf("error getting role: %w", err)
 	}
 
 	var group models.Group
-	if roleBinding.SubjectKind == "groups" {
-		group, err = r.GroupService.GetGroup(roleBinding.SubjectName)
-		if err != nil {
-			log.Println(err)
-			return uuid.UUID{}, uuid.UUID{}, err
-		}
-	} else {
-		return uuid.UUID{}, uuid.UUID{}, fmt.Errorf("subject_kind not valid")
+
+	group, err = r.GroupService.GetGroupByID(roleBinding.GroupID.String())
+	if err != nil {
+		return uuid.UUID{}, uuid.UUID{}, fmt.Errorf("error getting group: %w", err)
 	}
 
 	return role.ID, group.ID, nil

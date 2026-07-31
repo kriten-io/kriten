@@ -3,10 +3,8 @@ definitions:
   helpers.HTTPError:
     properties:
       code:
-        example: 400
         type: integer
-      message:
-        example: status bad request
+      error:
         type: string
     type: object
   models.ApiToken:
@@ -118,16 +116,38 @@ definitions:
         type: string
       failed:
         type: integer
-      id:
+      failed_reason:
         type: string
       json_data:
         additionalProperties: true
         type: object
+      name:
+        type: string
       owner:
         type: string
       start_time:
         type: string
+      status:
+        type: string
       stdout:
+        type: string
+    type: object
+  models.JobMessage:
+    properties:
+      message:
+        type: string
+      name:
+        type: string
+    type: object
+  models.LoginToken:
+    properties:
+      token:
+        type: string
+    type: object
+  models.ResponseMessage:
+    properties:
+      message:
+        example: runner successfully deleted
         type: string
     type: object
   models.Role:
@@ -159,30 +179,18 @@ definitions:
     properties:
       created_at:
         type: string
+      group_id:
+        type: string
       id:
         type: string
       name:
         type: string
       role_id:
         type: string
-      role_name:
-        type: string
-      subject_id:
-        type: string
-      subject_kind:
-        type: string
-      subject_name:
-        type: string
-      subject_provider:
-        type: string
       updated_at:
         type: string
     required:
     - name
-    - role_name
-    - subject_kind
-    - subject_name
-    - subject_provider
     type: object
   models.Runner:
     properties:
@@ -233,18 +241,27 @@ definitions:
         type: array
       id:
         type: string
-      name:
-        type: string
       password:
         type: string
       provider:
         type: string
       updated_at:
         type: string
+      username:
+        type: string
     required:
-    - name
     - password
     - provider
+    - username
+    type: object
+  models.UserGroup:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      provider:
+        type: string
     type: object
   models.Webhook:
     properties:
@@ -263,11 +280,13 @@ definitions:
       updated_at:
         type: string
     type: object
+externalDocs:
+  url: https://kriten.io
 info:
   contact:
-    email: info@evolvere-tech.co.uk
-    name: Evolvere Support
-    url: https://www.evolvere-tech.co.uk/contact
+    email: info@kubecode.io
+    name: Kubecode Support
+    url: https://www.kubecode.io/contact
   description: API Gateway for your kubernetes services.
   license:
     name: Apache 2.0
@@ -290,14 +309,6 @@ paths:
             items:
               $ref: '#/definitions/models.ApiToken'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -329,10 +340,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -356,10 +363,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.ApiToken'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
@@ -465,14 +472,6 @@ paths:
             items:
               $ref: '#/definitions/models.ApiToken'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -498,10 +497,6 @@ paths:
             type: array
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -531,10 +526,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.AuditLog'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -562,14 +553,6 @@ paths:
             items:
               $ref: '#/definitions/models.CronJob'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -614,7 +597,67 @@ paths:
       summary: Create a new job
       tags:
       - cronjobs
-  /cronjobs/:
+  /cronjobs/{name}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by CronJob ID
+      parameters:
+      - description: CronJob name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResponseMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a CronJob
+      tags:
+      - cronjobs
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific job
+      parameters:
+      - description: CronJob  name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CronJob'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get job info
+      tags:
+      - cronjobs
     patch:
       consumes:
       - application/json
@@ -650,84 +693,15 @@ paths:
       summary: Update a cronjob
       tags:
       - cronjobs
-  /cronjobs/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete by CronJob ID
-      parameters:
-      - description: CronJob ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Delete a CronJob
-      tags:
-      - cronjobs
+  /cronjobs/{name}/schema:
     get:
       consumes:
       - application/json
-      description: Get information about a specific job
-      parameters:
-      - description: CronJob  id
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get job info
-      tags:
-      - cronjobs
-  /cronjobs/{id}/schema:
-    get:
-      consumes:
-      - application/json
-      description: Get schema for the job info and input parameters
+      description: Get task schema for the job info and input parameters
       parameters:
       - description: Task  name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -738,10 +712,6 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -752,14 +722,27 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Get schema
+      summary: Get task schema
       tags:
-      - cronjobs
+      - jobs
   /groups:
     get:
       consumes:
       - application/json
       description: List all groups available on the cluster
+      parameters:
+      - description: Maximum number of groups to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of groups to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by group name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -769,14 +752,6 @@ paths:
             items:
               $ref: '#/definitions/models.Group'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -808,10 +783,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -835,10 +806,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.Group'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
@@ -1057,7 +1028,28 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all jobs
+      description: List all jobs with optional filtering and pagination
+      parameters:
+      - description: Maximum number of jobs to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of jobs to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by job owner
+        in: query
+        name: owner
+        type: string
+      - description: 'Filter by status: running, completed, failed'
+        in: query
+        name: status
+        type: string
+      - description: Filter by task/job name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -1065,14 +1057,10 @@ paths:
           description: OK
           schema:
             items:
-              type: string
+              $ref: '#/definitions/models.Job'
             type: array
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -1084,15 +1072,15 @@ paths:
       summary: List all jobs
       tags:
       - jobs
-  /jobs/{id}:
+  /jobs/{name}:
     get:
       consumes:
       - application/json
       description: Get information about a specific job
       parameters:
-      - description: Job  id
+      - description: Job Name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -1126,7 +1114,7 @@ paths:
       parameters:
       - description: Task  name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       - description: Extra vars
@@ -1140,7 +1128,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Task'
+            $ref: '#/definitions/models.JobMessage'
         "400":
           description: Bad Request
           schema:
@@ -1158,15 +1146,15 @@ paths:
       summary: Create a new job
       tags:
       - jobs
-  /jobs/{id}/log:
+  /jobs/{name}/log:
     get:
       consumes:
       - application/json
       description: Get a job log as text
       parameters:
-      - description: Job  id
+      - description: Job  name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -1193,42 +1181,6 @@ paths:
       summary: Get a job log
       tags:
       - jobs
-  /jobs/{id}/schema:
-    get:
-      consumes:
-      - application/json
-      description: Get task schema for the job info and input parameters
-      parameters:
-      - description: Task  name
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get task schema
-      tags:
-      - jobs
   /login:
     post:
       consumes:
@@ -1247,17 +1199,13 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/models.LoginToken'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -1284,16 +1232,8 @@ paths:
           description: OK
           schema:
             type: string
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -1310,6 +1250,19 @@ paths:
       consumes:
       - application/json
       description: List all roles bindings available on the cluster
+      parameters:
+      - description: Maximum number of role bindings to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of role bindings to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by role binding name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -1358,10 +1311,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -1385,10 +1334,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.RoleBinding'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
@@ -1485,6 +1434,19 @@ paths:
       consumes:
       - application/json
       description: List all roles available on the cluster
+      parameters:
+      - description: Maximum number of roles to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of roles to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by role name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -1560,10 +1522,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.Role'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
@@ -1660,6 +1622,19 @@ paths:
       consumes:
       - application/json
       description: List all runners available on the cluster
+      parameters:
+      - description: Maximum number of runners to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of runners to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by runner name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -1671,10 +1646,6 @@ paths:
             type: array
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -1712,6 +1683,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/helpers.HTTPError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -1721,79 +1696,7 @@ paths:
       summary: Create a new runner
       tags:
       - runners
-  /runners/{id}/schema:
-    delete:
-      consumes:
-      - application/json
-      description: Remove secret associated with runner
-      parameters:
-      - description: Runner name
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Delete secret
-      tags:
-      - runners
-  /runners/{id}/secret:
-    get:
-      consumes:
-      - application/json
-      description: Update secret associated with runner
-      parameters:
-      - description: runner name
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Update secret
-      tags:
-      - runners
-  /runners/{rname}:
+  /runners/{name}:
     delete:
       consumes:
       - application/json
@@ -1801,22 +1704,22 @@ paths:
       parameters:
       - description: Runner name
         in: path
-        name: rname
+        name: name
         required: true
         type: string
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.Runner'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
+            $ref: '#/definitions/models.ResponseMessage'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -1835,7 +1738,7 @@ paths:
       parameters:
       - description: Runner name
         in: path
-        name: rname
+        name: name
         required: true
         type: string
       produces:
@@ -1845,10 +1748,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.Runner'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -1869,7 +1768,7 @@ paths:
       parameters:
       - description: Runner name
         in: path
-        name: rname
+        name: name
         required: true
         type: string
       - description: Update runner
@@ -1902,11 +1801,92 @@ paths:
       summary: Update a runner
       tags:
       - runners
+  /runners/{name}/schema:
+    delete:
+      consumes:
+      - application/json
+      description: Remove secret associated with runner
+      parameters:
+      - description: Runner name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete secret
+      tags:
+      - runners
+  /runners/{name}/secret:
+    get:
+      consumes:
+      - application/json
+      description: Update secret associated with runner
+      parameters:
+      - description: Runner name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update secret
+      tags:
+      - runners
   /tasks:
     get:
       consumes:
       - application/json
       description: List all tasks available on the cluster
+      parameters:
+      - description: Maximum number of tasks to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of tasks to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by task name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -1968,7 +1948,7 @@ paths:
       summary: Create a new task
       tags:
       - tasks
-  /tasks/{id}:
+  /tasks/{name}:
     delete:
       consumes:
       - application/json
@@ -1976,7 +1956,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -1985,7 +1965,7 @@ paths:
         "204":
           description: No Content
           schema:
-            $ref: '#/definitions/models.Task'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
@@ -2010,7 +1990,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -2044,7 +2024,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       - description: Update task
@@ -2077,7 +2057,7 @@ paths:
       summary: Update a task
       tags:
       - tasks
-  /tasks/{id}/schema:
+  /tasks/{name}/schema:
     delete:
       consumes:
       - application/json
@@ -2085,7 +2065,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -2120,7 +2100,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       produces:
@@ -2155,7 +2135,7 @@ paths:
       parameters:
       - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       - description: New schema
@@ -2190,47 +2170,24 @@ paths:
       summary: Update schema
       tags:
       - tasks
-  /tasks/{id}/secret:
-    get:
-      consumes:
-      - application/json
-      description: Get secret associated with runner (passwords are obfuscated)
-      parameters:
-      - description: Runner name
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get secret
-      tags:
-      - runners
   /users:
     get:
       consumes:
       - application/json
       description: List all users available on the cluster
+      parameters:
+      - description: Maximum number of users to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of users to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by user name
+        in: query
+        name: name
+        type: string
       produces:
       - application/json
       responses:
@@ -2240,14 +2197,6 @@ paths:
             items:
               $ref: '#/definitions/models.User'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -2279,10 +2228,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -2306,16 +2251,20 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.User'
+            $ref: '#/definitions/models.ResponseMessage'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/helpers.HTTPError'
         "500":
@@ -2330,7 +2279,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get information about a specific user
+      description: Get groups memberships for a user
       parameters:
       - description: User ID
         in: path
@@ -2343,7 +2292,9 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.User'
+            items:
+              $ref: '#/definitions/models.UserGroup'
+            type: array
         "400":
           description: Bad Request
           schema:
@@ -2358,7 +2309,7 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Get a user
+      summary: Get user groups
       tags:
       - users
     patch:
@@ -2415,10 +2366,6 @@ paths:
             items:
               $ref: '#/definitions/models.Webhook'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -2454,10 +2401,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
@@ -2481,14 +2424,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.Webhook'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
+            $ref: '#/definitions/models.ResponseMessage'
         "404":
           description: Not Found
           schema:
@@ -2501,7 +2440,7 @@ paths:
       - Bearer: []
       summary: Delete a webhook
       tags:
-      - webhook
+      - webhooks
     get:
       consumes:
       - application/json
@@ -2519,10 +2458,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.Webhook'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -2550,14 +2485,6 @@ paths:
             items:
               $ref: '#/definitions/models.Webhook'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
         "500":
           description: Internal Server Error
           schema:
