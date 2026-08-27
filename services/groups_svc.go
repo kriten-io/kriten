@@ -251,7 +251,7 @@ func (g *GroupServiceImpl) DeleteGroup(id string) error {
 		return fmt.Errorf("failed to get group: %w", err)
 	}
 
-	if group.Users != nil {
+	if len(group.Users) != 0 {
 		return fmt.Errorf("group '%s' in use, remove users first: %w", id, ErrSvcObjInUse)
 	}
 

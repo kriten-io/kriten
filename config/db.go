@@ -6,10 +6,12 @@ import (
 	"github.com/kriten-io/kriten/models"
 	"github.com/lib/pq"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"gorm.io/gorm"
 )
 
-func InitDB(db *gorm.DB) {
+func InitDB(db *gorm.DB, rp string) {
 	err := db.AutoMigrate(
 		&models.AuditLog{},
 		&models.Group{},
@@ -24,7 +26,13 @@ func InitDB(db *gorm.DB) {
 		log.Println(err)
 	}
 
-	var root = models.User{Username: "root", Provider: "local", Builtin: true, Groups: pq.StringArray{}}
+	bytes, err := bcrypt.GenerateFromPassword([]byte(rp), bcrypt.DefaultCost)
+	if err != nil {
+		return
+	}
+	root_passwd_hashed := string(bytes)
+
+	var root = models.User{Username: "root", Password: root_passwd_hashed, Provider: "local", Builtin: true, Groups: pq.StringArray{}}
 	db.FirstOrCreate(&root)
 
 	if err := db.Where(&root).
@@ -66,9 +74,9 @@ func InitDB(db *gorm.DB) {
 
 	// rules to preveng builtin deletion or update
 	db.Exec("CREATE RULE builtin_del_users AS ON DELETE TO users WHERE builtin DO INSTEAD nothing;")
-	db.Exec("CREATE RULE builtin_upd_users AS ON UPDATE TO users WHERE old.builtin DO INSTEAD nothing;")
+	// db.Exec("CREATE RULE builtin_upd_users AS ON UPDATE TO users WHERE old.builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_groups AS ON DELETE TO groups WHERE builtin DO INSTEAD nothing;")
-	db.Exec("CREATE RULE builtin_upd_groups AS ON UPDATE TO groups WHERE old.builtin DO INSTEAD nothing;")
+	// db.Exec("CREATE RULE builtin_upd_groups AS ON UPDATE TO groups WHERE old.builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_roles AS ON DELETE TO roles WHERE builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_upd_roles AS ON UPDATE TO roles WHERE old.builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_rolebindings AS ON DELETE TO role_bindings WHERE builtin DO INSTEAD nothing;")

@@ -62,20 +62,21 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 	var user models.User
 	var err error
 
-	if credentials.Username == "root" {
-		rootPassword, err := a.GetRootPassword()
-		if err != nil {
-			return "", -1, fmt.Errorf("failed to get root password: %w", err)
-		}
-		if credentials.Password != rootPassword {
-			err := errors.New("password is incorrect")
-			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
-		}
-		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
-		if err != nil {
-			return "", -1, fmt.Errorf("user not found: %w", err)
-		}
-	} else if credentials.Provider == "local" {
+	// if credentials.Username == "root" {
+	// 	rootPassword, err := a.GetRootPassword()
+	// 	if err != nil {
+	// 		return "", -1, fmt.Errorf("failed to get root password: %w", err)
+	// 	}
+	// 	if credentials.Password != rootPassword {
+	// 		err := errors.New("password is incorrect")
+	// 		return "", -1, fmt.Errorf("failed to authenticate: %w", err)
+	// 	}
+	// 	user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
+	// 	if err != nil {
+	// 		return "", -1, fmt.Errorf("user not found: %w", err)
+	// 	}
+	// } else if credentials.Provider == "local" {
+	if credentials.Provider == "local" {
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
 			return "", -1, fmt.Errorf("user not found: %w", err)
@@ -135,17 +136,17 @@ func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
 	return tokenStr, a.config.JWT.ExpirySeconds, nil
 }
 
-func (a *AuthServiceImpl) GetRootPassword() (string, error) {
-	secret, err := helpers.GetSecret(a.config.Kube, a.config.RootSecret)
+// func (a *AuthServiceImpl) GetRootPassword() (string, error) {
+// 	secret, err := helpers.GetSecret(a.config.Kube, a.config.RootSecret)
 
-	if err != nil {
-		return "", fmt.Errorf("failed to get secret for root user: %w", err)
-	}
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to get secret for root user: %w", err)
+// 	}
 
-	password := secret.Data["password"]
+// 	password := secret.Data["password"]
 
-	return string(password), nil
-}
+// 	return string(password), nil
+// }
 
 func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 	var apiToken models.ApiToken

@@ -122,7 +122,7 @@ func init() {
 			connected = true
 		}
 	}
-	config.InitDB(db)
+	config.InitDB(db, conf.RootPassword)
 
 	// if conf.ElasticSearch.CloudID != "" {
 	// 	es.Client, err = elasticsearch.NewClient(
