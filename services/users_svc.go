@@ -10,7 +10,6 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -22,9 +21,7 @@ type UserService interface {
 	UpdateUser(models.User) (models.User, error)
 	DeleteUser(string) error
 	GetByUsernameAndProvider(string, string) (models.User, error)
-	AddGroup(models.User, string) (models.User, error)
-	RemoveGroup(models.User, string) (models.User, error)
-	GetUserRoles(string, string) ([]models.Role, error)
+	GetUserRoles(string) ([]models.Role, error)
 }
 
 type UserServiceImpl struct {
@@ -61,6 +58,7 @@ func (u *UserServiceImpl) ListUsers(authList []string, params models.UserQueryPa
 		if params.Name != "" && !strings.Contains(strings.ToLower(user.Username), strings.ToLower(params.Name)) {
 			continue
 		}
+		user.Password = ""
 		filtered = append(filtered, user)
 	}
 
@@ -91,7 +89,7 @@ func (u *UserServiceImpl) GetUser(id string) (models.User, error) {
 	if res.RowsAffected == 0 {
 		return models.User{}, fmt.Errorf("user '%s': %w", id, ErrSvcObjNotFound)
 	}
-
+	user.Password = ""
 	return user, nil
 }
 
@@ -134,17 +132,24 @@ func (u *UserServiceImpl) UpdateUser(user models.User) (models.User, error) {
 	return newUser, nil
 }
 
-func (u *UserServiceImpl) DeleteUser(id string) error {
-	user, err := u.GetUser(id)
+func (u *UserServiceImpl) DeleteUser(userID string) error {
+	var userGroups []models.Group
+	user, err := u.GetUser(userID)
 	if err != nil {
-		return fmt.Errorf("failed to get user '%s': %w", id, err)
+		return fmt.Errorf("failed to get user '%s': %w", userID, err)
 	}
-	if len(user.Groups) != 0 {
+
+	res := u.db.Model(&models.Group{}).Where("? = ANY(users)", userID).Find(&userGroups)
+	if res.Error != nil {
+		return fmt.Errorf("failed to get user '%s' groups: %w", userID, res.Error)
+	}
+
+	if len(userGroups) != 0 {
 		return fmt.Errorf("cannot delete user: %w", ErrSvcUserGroupMembership)
 	}
 
 	var apiTokens []models.ApiToken
-	res := u.db.Where("owner = ?", id).Find(&apiTokens)
+	res = u.db.Where("owner = ?", userID).Find(&apiTokens)
 
 	if res.Error != nil {
 		return fmt.Errorf("failed to get API tokens for user: %w", res.Error)
@@ -155,7 +160,7 @@ func (u *UserServiceImpl) DeleteUser(id string) error {
 
 	res = u.db.Unscoped().Delete(&user)
 	if res.Error != nil {
-		return fmt.Errorf("failed to delete user '%s': %w", id, res.Error)
+		return fmt.Errorf("failed to delete user '%s': %w", userID, res.Error)
 	}
 	return nil
 }
@@ -174,61 +179,29 @@ func (u *UserServiceImpl) GetByUsernameAndProvider(username string, provider str
 	return user, nil
 }
 
-func (u *UserServiceImpl) AddGroup(user models.User, newGroup string) (models.User, error) {
-	if user.Groups == nil || len(user.Groups) == 0 {
-		user.Groups = pq.StringArray{newGroup}
-	} else if !slices.Contains(user.Groups, newGroup) {
-		user.Groups = append(user.Groups, newGroup)
-	}
-
-	res := u.db.Updates(user)
-	if res.Error != nil {
-		return models.User{}, fmt.Errorf("failed to update user '%s': %w", user.ID.String(), res.Error)
-	}
-
-	return user, nil
-}
-
-func (u *UserServiceImpl) RemoveGroup(user models.User, group string) (models.User, error) {
-	found := false
-
-	for key, value := range user.Groups {
-		if value == group {
-			user.Groups = append(user.Groups[:key], user.Groups[key+1:]...)
-			found = true
-			break
-		}
-	}
-
-	if found {
-		res := u.db.Updates(user)
-		if res.Error != nil {
-			return models.User{}, fmt.Errorf("failed to update user '%s': %w", user.ID.String(), res.Error)
-		}
-	}
-
-	return user, nil
-}
-
-func (u *UserServiceImpl) GetUserRoles(userID string, provider string) ([]models.Role, error) {
+func (u *UserServiceImpl) GetUserRoles(userID string) ([]models.Role, error) {
 	var roles []models.Role
-	var groups []string
+	var userGroups []models.Group
 
-	user, err := u.GetUser(userID)
+	_, err := u.GetUser(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user '%s': %w", userID, err)
 	}
-	groups = user.Groups
-	// SELECT *
-	// FROM roles
-	// INNER JOIN role_bindings
-	// ON roles.id = role_bindings.role_id
-	// WHERE role_bindings.subject_provider = provider AND role_bindings.subject_id = subjectID;
-	res := u.db.Model(&models.Role{}).Joins(
-		"left join role_bindings on roles.id = role_bindings.role_id").Where(
-		"role_bindings.group_id IN ?", groups).Find(&roles)
+	res := u.db.Model(&models.Group{}).Where("? = ANY(users)", userID).Find(&userGroups)
+
 	if res.Error != nil {
 		return []models.Role{}, fmt.Errorf("failed to get user '%s' rbac roles: %w", userID, res.Error)
+	}
+
+	for _, group := range userGroups {
+		for _, roleID := range group.Role_IDs {
+			var role models.Role
+			res = u.db.Model(&models.Role{}).Where("id = ?", roleID).Find(&role)
+			if res.Error != nil {
+				return []models.Role{}, fmt.Errorf("failed to get user '%s' rbac roles: %w", userID, res.Error)
+			}
+			roles = append(roles, role)
+		}
 	}
 	return roles, nil
 }

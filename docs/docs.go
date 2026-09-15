@@ -978,6 +978,197 @@ const docTemplate = `{
                 }
             }
         },
+        "/groups/{id}/roles": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "List all roles in given group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "groups"
+                ],
+                "summary": "List roles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/models.GroupRole"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Add roles to group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "groups"
+                ],
+                "summary": "Add roles",
+                "parameters": [
+                    {
+                        "description": "Roles to be added",
+                        "name": "group",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.GroupRole"
+                            }
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Group"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Remove roles from group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "groups"
+                ],
+                "summary": "Remove roles",
+                "parameters": [
+                    {
+                        "description": "Roles to be removed",
+                        "name": "group",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.GroupRole"
+                            }
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Group"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
         "/groups/{id}/users": {
             "get": {
                 "security": [
@@ -1297,67 +1488,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Add a job to the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "jobs"
-                ],
-                "summary": "Create a new job",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task  name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Extra vars",
-                        "name": "evars",
-                        "in": "body",
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.JobMessage"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
             }
         },
         "/jobs/{name}/log": {
@@ -1502,294 +1632,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/role_bindings": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "List all roles bindings available on the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rolebindings"
-                ],
-                "summary": "List all role bindings",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Maximum number of role bindings to return (default 100)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of role bindings to skip (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by role binding name",
-                        "name": "name",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.RoleBinding"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Add a role binding to the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rolebindings"
-                ],
-                "summary": "Create a new role binding",
-                "parameters": [
-                    {
-                        "description": "New role binding",
-                        "name": "roleBinding",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/role_bindings/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get information about a specific role binding",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rolebindings"
-                ],
-                "summary": "Get a role binding",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "RoleBinding ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Delete by role binding ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rolebindings"
-                ],
-                "summary": "Delete a role binding",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "RoleBinding ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ResponseMessage"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update a role binding in the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rolebindings"
-                ],
-                "summary": "Update a role binding",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "RoleBinding ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Update role",
-                        "name": "role",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.RoleBinding"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -2074,6 +1916,64 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.Role"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/roles/{id}/groups": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get groups linked to role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Get role groups",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Role ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.RoleGroup"
+                            }
                         }
                     },
                     "400": {
@@ -2785,6 +2685,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/tasks/{name}/run": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Run Task",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Run Task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task  name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Extra vars",
+                        "name": "evars",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.JobMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks/{name}/schema": {
             "get": {
                 "security": [
@@ -3072,7 +3035,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Get groups memberships for a user",
+                "description": "Get information about a specific user",
                 "consumes": [
                     "application/json"
                 ],
@@ -3082,7 +3045,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Get user groups",
+                "summary": "Get a user",
                 "parameters": [
                     {
                         "type": "string",
@@ -3096,10 +3059,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.UserGroup"
-                            }
+                            "$ref": "#/definitions/models.User"
                         }
                     },
                     "400": {
@@ -3221,6 +3181,64 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/groups": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get groups memberships for a user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get user groups",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.UserGroup"
+                            }
                         }
                     },
                     "400": {
@@ -3657,7 +3675,8 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "name",
-                "provider"
+                "provider",
+                "role_ids"
             ],
             "properties": {
                 "created_at": {
@@ -3672,10 +3691,37 @@ const docTemplate = `{
                 "provider": {
                     "type": "string"
                 },
+                "role_ids": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "updated_at": {
                     "type": "string"
                 },
-                "users": {
+                "user_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.GroupRole": {
+            "type": "object",
+            "properties": {
+                "access": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "resource_names": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -3689,10 +3735,10 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "name": {
+                "provider": {
                     "type": "string"
                 },
-                "provider": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -3767,7 +3813,7 @@ const docTemplate = `{
                 "access",
                 "name",
                 "resource",
-                "resource_ids"
+                "resource_names"
             ],
             "properties": {
                 "access": {
@@ -3785,7 +3831,7 @@ const docTemplate = `{
                 "resource": {
                     "type": "string"
                 },
-                "resource_ids": {
+                "resource_names": {
                     "type": "array",
                     "uniqueItems": true,
                     "items": {
@@ -3797,28 +3843,16 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RoleBinding": {
+        "models.RoleGroup": {
             "type": "object",
-            "required": [
-                "name"
-            ],
             "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "group_id": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "role_id": {
-                    "type": "string"
-                },
-                "updated_at": {
+                "provider": {
                     "type": "string"
                 }
             }
@@ -3890,12 +3924,6 @@ const docTemplate = `{
             "properties": {
                 "created_at": {
                     "type": "string"
-                },
-                "groups": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "id": {
                     "type": "string"

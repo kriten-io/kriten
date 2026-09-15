@@ -20,21 +20,20 @@ type RoleService interface {
 	CreateRole(models.Role) (models.Role, error)
 	UpdateRole(models.Role) (models.Role, error)
 	DeleteRole(string) error
+	ListRoleGroups(string) ([]models.RoleGroup, error)
 }
 
 type RoleServiceImpl struct {
-	db                 *gorm.DB
-	config             config.Config
-	RoleBindingService *RoleBindingService
-	UserService        *UserService
+	db           *gorm.DB
+	config       config.Config
+	GroupService GroupService
 }
 
-func NewRoleService(database *gorm.DB, config config.Config, rbs *RoleBindingService, us *UserService) RoleService {
+func NewRoleService(database *gorm.DB, config config.Config, gs GroupService) RoleService {
 	return &RoleServiceImpl{
-		db:                 database,
-		config:             config,
-		RoleBindingService: rbs,
-		UserService:        us,
+		db:           database,
+		config:       config,
+		GroupService: gs,
 	}
 }
 
@@ -133,6 +132,7 @@ func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
 }
 
 func (r *RoleServiceImpl) DeleteRole(id string) error {
+	var groups []models.Group
 	role, err := r.GetRole(id)
 	if err != nil {
 		return fmt.Errorf("error getting role: %w", err)
@@ -142,20 +142,12 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 		return fmt.Errorf("error deleting role '%s': %w", id, ErrSvcDeleteBuiltin)
 	}
 
-	rbs := *r.RoleBindingService
-	var params models.RoleBindingQueryParams
-	roleBindings, err := rbs.ListRoleBindings([]string{"*"}, params)
-	if err != nil {
-		return fmt.Errorf("error getting role bindings: %w", err)
+	res := r.db.Model(&models.Group{}).Where("? = ANY(roles)", id).Find(&groups)
+	if len(groups) != 0 {
+		return fmt.Errorf("role %s is used, please remove role from groups first: %w", role.ID, ErrSvcObjInUse)
 	}
 
-	for _, r := range roleBindings {
-		if r.RoleID.String() == id {
-			return fmt.Errorf("role is bound via role_binding: %s , please delete that first: %w", r.ID, ErrSvcObjInUse)
-		}
-	}
-
-	res := r.db.Unscoped().Delete(&role)
+	res = r.db.Unscoped().Delete(&role)
 	if res.Error != nil {
 		return fmt.Errorf("error deleting role '%s': %w", id, res.Error)
 	}
@@ -167,7 +159,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 // might need a refactor in the future.
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 
-	for _, c := range role.Resource_IDs {
+	for _, c := range role.Resource_Names {
 		configMap, err := helpers.GetConfigMap(r.config.Kube, c)
 		if err != nil {
 			return err
@@ -189,4 +181,39 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 	}
 
 	return nil
+}
+
+func (r *RoleServiceImpl) AddGroupsToRole(id string, groups []models.RoleGroup) (models.Role, error) {
+	role, err := r.GetRole(id)
+	if err != nil {
+		return models.Role{}, fmt.Errorf("failed to get role: %w", err)
+	}
+
+	return role, nil
+}
+
+func (r *RoleServiceImpl) ListRoleGroups(id string) ([]models.RoleGroup, error) {
+	var roleGroups []models.RoleGroup
+	var groups []models.Group
+
+	_, err := r.GetRole(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get role: %w", err)
+	}
+
+	res := r.db.Model(&models.Group{}).Where("? = ANY(roles)", id).Find(&groups)
+	if res.Error != nil {
+		return []models.RoleGroup{}, fmt.Errorf("failed to get role '%s' groups: %w", id, res.Error)
+	}
+
+	for _, group := range groups {
+		roleGroups = append(roleGroups, models.RoleGroup{
+			Group:    group.Name,
+			Provider: group.Provider,
+			ID:       group.ID,
+		})
+
+	}
+
+	return roleGroups, nil
 }

@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/kriten-io/kriten/config"
@@ -36,6 +37,7 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 	r.GET("", middlewares.SetAuthorizationListMiddleware(tc.AuthService, "tasks"), tc.ListTasks)
 	r.GET("/:name", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetTask)
 	r.GET("/:name/schema", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "read"), tc.GetSchema)
+	r.POST("/:name/run", middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "execute"), tc.RunTask)
 
 	r.Use(middlewares.AuthorizationMiddleware(tc.AuthService, "tasks", "write"))
 	{
@@ -51,7 +53,6 @@ func (tc *TaskController) SetTaskRoutes(rg *gin.RouterGroup, config config.Confi
 			r.DELETE("/:name/schema", tc.DeleteSchema)
 		}
 	}
-
 }
 
 // ListTask godoc
@@ -323,4 +324,53 @@ func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 	audit.Status = "success"
 	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "schema deleted successfully"})
+}
+
+// RunTask godoc
+//
+//	@Summary		Run Task
+//	@Description	Run Task
+//	@Tags			tasks
+//	@Accept			json
+//	@Produce		json
+//	@Param			name	path		string	true	"Task  name"
+//	@Param			evars	body		object	false	"Extra vars"
+//	@Success		200		{object}	models.JobMessage
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/tasks/{name}/run [post]
+//	@Security		Bearer
+func (tc *TaskController) RunTask(ctx *gin.Context) {
+	taskName := ctx.Param("name")
+	audit := tc.AuditService.InitialiseAuditLog(ctx, "run", tc.AuditCategory, taskName)
+	username := ctx.MustGet("username").(string)
+
+	extraVars, err := io.ReadAll(ctx.Request.Body)
+
+	if err != nil {
+		tc.AuditService.CreateAudit(audit)
+		ctx.Error(errors.New("invalid payload"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	job, err := tc.TaskService.RunTask(username, taskName, string(extraVars))
+
+	if err != nil {
+		tc.AuditService.CreateAudit(audit)
+		ctx.Error(err)
+		return
+	}
+
+	audit.Status = "success"
+
+	if (job.Name != "") && (job.Completed != 0) {
+		tc.AuditService.CreateAudit(audit)
+		ctx.JSON(http.StatusOK, job)
+		return
+	}
+
+	tc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, models.JobMessage{Message: "job created successfully", JobName: job.Name})
 }

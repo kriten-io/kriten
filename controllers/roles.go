@@ -17,7 +17,7 @@ import (
 
 // TODO: This is currently hardcoded but needs to be fetched from somewhere else
 var resources = []string{"runners", "tasks", "jobs"}
-var access = []string{"read", "write"}
+var access = []string{"read", "write", "execute"}
 
 type RoleController struct {
 	RoleService   services.RoleService
@@ -41,6 +41,7 @@ func (rc *RoleController) SetRoleRoutes(rg *gin.RouterGroup, config config.Confi
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(rc.AuthService, "roles"), rc.ListRoles)
 	r.GET("/:id", middlewares.AuthorizationMiddleware(rc.AuthService, "roles", "read"), rc.GetRole)
+	r.GET("/:id/groups", middlewares.AuthorizationMiddleware(rc.AuthService, "roles", "read"), rc.ListRoleGroups)
 
 	r.Use(middlewares.AuthorizationMiddleware(rc.AuthService, "roles", "write"))
 	{
@@ -162,13 +163,27 @@ func (rc *RoleController) CreateRole(ctx *gin.Context) {
 
 	if !slices.Contains(resources, role.Resource) {
 		rc.AuditService.CreateAudit(audit)
-		ctx.Error(fmt.Errorf("invalid role binding resource, supported options: %s", resources))
+		ctx.Error(fmt.Errorf("invalid role resource, supported options: %s", resources))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 	if !slices.Contains(access, role.Access) {
 		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("access type not allowed, supported options: %s", access))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if role.Access == "execute" && role.Resource != "tasks" {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("access type 'execute' applied to resource 'tasks' only"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if role.Access != "read" && role.Resource == "jobs" {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("resource 'jobs' valid access type is 'read'"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
@@ -221,6 +236,33 @@ func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 		return
 	}
 
+	if !slices.Contains(resources, role.Resource) {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("invalid role resource, supported options: %s", resources))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+	if !slices.Contains(access, role.Access) {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("access type not allowed, supported options: %s", access))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if role.Access == "run" && role.Resource != "tasks" {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("access type 'execute' applied to 'tasks' only"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if role.Access != "read" && role.Resource == "jobs" {
+		rc.AuditService.CreateAudit(audit)
+		ctx.Error(fmt.Errorf("resource 'jobs' valid access type is 'read'"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
 	role, err = rc.RoleService.UpdateRole(role)
 	if err != nil {
 		rc.AuditService.CreateAudit(audit)
@@ -264,4 +306,44 @@ func (rc *RoleController) DeleteRole(ctx *gin.Context) {
 	audit.Status = "success"
 	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "role deleted successfully"})
+}
+
+// GetRoleGroups godoc
+//
+//	@Summary		Get role groups
+//	@Description	Get groups linked to role
+//	@Tags			roles
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Role ID"
+//	@Success		200	{array}		models.RoleGroup
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/roles/{id}/groups [get]
+//	@Security		Bearer
+func (rc *RoleController) ListRoleGroups(ctx *gin.Context) {
+	roleID := ctx.Param("id")
+
+	_, err := uuid.FromString(roleID)
+	if err != nil {
+		ctx.Error(errors.New("invalid role id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	groups, err := rc.RoleService.ListRoleGroups(roleID)
+	if err != nil {
+		ctx.Error(err)
+	}
+
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
+	if len(groups) == 0 {
+		var arr [0]int
+		ctx.JSON(http.StatusOK, arr)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, groups)
+
 }

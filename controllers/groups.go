@@ -35,26 +35,33 @@ func NewGroupController(groupService services.GroupService,
 	}
 }
 
-func (uc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Config) {
+func (gc *GroupController) SetGroupRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
+		middlewares.AuthenticationMiddleware(gc.AuthService, config.JWT))
 
-	r.GET("", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "groups"), uc.ListGroups)
-	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "groups", "read"), uc.GetGroup)
+	r.GET("", middlewares.SetAuthorizationListMiddleware(gc.AuthService, "groups"), gc.ListGroups)
+	r.GET("/:id", middlewares.AuthorizationMiddleware(gc.AuthService, "groups", "read"), gc.GetGroup)
+	r.GET("/:id/users", middlewares.AuthorizationMiddleware(gc.AuthService, "groups", "read"), gc.ListGroupUsers)
+	r.GET("/:id/roles", middlewares.AuthorizationMiddleware(gc.AuthService, "groups", "read"), gc.ListGroupRoles)
 
-	r.Use(middlewares.AuthorizationMiddleware(uc.AuthService, "groups", "write"))
+	r.Use(middlewares.AuthorizationMiddleware(gc.AuthService, "groups", "write"))
 	{
-		r.POST("", uc.CreateGroup)
-		r.PUT("", uc.CreateGroup)
-		r.PATCH("/:id", uc.UpdateGroup)
-		r.PUT("/:id", uc.UpdateGroup)
-		r.DELETE("/:id", uc.DeleteGroup)
+		r.POST("", gc.CreateGroup)
+		r.PUT("", gc.CreateGroup)
+		r.PATCH("/:id", gc.UpdateGroup)
+		r.PUT("/:id", gc.UpdateGroup)
+		r.DELETE("/:id", gc.DeleteGroup)
 
 		{
-			r.GET("/:id/users", uc.ListGroupUsers)
-			r.POST("/:id/users", uc.AddUserToGroup)
-			r.PUT("/:id/users", uc.AddUserToGroup)
-			r.DELETE("/:id/users", uc.RemoveUserFromGroup)
+			r.POST("/:id/users", gc.AddUsersToGroup)
+			r.PUT("/:id/users", gc.AddUsersToGroup)
+			r.DELETE("/:id/users", gc.RemoveUsersFromGroup)
+		}
+
+		{
+			r.POST("/:id/roles", gc.AddRolesToGroup)
+			r.PUT("/:id/roles", gc.AddRolesToGroup)
+			r.DELETE("/:id/roles", gc.RemoveRolesFromGroup)
 		}
 	}
 }
@@ -343,7 +350,7 @@ func (gc *GroupController) ListGroupUsers(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [post]
 //	@Security		Bearer
-func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
+func (gc *GroupController) AddUsersToGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
 	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_users", gc.AuditCategory, groupID)
 	var users []models.GroupUser
@@ -395,7 +402,7 @@ func (gc *GroupController) AddUserToGroup(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/groups/{id}/users [delete]
 //	@Security		Bearer
-func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
+func (gc *GroupController) RemoveUsersFromGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
 	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_users", gc.AuditCategory, groupID)
 	var users []models.GroupUser
@@ -430,4 +437,155 @@ func (gc *GroupController) RemoveUserFromGroup(ctx *gin.Context) {
 	audit.Status = "success"
 	gc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, group)
+}
+
+// AddRolesToGroup godoc
+//
+//	@Summary		Add roles
+//	@Description	Add roles to group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			group	body		[]models.GroupRole	true	"Roles to be added"
+//	@Param			id		path		string				true	"Group ID"
+//	@Success		200		{object}	models.Group
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/groups/{id}/roles [post]
+//	@Security		Bearer
+func (gc *GroupController) AddRolesToGroup(ctx *gin.Context) {
+	groupID := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "add_roles", gc.AuditCategory, groupID)
+	var roles []models.GroupRole
+	var err error
+
+	_, err = uuid.FromString(groupID)
+	if err != nil {
+		ctx.Error(errors.New("invalid group id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	_, err = gc.GroupService.GetGroupByID(groupID)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	if err := ctx.ShouldBindJSON(&roles); err != nil {
+		gc.AuditService.CreateAudit(audit)
+		ctx.Error(errors.New("invalid payload format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	group, err := gc.GroupService.AddRolesToGroup(groupID, roles)
+	if err != nil {
+		gc.AuditService.CreateAudit(audit)
+		ctx.Error(err)
+		return
+	}
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, group)
+}
+
+// RemoveRolesFromGroup godoc
+//
+//	@Summary		Remove roles
+//	@Description	Remove roles from group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			group	body		[]models.GroupRole	true	"Roles to be removed"
+//	@Param			id		path		string				true	"Group ID"
+//	@Success		200		{object}	models.Group
+//	@Failure		400		{object}	helpers.HTTPError
+//	@Failure		404		{object}	helpers.HTTPError
+//	@Failure		500		{object}	helpers.HTTPError
+//	@Router			/groups/{id}/roles [delete]
+//	@Security		Bearer
+func (gc *GroupController) RemoveRolesFromGroup(ctx *gin.Context) {
+	groupID := ctx.Param("id")
+	audit := gc.AuditService.InitialiseAuditLog(ctx, "remove_roles", gc.AuditCategory, groupID)
+	var roles []models.GroupRole
+	var err error
+
+	_, err = uuid.FromString(groupID)
+	if err != nil {
+		ctx.Error(errors.New("invalid group id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	_, err = gc.GroupService.GetGroupByID(groupID)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	if err := ctx.ShouldBindJSON(&roles); err != nil {
+		gc.AuditService.CreateAudit(audit)
+		ctx.Error(errors.New("invalid payload format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	group, err := gc.GroupService.RemoveRolesFromGroup(groupID, roles)
+	if err != nil {
+		gc.AuditService.CreateAudit(audit)
+		ctx.Error(err)
+		return
+	}
+	audit.Status = "success"
+	gc.AuditService.CreateAudit(audit)
+	ctx.JSON(http.StatusOK, group)
+}
+
+// ListRolesInGroup godoc
+//
+//	@Summary		List roles
+//	@Description	List all roles in given group
+//	@Tags			groups
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Group ID"
+//	@Success		200	{array}		[]models.GroupRole
+//	@Failure		400	{object}	helpers.HTTPError
+//	@Failure		404	{object}	helpers.HTTPError
+//	@Failure		500	{object}	helpers.HTTPError
+//	@Router			/groups/{id}/roles [get]
+//	@Security		Bearer
+func (gc *GroupController) ListGroupRoles(ctx *gin.Context) {
+	groupID := ctx.Param("id")
+	var err error
+
+	_, err = uuid.FromString(groupID)
+	if err != nil {
+		ctx.Error(errors.New("invalid group id format"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	_, err = gc.GroupService.GetGroupByID(groupID)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	roles, err := gc.GroupService.ListGroupRoles(groupID)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
+	if len(roles) == 0 {
+		var arr [0]int
+		ctx.JSON(http.StatusOK, arr)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, roles)
 }

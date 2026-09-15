@@ -2,22 +2,28 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
 	"github.com/go-openapi/loads"
+	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 	"golang.org/x/exp/slices"
 
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type TaskService interface {
@@ -29,10 +35,12 @@ type TaskService interface {
 	GetSchema(string) (map[string]interface{}, error)
 	DeleteSchema(string) error
 	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
+	RunTask(string, string, string) (models.Job, error)
 }
 
 type TaskServiceImpl struct {
 	WebhookService WebhookService
+	JobService     JobService
 	config         config.Config
 }
 
@@ -361,4 +369,98 @@ func ValidateSchema(schema []byte) error {
 	}
 
 	return nil
+}
+
+func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars string) (models.Job, error) {
+	ctx := context.Background()
+	var jobStatus models.Job
+
+	task, err := helpers.GetConfigMap(t.config.Kube, taskName)
+	if err != nil {
+		return jobStatus, err
+	}
+	runnerName := task.Data["runner"]
+
+	if task.Data["schema"] != "" {
+		schema := new(spec.Schema)
+		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
+
+		input := map[string]interface{}{}
+
+		// JSON data to validate
+		_ = json.Unmarshal([]byte(extraVars), &input)
+
+		// strfmt.Default is the registry of recognized formats
+		err = validate.AgainstSchema(schema, input, strfmt.Default)
+		if err != nil {
+			log.Printf("JSON does not validate against schema: %v", err)
+			return models.Job{}, err
+		}
+	}
+
+	runner, err := helpers.GetConfigMap(t.config.Kube, runnerName)
+	if err != nil {
+		return jobStatus, err
+	}
+	runnerImage := runner.Data["image"]
+	gitURL := runner.Data["gitURL"]
+	gitBranch := runner.Data["branch"]
+
+	if gitBranch == "" {
+		gitBranch = "main"
+	}
+	tokenObjName := runnerName + "-token"
+	token, err := helpers.GetSecret(t.config.Kube, tokenObjName)
+	if err != nil {
+		if !k8sErrors.IsNotFound(err) {
+			return jobStatus, err
+		}
+	} else {
+		gitToken := string(token.Data["token"])
+		if gitToken != "" {
+			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
+		}
+	}
+
+	jobName, err := helpers.CreateJob(
+		t.config.Kube,
+		taskName,
+		runnerName,
+		runnerImage,
+		username,
+		extraVars,
+		task.Data["command"],
+		gitURL,
+		gitBranch,
+	)
+
+	jobStatus.Name = jobName
+
+	if err != nil {
+		return jobStatus, err
+	}
+
+	if task.Data["synchronous"] == "true" {
+		err = wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 20*time.Second, false,
+			func(conditionCtx context.Context) (done bool, err error) {
+
+				job, err := helpers.GetJob(t.config.Kube, jobName)
+
+				if err != nil {
+					fmt.Println(err)
+					return false, err
+				}
+
+				if job.Status.Succeeded != 0 || job.Status.Failed != 0 {
+					return true, nil
+				}
+
+				return false, nil
+			})
+
+		ret, err := t.JobService.GetJob(username, jobName)
+		return ret, err
+	}
+
+	return jobStatus, nil
 }

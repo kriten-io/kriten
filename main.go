@@ -41,7 +41,6 @@ var (
 	gs         services.GroupService
 	als        services.AuditService
 	rls        services.RoleService
-	rbs        services.RoleBindingService
 	ac         controllers.AuthController
 	alc        controllers.AuditController
 	rc         controllers.RunnerController
@@ -53,7 +52,6 @@ var (
 	wc         controllers.WebhookController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
-	rbc        controllers.RoleBindingController
 	conf       config.Config
 	kubeConfig *rest.Config
 	// es         helpers.ElasticSearch
@@ -124,21 +122,6 @@ func init() {
 	}
 	config.InitDB(db, conf.RootPassword)
 
-	// if conf.ElasticSearch.CloudID != "" {
-	// 	es.Client, err = elasticsearch.NewClient(
-	// 		elasticsearch.Config{
-	// 			CloudID: conf.ElasticSearch.CloudID,
-	// 			APIKey:  conf.ElasticSearch.APIKey,
-	// 		})
-	// 	es.Index = conf.ElasticSearch.Index
-	//
-	// 	if err != nil {
-	// 		log.Println("Error while connecting to ElasticSearch")
-	// 		log.Println(err)
-	// 	} else {
-	// 		es.Enabled = true
-	// 	}
-	// }
 }
 
 func init() {
@@ -147,9 +130,8 @@ func init() {
 	ats = services.NewApiTokenService(db, conf)
 	ws = services.NewWebhookService(db, conf)
 	gs = services.NewGroupService(db, us, conf)
-	rls = services.NewRoleService(db, conf, &rbs, &us)
-	rbs = services.NewRoleBindingService(db, conf, rls, gs)
-	as = services.NewAuthService(conf, us, rls, rbs, db)
+	rls = services.NewRoleService(db, conf, gs)
+	as = services.NewAuthService(conf, us, rls, db)
 	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(conf)
@@ -159,11 +141,10 @@ func init() {
 
 	// Controllers
 	uc = controllers.NewUserController(us, gs, as, als, authProviders)
-	wc = controllers.NewWebhookController(ws, js, as, als, authProviders)
+	wc = controllers.NewWebhookController(ws, ts, as, als, authProviders)
 	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
 	gc = controllers.NewGroupController(gs, as, als, authProviders)
 	rlc = controllers.NewRoleController(rls, as, als)
-	rbc = controllers.NewRoleBindingController(rbs, as, als, authProviders)
 	ac = controllers.NewAuthController(as, als, authProviders)
 	alc = controllers.NewAuditController(als, as)
 
@@ -222,7 +203,6 @@ func main() {
 		tokens := basepath.Group("/api_tokens")
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
-		roleBindings := basepath.Group("/role_bindings")
 		webhooks := basepath.Group("/webhooks")
 		{
 			alc.SetAuditRoutes(audit, conf)
@@ -235,7 +215,6 @@ func main() {
 			wc.SetWebhookRoutes(webhooks, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
-			rbc.SetRoleBindingRoutes(roleBindings, conf)
 		}
 	}
 
