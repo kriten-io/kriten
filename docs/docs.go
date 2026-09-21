@@ -409,6 +409,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/change-password": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Change own local user password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authenticate"
+                ],
+                "summary": "Change Local Password",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "JWT Token can be provided as Cookie",
+                        "name": "token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Current and New passwords",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ChangePassword"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ResponseMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
         "/cronjobs": {
             "get": {
                 "security": [
@@ -1614,7 +1671,7 @@ const docTemplate = `{
                 "tags": [
                     "authenticate"
                 ],
-                "summary": "Auth admin",
+                "summary": "Refresh token",
                 "parameters": [
                     {
                         "type": "string",
@@ -1627,7 +1684,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.LoginToken"
                         }
                     },
                     "401": {
@@ -3624,6 +3681,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChangePassword": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "new_password"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "new_password": {
                     "type": "string"
                 }
             }

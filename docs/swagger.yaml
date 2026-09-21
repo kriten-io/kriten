@@ -50,6 +50,16 @@ definitions:
       username:
         type: string
     type: object
+  models.ChangePassword:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
   models.Credentials:
     properties:
       password:
@@ -546,6 +556,42 @@ paths:
       summary: Get audit log
       tags:
       - audit
+  /change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change own local user password
+      parameters:
+      - description: JWT Token can be provided as Cookie
+        in: header
+        name: token
+        type: string
+      - description: Current and New passwords
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePassword'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResponseMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Change Local Password
+      tags:
+      - authenticate
   /cronjobs:
     get:
       consumes:
@@ -1322,7 +1368,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/models.LoginToken'
         "401":
           description: Unauthorized
           schema:
@@ -1333,7 +1379,7 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Auth admin
+      summary: Refresh token
       tags:
       - authenticate
   /roles:

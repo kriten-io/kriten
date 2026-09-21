@@ -25,6 +25,7 @@ import (
 type AuthService interface {
 	Login(*models.Credentials) (string, int, error)
 	Refresh(string) (string, int, error)
+	ChangePassword(string, *models.ChangePassword) error
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
 	ValidateAPIToken(string) (models.User, error)
@@ -117,6 +118,36 @@ func (a *AuthServiceImpl) Refresh(tokenStr string) (string, int, error) {
 	}
 
 	return tokenStr, a.config.JWT.ExpirySeconds, nil
+}
+
+func (a *AuthServiceImpl) ChangePassword(tokenStr string, creds *models.ChangePassword) error {
+	claims, err := helpers.ValidateJWTToken(tokenStr, a.config.JWT)
+	if err != nil {
+		return fmt.Errorf("failed to validate token: %w", err)
+	}
+
+	if claims.Provider != "local" {
+		return errors.New("password change is only allowed to local users.")
+	}
+
+	user, err := a.UserService.GetByUsernameAndProvider(claims.Username, claims.Provider)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(creds.CurrentPassword))
+	if err != nil {
+		return errors.New("incorrect current password")
+	}
+
+	user.Password = creds.NewPassword
+
+	_, err = a.UserService.UpdateUser(user)
+	if err != nil {
+		return fmt.Errorf("failed to update user %s password in DB: %w", user.Username, err)
+	}
+
+	return nil
+
 }
 
 func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
