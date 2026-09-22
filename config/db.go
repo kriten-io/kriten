@@ -65,7 +65,6 @@ func InitDB(db *gorm.DB, rp string) {
 		{Name: "WriteAllJobs", Resource: "jobs", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
 		{Name: "WriteAllUsers", Resource: "users", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
 		{Name: "WriteAllRoles", Resource: "roles", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllRoleBindings", Resource: "role_bindings", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
 	}
 	db.Create(&builtinRoles)
 
@@ -76,6 +75,4 @@ func InitDB(db *gorm.DB, rp string) {
 	// db.Exec("CREATE RULE builtin_upd_groups AS ON UPDATE TO groups WHERE old.builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_del_roles AS ON DELETE TO roles WHERE builtin DO INSTEAD nothing;")
 	db.Exec("CREATE RULE builtin_upd_roles AS ON UPDATE TO roles WHERE old.builtin DO INSTEAD nothing;")
-	db.Exec("CREATE RULE builtin_del_rolebindings AS ON DELETE TO role_bindings WHERE builtin DO INSTEAD nothing;")
-	db.Exec("CREATE RULE builtin_upd_rolebindings AS ON UPDATE TO role_bindings WHERE old.builtin DO INSTEAD nothing;")
 }

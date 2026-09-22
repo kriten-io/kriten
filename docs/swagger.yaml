@@ -312,7 +312,7 @@ info:
   title: Swagger Kriten
   version: v0.3
 paths:
-  /api_tokens:
+  /api-tokens:
     get:
       consumes:
       - application/json
@@ -334,7 +334,7 @@ paths:
       - Bearer: []
       summary: List own apiTokens
       tags:
-      - api_tokens
+      - api-tokens
     post:
       consumes:
       - application/json
@@ -365,8 +365,8 @@ paths:
       - Bearer: []
       summary: Create a new apiToken
       tags:
-      - api_tokens
-  /api_tokens/{id}:
+      - api-tokens
+  /api-tokens/{id}:
     delete:
       consumes:
       - application/json
@@ -400,7 +400,7 @@ paths:
       - Bearer: []
       summary: Delete a apiToken
       tags:
-      - api_tokens
+      - api-tokens
     get:
       consumes:
       - application/json
@@ -434,7 +434,7 @@ paths:
       - Bearer: []
       summary: Get a apiToken
       tags:
-      - api_tokens
+      - api-tokens
     patch:
       consumes:
       - application/json
@@ -474,8 +474,8 @@ paths:
       - Bearer: []
       summary: Update a apiToken
       tags:
-      - api_tokens
-  /api_tokens/all:
+      - api-tokens
+  /api-tokens/all:
     get:
       consumes:
       - application/json
@@ -497,8 +497,8 @@ paths:
       - Bearer: []
       summary: List all apiTokens
       tags:
-      - api_tokens
-  /audit_logs:
+      - api-tokens
+  /audit-logs:
     get:
       consumes:
       - application/json
@@ -525,7 +525,7 @@ paths:
       summary: List audit
       tags:
       - audit
-  /audit_logs/{id}:
+  /audit-logs/{id}:
     get:
       consumes:
       - application/json

@@ -17,7 +17,7 @@
     },
     "basePath": "/api/v1",
     "paths": {
-        "/api_tokens": {
+        "/api-tokens": {
             "get": {
                 "security": [
                     {
@@ -32,7 +32,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "List own apiTokens",
                 "responses": {
@@ -67,7 +67,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Create a new apiToken",
                 "parameters": [
@@ -103,7 +103,7 @@
                 }
             }
         },
-        "/api_tokens/all": {
+        "/api-tokens/all": {
             "get": {
                 "security": [
                     {
@@ -118,7 +118,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "List all apiTokens",
                 "responses": {
@@ -140,7 +140,7 @@
                 }
             }
         },
-        "/api_tokens/{id}": {
+        "/api-tokens/{id}": {
             "get": {
                 "security": [
                     {
@@ -155,7 +155,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Get a apiToken",
                 "parameters": [
@@ -208,7 +208,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Delete a apiToken",
                 "parameters": [
@@ -261,7 +261,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Update a apiToken",
                 "parameters": [
@@ -310,7 +310,7 @@
                 }
             }
         },
-        "/audit_logs": {
+        "/audit-logs": {
             "get": {
                 "security": [
                     {
@@ -353,7 +353,7 @@
                 }
             }
         },
-        "/audit_logs/{id}": {
+        "/audit-logs/{id}": {
             "get": {
                 "security": [
                     {

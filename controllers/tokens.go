@@ -58,12 +58,12 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 //
 //	@Summary		List own apiTokens
 //	@Description	List own apiTokens available on the cluster
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.ApiToken
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/api_tokens [get]
+//	@Router			/api-tokens [get]
 //	@Security		Bearer
 func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 	userid := ctx.MustGet("userID").(uuid.UUID)
@@ -89,12 +89,12 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 //
 //	@Summary		List all apiTokens
 //	@Description	List all apiTokens available on the cluster
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.ApiToken
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/api_tokens/all [get]
+//	@Router			/api-tokens/all [get]
 //	@Security		Bearer
 func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
@@ -120,7 +120,7 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 //
 //	@Summary		Get a apiToken
 //	@Description	Get information about a specific apiToken
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"ApiToken ID"
@@ -128,7 +128,7 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/api_tokens/{id} [get]
+//	@Router			/api-tokens/{id} [get]
 //	@Security		Bearer
 func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
@@ -153,14 +153,14 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 //
 //	@Summary		Create a new apiToken
 //	@Description	Add a apiToken to the cluster
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Param			apiToken	body		models.ApiToken	true	"New apiToken"
 //	@Success		200		{object}	models.ApiToken
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/api_tokens [post]
+//	@Router			/api-tokens [post]
 //	@Security		Bearer
 func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 	userid := ctx.MustGet("userID").(uuid.UUID)
@@ -194,7 +194,7 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 //
 //	@Summary		Update a apiToken
 //	@Description	Update a apiToken in the cluster
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Param			id		path		string		true	"ApiToken ID"
@@ -203,7 +203,7 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 //	@Failure		400		{object}	helpers.HTTPError
 //	@Failure		404		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
-//	@Router			/api_tokens/{id} [patch]
+//	@Router			/api-tokens/{id} [patch]
 //	@Security		Bearer
 func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
@@ -241,7 +241,7 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //
 //	@Summary		Delete a apiToken
 //	@Description	Delete by apiToken ID
-//	@Tags			api_tokens
+//	@Tags			api-tokens
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		string	true	"ApiToken ID"
@@ -249,7 +249,7 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/api_tokens/{id} [delete]
+//	@Router			/api-tokens/{id} [delete]
 //	@Security		Bearer
 func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")

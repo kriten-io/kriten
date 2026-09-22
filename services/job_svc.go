@@ -184,10 +184,8 @@ func (j *JobServiceImpl) GetJob(username string, jobName string) (models.Job, er
 	} else {
 		jobStatus.Status = ""
 	}
+
 	labelSelector := fmt.Sprintf("job-name=%s", jobName)
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
@@ -274,9 +272,6 @@ func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error)
 	}
 
 	labelSelector := "job-name=" + jobName
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {

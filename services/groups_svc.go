@@ -312,11 +312,14 @@ func RemoveDuplicates(strSlice []string) []string {
 }
 
 func RemoveFromSlice(current []string, input []string) []string {
-	for key, value := range current {
-		if slices.Contains(input, value) {
-			current = append(current[:key], current[key+1:]...)
-		}
-	}
+	// for key, value := range current {
+	// 	if slices.Contains(input, value) {
+	// 		current = append(current[:key], current[key+1:]...)
+	// 	}
+	// }
+	current = slices.DeleteFunc(current, func(s string) bool {
+		return slices.Contains(input, s)
+	})
 	return current
 }
 

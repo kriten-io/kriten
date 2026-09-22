@@ -46,7 +46,7 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Success		200	{array}		models.AuditLog
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/audit_logs [get]
+//	@Router			/audit-logs [get]
 //	@Security		Bearer
 func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	var err error
@@ -91,7 +91,7 @@ func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 //	@Success		200	{object}	models.AuditLog
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/audit_logs/{id} [get]
+//	@Router			/audit-logs/{id} [get]
 //	@Security		Bearer
 func (ac *AuditController) GetAuditLog(ctx *gin.Context) {
 	auditLogID := ctx.Param("id")

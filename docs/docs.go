@@ -24,7 +24,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api_tokens": {
+        "/api-tokens": {
             "get": {
                 "security": [
                     {
@@ -39,7 +39,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "List own apiTokens",
                 "responses": {
@@ -74,7 +74,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Create a new apiToken",
                 "parameters": [
@@ -110,7 +110,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api_tokens/all": {
+        "/api-tokens/all": {
             "get": {
                 "security": [
                     {
@@ -125,7 +125,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "List all apiTokens",
                 "responses": {
@@ -147,7 +147,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api_tokens/{id}": {
+        "/api-tokens/{id}": {
             "get": {
                 "security": [
                     {
@@ -162,7 +162,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Get a apiToken",
                 "parameters": [
@@ -215,7 +215,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Delete a apiToken",
                 "parameters": [
@@ -268,7 +268,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "api-tokens"
                 ],
                 "summary": "Update a apiToken",
                 "parameters": [
@@ -317,7 +317,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/audit_logs": {
+        "/audit-logs": {
             "get": {
                 "security": [
                     {
@@ -360,7 +360,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/audit_logs/{id}": {
+        "/audit-logs/{id}": {
             "get": {
                 "security": [
                     {
