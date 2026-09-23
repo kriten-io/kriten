@@ -116,32 +116,31 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)
 		provider := ctx.MustGet("provider").(string)
-		requestUrl := ctx.Request.URL.String()
 
-		resourceID := ""
+		resourceName := ""
 		if ctx.Param("name") != "" {
-			resourceID = ctx.Param("name")
+			resourceName = ctx.Param("name")
 		} else {
-			resourceID = ctx.Param("id")
+			resourceName = ctx.Param("id")
 		}
 
-		if resourceID == "" {
-			resourceID = "*"
+		if resourceName == "" {
+			resourceName = "*"
 		}
 
 		// trimming last 6 chars for jobs read because
 		// jobs include random caracters at the end
-		if resource == "jobs" && access == "read" && !strings.HasSuffix(requestUrl, "/schema") {
-			resourceID = resourceID[:len(resourceID)-6]
+		if resource == "jobs" && access == "read" {
+			resourceName = resourceName[:len(resourceName)-6]
 		}
 
 		isAuthorised, err := as.IsAutorised(
 			&models.Authorization{
-				UserID:     userID,
-				Provider:   provider,
-				Resource:   resource,
-				ResourceID: resourceID,
-				Access:     access,
+				UserID:       userID,
+				Provider:     provider,
+				Resource:     resource,
+				ResourceName: resourceName,
+				Access:       access,
 			},
 		)
 		if err != nil {

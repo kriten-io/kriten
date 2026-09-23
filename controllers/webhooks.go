@@ -17,7 +17,7 @@ import (
 
 type WebhookController struct {
 	WebhookService services.WebhookService
-	JobService     services.JobService
+	TaskService    services.TaskService
 	AuthService    services.AuthService
 	providers      []string
 	AuditService   services.AuditService
@@ -26,14 +26,14 @@ type WebhookController struct {
 
 func NewWebhookController(
 	ws services.WebhookService,
-	js services.JobService,
+	ts services.TaskService,
 	as services.AuthService,
 	als services.AuditService,
 	p []string,
 ) WebhookController {
 	return WebhookController{
 		WebhookService: ws,
-		JobService:     js,
+		TaskService:    ts,
 		AuthService:    as,
 		providers:      p,
 		AuditService:   als,
@@ -263,7 +263,7 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 		return
 	}
 
-	job, err := wc.JobService.CreateJob(username, taskID, string(extraVars))
+	job, err := wc.TaskService.RunTask(username, taskID, string(extraVars))
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)

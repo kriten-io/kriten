@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -31,6 +32,7 @@ func NewAuthController(as services.AuthService, als services.AuditService, p []s
 func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
 	rg.POST("/login", ac.Login)
 	rg.GET("/refresh", ac.Refresh)
+	rg.POST("/change-password", ac.ChangePassword)
 }
 
 // Login godoc
@@ -86,13 +88,13 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 // Refresh godoc
 //
-//	@Summary		Auth admin
+//	@Summary		Refresh token
 //	@Description	Refresh time limit of a JWT token
 //	@Tags			authenticate
 //	@Accept			json
 //	@Produce		json
 //	@Param			token	header		string	false	"JWT Token can be provided as Cookie"
-//	@Success		200		{object}	string
+//	@Success		200		{object}	models.LoginToken
 //	@Failure		401		{object}	helpers.HTTPError
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/refresh [get]
@@ -122,5 +124,54 @@ func (ac *AuthController) Refresh(ctx *gin.Context) {
 
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie("token", newToken, expiry, "", "", false, true)
-	ctx.JSON(http.StatusOK, gin.H{"token": newToken})
+	ctx.JSON(http.StatusOK, models.LoginToken{Token: newToken})
+}
+
+// Refresh godoc
+//
+//		@Summary		Change Local Password
+//		@Description	Change own local user password
+//		@Tags			authenticate
+//		@Accept			json
+//		@Produce		json
+//		@Param			token	header		string	false	"JWT Token can be provided as Cookie"
+//	    @Param          json    body        models.ChangePassword true "Current and New passwords"
+//		@Success		200		{object}	models.ResponseMessage
+//		@Failure		401		{object}	helpers.HTTPError
+//		@Failure		500		{object}	helpers.HTTPError
+//		@Router			/change-password [post]
+//		@Security		Bearer
+func (ac *AuthController) ChangePassword(ctx *gin.Context) {
+	var token string
+	var passwords models.ChangePassword
+	bearer := strings.Split(ctx.GetHeader("Authorization"), "Bearer ")
+	if len(bearer) > 1 {
+		token = bearer[1]
+	}
+	cookie, err := ctx.Request.Cookie("token")
+	if token == "" {
+		if err != nil {
+			ctx.Error(errors.New("please authenticate"))
+			ctx.Status(http.StatusUnauthorized)
+			return
+		}
+		token = cookie.Value
+	}
+
+	if err := ctx.ShouldBindJSON(&passwords); err != nil {
+		ctx.Error(errors.New("invalid login payload"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	err = ac.AuthService.ChangePassword(token, &passwords)
+	if err != nil {
+		ctx.Error(fmt.Errorf("failed changing password: %w", err))
+		ctx.Status(http.StatusUnauthorized)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, models.ResponseMessage{
+		Message: "password changed successfully",
+	})
 }

@@ -11,6 +11,11 @@ type Credentials struct {
 	Provider string `json:"provider" binding:"required"`
 }
 
+type ChangePassword struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required"`
+}
+
 type Claims struct {
 	Username string    `json:"username"`
 	UserID   uuid.UUID `json:"user_id"`
@@ -19,12 +24,12 @@ type Claims struct {
 }
 
 type Authorization struct {
-	Username   string    `json:"username"`
-	UserID     uuid.UUID `json:"user_id"`
-	Provider   string    `json:"provider"`
-	Resource   string    `json:"resource"`
-	ResourceID string    `json:"resource_id"`
-	Access     string    `json:"access"`
+	Username     string    `json:"username"`
+	UserID       uuid.UUID `json:"user_id"`
+	Provider     string    `json:"provider"`
+	Resource     string    `json:"resource"`
+	ResourceName string    `json:"resource_id"`
+	Access       string    `json:"access"`
 }
 
 type LoginToken struct {

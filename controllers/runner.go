@@ -82,14 +82,14 @@ func (rc *RunnerController) ListRunners(ctx *gin.Context) {
 		params.Limit = 100
 	}
 
-	runnersList, err := rc.RunnerService.ListRunners(authList, params)
+	runnersList, total, err := rc.RunnerService.ListRunners(authList, params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(runnersList)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(runnersList) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)

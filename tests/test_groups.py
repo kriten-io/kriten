@@ -13,14 +13,20 @@ class TestGroups:
 
     @pytest.mark.smoke
     def test_create_group(self, api_client, api_base, random_name):
-        group = {"name": random_name, "provider": "local"}
+        group = {"name": random_name, 
+                 "provider": "local",
+                 "user_ids": [],
+                 "role_ids": []}
         resp = api_client.post(f"{api_base}/groups", json=group)
         assert resp.status_code == 200
         data = resp.json()
         assert data["name"] == random_name
 
     def test_get_group(self, api_client, api_base, random_name):
-        group = {"name": random_name, "provider": "local"}
+        group = {"name": random_name, 
+                         "provider": "local",
+                         "user_ids": [],
+                         "role_ids": []}
         create_resp = api_client.post(f"{api_base}/groups", json=group)
         assert create_resp.status_code == 200
         group_id = create_resp.json()["id"]
@@ -31,17 +37,26 @@ class TestGroups:
         assert data["name"] == random_name
 
     def test_update_group(self, api_client, api_base, random_name):
-        group = {"name": random_name, "provider": "local"}
+        group = {"name": random_name, 
+                         "provider": "local",
+                         "user_ids": [],
+                         "role_ids": []}
         create_resp = api_client.post(f"{api_base}/groups", json=group)
         assert create_resp.status_code == 200
         group_id = create_resp.json()["id"]
 
-        update_data = {"name": random_name, "provider": "local"}
+        update_data = {"name": random_name, 
+                         "provider": "local",
+                         "user_ids": [],
+                         "role_ids": []}
         resp = api_client.patch(f"{api_base}/groups/{group_id}", json=update_data)
         assert resp.status_code == 200
 
     def test_delete_group(self, api_client, api_base, random_name):
-        group = {"name": random_name, "provider": "local"}
+        group = {"name": random_name, 
+                         "provider": "local",
+                         "user_ids": [],
+                         "role_ids": []}
         create_resp = api_client.post(f"{api_base}/groups", json=group)
         assert create_resp.status_code == 200
         group_id = create_resp.json()["id"]
@@ -69,7 +84,10 @@ class TestGroups:
 
     @pytest.mark.smoke
     def test_group_users(self, api_client, api_base, random_name):
-        group = {"name": random_name, "provider": "local"}
+        group = {"name": random_name, 
+                         "provider": "local",
+                         "user_ids": [],
+                         "role_ids": []}
         create_resp = api_client.post(f"{api_base}/groups", json=group)
         assert create_resp.status_code == 200
         group_id = create_resp.json()["id"]

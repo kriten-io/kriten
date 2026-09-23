@@ -28,7 +28,7 @@ class TestRoles:
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_ids": [f"{runner["name"]}"],
+            "resource_names": [f"{runner["name"]}"],
         }
         resp = api_client.post(f"{api_base}/roles", json=role)
         assert resp.status_code == 200
@@ -43,7 +43,7 @@ class TestRoles:
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_ids": [f"{runner["name"]}"],
+            "resource_names": [f"{runner["name"]}"],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -62,7 +62,7 @@ class TestRoles:
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_ids": [f"{runner["name"]}"],
+            "resource_names": [f"{runner["name"]}"],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -72,7 +72,7 @@ class TestRoles:
             "name": random_name,
             "access": "write",
             "resource": "runners",
-            "resource_ids": [f"{runner["name"]}"],
+            "resource_names": [f"{runner["name"]}"],
         }
         resp = api_client.patch(f"{api_base}/roles/{role_id}", json=update_data)
         assert resp.status_code == 200
@@ -87,7 +87,7 @@ class TestRoles:
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_ids": [f"{runner["name"]}"],
+            "resource_names": [f"{runner["name"]}"],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -108,7 +108,7 @@ class TestRoles:
     def test_update_role_not_found(self, api_client, api_base):
         resp = api_client.patch(
             f"{api_base}/roles/00000000-0000-0000-0000-000000000000",
-            json={"name": "test", "access": "read", "resource": "runners", "resource_ids": ["*"]},
+            json={"name": "test", "access": "read", "resource": "runners", "resource_names": ["*"]},
         )
         assert resp.status_code in (404, 500)
 

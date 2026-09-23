@@ -41,23 +41,23 @@ type DBConfig struct {
 }
 
 type Config struct {
-	Environment string
-	RootSecret  string
-	APISecret   string
-	LDAP        LDAPConfig
-	Kube        KubeConfig
-	JWT         JWTConfig
-	DB          DBConfig
-	DebugMode   bool
+	Environment  string
+	RootPassword string
+	APISecret    string
+	LDAP         LDAPConfig
+	Kube         KubeConfig
+	JWT          JWTConfig
+	DB           DBConfig
+	DebugMode    bool
 }
 
 // NewConfig returns a new Config struct.
 func NewConfig(gitBranch string) Config {
 	return Config{
-		Environment: getEnv("ENV", "development"),
-		RootSecret:  getEnv("ROOT_SECRET", "kriten-root"),
-		APISecret:   getEnv("API_SECRET_KEY", "api-secret"),
-		DebugMode:   getEnvAsBool("DEBUG_MODE", true),
+		Environment:  getEnv("ENV", "development"),
+		RootPassword: getEnv("ROOT_PASSWORD", "root"),
+		APISecret:    getEnv("API_SECRET_KEY", "api-secret"),
+		DebugMode:    getEnvAsBool("DEBUG_MODE", true),
 		LDAP: LDAPConfig{
 			BindUser: getEnv("LDAP_BIND_USER", ""),
 			BindPass: getEnv("LDAP_BIND_PASS", ""),

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
@@ -43,41 +43,38 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Tags			audit
 //	@Accept			json
 //	@Produce		json
+//	@Param			limit	query	    int		false	"Maximum number of logs to return (default 100)"
+//	@Param			offset	query		int		false	"Number of logs to skip (default 0)"
 //	@Success		200	{array}		models.AuditLog
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/audit_logs [get]
+//	@Router			/audit-logs [get]
 //	@Security		Bearer
 func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	var err error
-	// Default limit
-	maxDefault := 100
-	param := ctx.Request.URL.Query().Get("max")
-
-	if param != "" {
-		maxDefault, err = strconv.Atoi(param)
-		if err != nil {
-			ctx.Error(errors.New("invalid query parameters"))
-			ctx.Status(http.StatusBadRequest)
-		}
+	var params models.AuditQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
+		return
 	}
 
-	groups, err := ac.AuditService.ListAuditLogs(maxDefault)
+	auditLogs, total, err := ac.AuditService.ListAuditLogs(params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
-	if len(groups) == 0 {
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
+	if len(auditLogs) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.JSON(http.StatusOK, groups)
+	ctx.JSON(http.StatusOK, auditLogs)
 }
 
 // GetAuditLog godoc
@@ -91,7 +88,7 @@ func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 //	@Success		200	{object}	models.AuditLog
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/audit_logs/{id} [get]
+//	@Router			/audit-logs/{id} [get]
 //	@Security		Bearer
 func (ac *AuditController) GetAuditLog(ctx *gin.Context) {
 	auditLogID := ctx.Param("id")

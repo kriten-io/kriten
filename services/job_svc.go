@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
@@ -13,18 +12,13 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/go-openapi/spec"
-	"github.com/go-openapi/strfmt"
-	"github.com/go-openapi/validate"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type JobService interface {
 	ListJobs([]string, models.JobQueryParams) ([]models.Job, int, error)
 	GetJob(string, string) (models.Job, error)
 	GetLog(string, string) (string, error)
-	CreateJob(string, string, string) (models.Job, error)
 	GetSchema(string) (map[string]interface{}, error)
 }
 
@@ -190,10 +184,8 @@ func (j *JobServiceImpl) GetJob(username string, jobName string) (models.Job, er
 	} else {
 		jobStatus.Status = ""
 	}
+
 	labelSelector := fmt.Sprintf("job-name=%s", jobName)
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
@@ -280,9 +272,6 @@ func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error)
 	}
 
 	labelSelector := "job-name=" + jobName
-	if username != "" {
-		labelSelector = labelSelector + ",owner=" + username
-	}
 
 	pods, err := helpers.ListPods(j.config.Kube, labelSelector)
 	if err != nil {
@@ -317,98 +306,6 @@ func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error)
 	}
 
 	return logs, nil
-}
-
-func (j *JobServiceImpl) CreateJob(username string, taskName string, extraVars string) (models.Job, error) {
-	var jobStatus models.Job
-
-	task, err := helpers.GetConfigMap(j.config.Kube, taskName)
-	if err != nil {
-		return jobStatus, err
-	}
-	runnerName := task.Data["runner"]
-
-	if task.Data["schema"] != "" {
-		schema := new(spec.Schema)
-		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
-
-		input := map[string]interface{}{}
-
-		// JSON data to validate
-		_ = json.Unmarshal([]byte(extraVars), &input)
-
-		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, input, strfmt.Default)
-		if err != nil {
-			log.Printf("JSON does not validate against schema: %v", err)
-			return models.Job{}, err
-		}
-	}
-
-	runner, err := helpers.GetConfigMap(j.config.Kube, runnerName)
-	if err != nil {
-		return jobStatus, err
-	}
-	runnerImage := runner.Data["image"]
-	gitURL := runner.Data["gitURL"]
-	gitBranch := runner.Data["branch"]
-
-	if gitBranch == "" {
-		gitBranch = "main"
-	}
-	tokenObjName := runnerName + "-token"
-	token, err := helpers.GetSecret(j.config.Kube, tokenObjName)
-	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
-			return jobStatus, err
-		}
-	} else {
-		gitToken := string(token.Data["token"])
-		if gitToken != "" {
-			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
-		}
-	}
-
-	jobName, err := helpers.CreateJob(
-		j.config.Kube,
-		taskName,
-		runnerName,
-		runnerImage,
-		username,
-		extraVars,
-		task.Data["command"],
-		gitURL,
-		gitBranch,
-	)
-
-	jobStatus.Name = jobName
-
-	if err != nil {
-		return jobStatus, err
-	}
-
-	if task.Data["synchronous"] == "true" {
-		_ = wait.Poll(100*time.Millisecond, 20*time.Second, func() (done bool, err error) {
-
-			job, err := helpers.GetJob(j.config.Kube, jobName)
-
-			if err != nil {
-				fmt.Println(err)
-				return false, err
-			}
-
-			if job.Status.Succeeded != 0 || job.Status.Failed != 0 {
-				return true, nil
-			}
-
-			return false, nil
-		})
-
-		ret, err := j.GetJob(username, jobName)
-		return ret, err
-	}
-
-	return jobStatus, nil
 }
 
 func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) {

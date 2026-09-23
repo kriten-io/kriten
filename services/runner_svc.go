@@ -15,7 +15,7 @@ import (
 )
 
 type RunnerService interface {
-	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, error)
+	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, int, error)
 	GetRunner(string) (*models.Runner, error)
 	CreateRunner(models.Runner) (*models.Runner, error)
 	UpdateRunner(models.Runner) (*models.Runner, error)
@@ -37,16 +37,16 @@ func NewRunnerService(config config.Config) RunnerService {
 	}
 }
 
-func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQueryParams) ([]models.Runner, error) {
+func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQueryParams) ([]models.Runner, int, error) {
 	var runnersList []models.Runner
 
 	if len(authList) == 0 {
-		return runnersList, nil
+		return runnersList, 0, nil
 	}
 
 	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch list of runners: %w", err)
+		return nil, 0, fmt.Errorf("failed to fetch list of runners: %w", err)
 	}
 
 	for _, configMap := range configMaps.Items {
@@ -91,7 +91,7 @@ func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQ
 		filtered = filtered[start:end]
 	}
 
-	return filtered, nil
+	return filtered, total, nil
 }
 
 func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {

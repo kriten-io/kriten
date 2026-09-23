@@ -81,14 +81,14 @@ func (uc *UserController) ListUsers(ctx *gin.Context) {
 		params.Limit = 100
 	}
 
-	users, err := uc.UserService.ListUsers(authList, params)
+	users, total, err := uc.UserService.ListUsers(authList, params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(users)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(users) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)
@@ -128,7 +128,7 @@ func (uc *UserController) GetUser(ctx *gin.Context) {
 		ctx.Error(err)
 		return
 	}
-	user.Groups = []string{}
+
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -144,7 +144,7 @@ func (uc *UserController) GetUser(ctx *gin.Context) {
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/users/{id} [get]
+//	@Router			/users/{id}/groups [get]
 //	@Security		Bearer
 func (uc *UserController) GetUserGroups(ctx *gin.Context) {
 	userID := ctx.Param("id")

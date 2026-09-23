@@ -50,6 +50,16 @@ definitions:
       username:
         type: string
     type: object
+  models.ChangePassword:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
   models.Credentials:
     properties:
       password:
@@ -89,23 +99,42 @@ definitions:
         type: string
       provider:
         type: string
+      role_ids:
+        items:
+          type: string
+        type: array
+        uniqueItems: true
       updated_at:
         type: string
-      users:
+      user_ids:
         items:
           type: string
         type: array
     required:
     - name
     - provider
+    - role_ids
+    type: object
+  models.GroupRole:
+    properties:
+      access:
+        type: string
+      name:
+        type: string
+      resource:
+        type: string
+      resource_names:
+        items:
+          type: string
+        type: array
     type: object
   models.GroupUser:
     properties:
       id:
         type: string
-      name:
-        type: string
       provider:
+        type: string
+      username:
         type: string
     type: object
   models.Job:
@@ -162,7 +191,7 @@ definitions:
         type: string
       resource:
         type: string
-      resource_ids:
+      resource_names:
         items:
           type: string
         type: array
@@ -173,24 +202,16 @@ definitions:
     - access
     - name
     - resource
-    - resource_ids
+    - resource_names
     type: object
-  models.RoleBinding:
+  models.RoleGroup:
     properties:
-      created_at:
-        type: string
-      group_id:
-        type: string
       id:
         type: string
       name:
         type: string
-      role_id:
+      provider:
         type: string
-      updated_at:
-        type: string
-    required:
-    - name
     type: object
   models.Runner:
     properties:
@@ -235,10 +256,6 @@ definitions:
     properties:
       created_at:
         type: string
-      groups:
-        items:
-          type: string
-        type: array
       id:
         type: string
       password:
@@ -295,7 +312,7 @@ info:
   title: Swagger Kriten
   version: v0.3
 paths:
-  /api_tokens:
+  /api-tokens:
     get:
       consumes:
       - application/json
@@ -317,7 +334,7 @@ paths:
       - Bearer: []
       summary: List own apiTokens
       tags:
-      - api_tokens
+      - api-tokens
     post:
       consumes:
       - application/json
@@ -348,8 +365,8 @@ paths:
       - Bearer: []
       summary: Create a new apiToken
       tags:
-      - api_tokens
-  /api_tokens/{id}:
+      - api-tokens
+  /api-tokens/{id}:
     delete:
       consumes:
       - application/json
@@ -383,7 +400,7 @@ paths:
       - Bearer: []
       summary: Delete a apiToken
       tags:
-      - api_tokens
+      - api-tokens
     get:
       consumes:
       - application/json
@@ -417,7 +434,7 @@ paths:
       - Bearer: []
       summary: Get a apiToken
       tags:
-      - api_tokens
+      - api-tokens
     patch:
       consumes:
       - application/json
@@ -457,8 +474,8 @@ paths:
       - Bearer: []
       summary: Update a apiToken
       tags:
-      - api_tokens
-  /api_tokens/all:
+      - api-tokens
+  /api-tokens/all:
     get:
       consumes:
       - application/json
@@ -480,12 +497,21 @@ paths:
       - Bearer: []
       summary: List all apiTokens
       tags:
-      - api_tokens
-  /audit_logs:
+      - api-tokens
+  /audit-logs:
     get:
       consumes:
       - application/json
       description: List all audit logs
+      parameters:
+      - description: Maximum number of logs to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of logs to skip (default 0)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
@@ -508,7 +534,7 @@ paths:
       summary: List audit
       tags:
       - audit
-  /audit_logs/{id}:
+  /audit-logs/{id}:
     get:
       consumes:
       - application/json
@@ -539,6 +565,42 @@ paths:
       summary: Get audit log
       tags:
       - audit
+  /change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change own local user password
+      parameters:
+      - description: JWT Token can be provided as Cookie
+        in: header
+        name: token
+        type: string
+      - description: Current and New passwords
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePassword'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResponseMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Change Local Password
+      tags:
+      - authenticate
   /cronjobs:
     get:
       consumes:
@@ -901,6 +963,129 @@ paths:
       summary: Update a group
       tags:
       - groups
+  /groups/{id}/roles:
+    delete:
+      consumes:
+      - application/json
+      description: Remove roles from group
+      parameters:
+      - description: Roles to be removed
+        in: body
+        name: group
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/models.GroupRole'
+          type: array
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Group'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Remove roles
+      tags:
+      - groups
+    get:
+      consumes:
+      - application/json
+      description: List all roles in given group
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              items:
+                $ref: '#/definitions/models.GroupRole'
+              type: array
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List roles
+      tags:
+      - groups
+    post:
+      consumes:
+      - application/json
+      description: Add roles to group
+      parameters:
+      - description: Roles to be added
+        in: body
+        name: group
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/models.GroupRole'
+          type: array
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Group'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Add roles
+      tags:
+      - groups
   /groups/{id}/users:
     delete:
       consumes:
@@ -1107,45 +1292,6 @@ paths:
       summary: Get job info
       tags:
       - jobs
-    post:
-      consumes:
-      - application/json
-      description: Add a job to the cluster
-      parameters:
-      - description: Task  name
-        in: path
-        name: name
-        required: true
-        type: string
-      - description: Extra vars
-        in: body
-        name: evars
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.JobMessage'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Create a new job
-      tags:
-      - jobs
   /jobs/{name}/log:
     get:
       consumes:
@@ -1231,7 +1377,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/models.LoginToken'
         "401":
           description: Unauthorized
           schema:
@@ -1242,193 +1388,9 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Auth admin
+      summary: Refresh token
       tags:
       - authenticate
-  /role_bindings:
-    get:
-      consumes:
-      - application/json
-      description: List all roles bindings available on the cluster
-      parameters:
-      - description: Maximum number of role bindings to return (default 100)
-        in: query
-        name: limit
-        type: integer
-      - description: Number of role bindings to skip (default 0)
-        in: query
-        name: offset
-        type: integer
-      - description: Filter by role binding name
-        in: query
-        name: name
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.RoleBinding'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: List all role bindings
-      tags:
-      - rolebindings
-    post:
-      consumes:
-      - application/json
-      description: Add a role binding to the cluster
-      parameters:
-      - description: New role binding
-        in: body
-        name: roleBinding
-        required: true
-        schema:
-          $ref: '#/definitions/models.RoleBinding'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.RoleBinding'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Create a new role binding
-      tags:
-      - rolebindings
-  /role_bindings/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete by role binding ID
-      parameters:
-      - description: RoleBinding ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ResponseMessage'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Delete a role binding
-      tags:
-      - rolebindings
-    get:
-      consumes:
-      - application/json
-      description: Get information about a specific role binding
-      parameters:
-      - description: RoleBinding ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.RoleBinding'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get a role binding
-      tags:
-      - rolebindings
-    patch:
-      consumes:
-      - application/json
-      description: Update a role binding in the cluster
-      parameters:
-      - description: RoleBinding ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Update role
-        in: body
-        name: role
-        required: true
-        schema:
-          $ref: '#/definitions/models.RoleBinding'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.RoleBinding'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Update a role binding
-      tags:
-      - rolebindings
   /roles:
     get:
       consumes:
@@ -1615,6 +1577,43 @@ paths:
       security:
       - Bearer: []
       summary: Update a role
+      tags:
+      - roles
+  /roles/{id}/groups:
+    get:
+      consumes:
+      - application/json
+      description: Get groups linked to role
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RoleGroup'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get role groups
       tags:
       - roles
   /runners:
@@ -2057,6 +2056,46 @@ paths:
       summary: Update a task
       tags:
       - tasks
+  /tasks/{name}/run:
+    post:
+      consumes:
+      - application/json
+      description: Run Task
+      parameters:
+      - description: Task  name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Extra vars
+        in: body
+        name: evars
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JobMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Run Task
+      tags:
+      - tasks
   /tasks/{name}/schema:
     delete:
       consumes:
@@ -2279,7 +2318,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get groups memberships for a user
+      description: Get information about a specific user
       parameters:
       - description: User ID
         in: path
@@ -2292,9 +2331,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/models.UserGroup'
-            type: array
+            $ref: '#/definitions/models.User'
         "400":
           description: Bad Request
           schema:
@@ -2309,7 +2346,7 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Get user groups
+      summary: Get a user
       tags:
       - users
     patch:
@@ -2350,6 +2387,43 @@ paths:
       security:
       - Bearer: []
       summary: Update a user
+      tags:
+      - users
+  /users/{id}/groups:
+    get:
+      consumes:
+      - application/json
+      description: Get groups memberships for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.UserGroup'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get user groups
       tags:
       - users
   /webhooks:
