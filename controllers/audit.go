@@ -43,6 +43,8 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Tags			audit
 //	@Accept			json
 //	@Produce		json
+//	@Param			limit	query	    int		false	"Maximum number of logs to return (default 100)"
+//	@Param			offset	query		int		false	"Number of logs to skip (default 0)"
 //	@Success		200	{array}		models.AuditLog
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError

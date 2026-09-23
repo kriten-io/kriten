@@ -503,6 +503,15 @@ paths:
       consumes:
       - application/json
       description: List all audit logs
+      parameters:
+      - description: Maximum number of logs to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of logs to skip (default 0)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
