@@ -15,7 +15,7 @@ import (
 )
 
 type UserService interface {
-	ListUsers([]string, models.UserQueryParams) ([]models.User, error)
+	ListUsers([]string, models.UserQueryParams) ([]models.User, int, error)
 	GetUser(string) (models.User, error)
 	CreateUser(models.User) (models.User, error)
 	UpdateUser(models.User) (models.User, error)
@@ -36,12 +36,12 @@ func NewUserService(database *gorm.DB, config config.Config) UserService {
 	}
 }
 
-func (u *UserServiceImpl) ListUsers(authList []string, params models.UserQueryParams) ([]models.User, error) {
+func (u *UserServiceImpl) ListUsers(authList []string, params models.UserQueryParams) ([]models.User, int, error) {
 	var users []models.User
 	var res *gorm.DB
 
 	if len(authList) == 0 {
-		return users, nil
+		return users, 0, nil
 	}
 
 	if slices.Contains(authList, "*") {
@@ -50,7 +50,7 @@ func (u *UserServiceImpl) ListUsers(authList []string, params models.UserQueryPa
 		res = u.db.Find(&users, authList)
 	}
 	if res.Error != nil {
-		return users, fmt.Errorf("failed to get users: %w", res.Error)
+		return users, 0, fmt.Errorf("failed to get users: %w", res.Error)
 	}
 
 	var filtered []models.User
@@ -76,7 +76,7 @@ func (u *UserServiceImpl) ListUsers(authList []string, params models.UserQueryPa
 		filtered = filtered[start:end]
 	}
 
-	return filtered, nil
+	return filtered, total, nil
 }
 
 func (u *UserServiceImpl) GetUser(id string) (models.User, error) {

@@ -84,14 +84,14 @@ func (tc *TaskController) ListTasks(ctx *gin.Context) {
 		params.Limit = 100
 	}
 
-	tasks, err := tc.TaskService.ListTasks(authList, params)
+	tasks, total, err := tc.TaskService.ListTasks(authList, params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(tasks)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(tasks) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)

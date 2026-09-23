@@ -27,7 +27,7 @@ import (
 )
 
 type TaskService interface {
-	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, error)
+	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, int, error)
 	GetTask(string) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
 	UpdateTask(models.Task) (*models.Task, error)
@@ -51,16 +51,16 @@ func NewTaskService(ws WebhookService, config config.Config) TaskService {
 	}
 }
 
-func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryParams) ([]*models.Task, error) {
+func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryParams) ([]*models.Task, int, error) {
 	var tasks []*models.Task
 
 	if len(authList) == 0 {
-		return tasks, nil
+		return tasks, 0, nil
 	}
 
 	configMaps, err := helpers.ListConfigMaps(t.config.Kube)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch list of tasks: %w", err)
+		return nil, 0, fmt.Errorf("failed to fetch list of tasks: %w", err)
 	}
 
 	for _, configMap := range configMaps.Items {
@@ -76,7 +76,7 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 					var jsonData map[string]interface{}
 					err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
 					if err != nil {
-						return nil, fmt.Errorf("task '%s' schema: %w", configMap.Data["name"], err)
+						return nil, 0, fmt.Errorf("task '%s' schema: %w", configMap.Data["name"], err)
 					}
 					taskData.Schema = jsonData
 				}
@@ -107,7 +107,7 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 		filtered = filtered[start:end]
 	}
 
-	return filtered, nil
+	return filtered, total, nil
 
 }
 

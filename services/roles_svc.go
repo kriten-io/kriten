@@ -15,7 +15,7 @@ import (
 )
 
 type RoleService interface {
-	ListRoles([]string, models.RoleQueryParams) ([]models.Role, error)
+	ListRoles([]string, models.RoleQueryParams) ([]models.Role, int, error)
 	GetRole(string) (models.Role, error)
 	CreateRole(models.Role) (models.Role, error)
 	UpdateRole(models.Role) (models.Role, error)
@@ -37,19 +37,19 @@ func NewRoleService(database *gorm.DB, config config.Config, gs GroupService) Ro
 	}
 }
 
-func (r *RoleServiceImpl) ListRoles(authList []string, params models.RoleQueryParams) ([]models.Role, error) {
+func (r *RoleServiceImpl) ListRoles(authList []string, params models.RoleQueryParams) ([]models.Role, int, error) {
 	var roles []models.Role
 	var res *gorm.DB
 
 	if len(authList) == 0 {
-		return roles, nil
+		return roles, 0, nil
 	} else if slices.Contains(authList, "*") {
 		res = r.db.Find(&roles)
 	} else {
 		res = r.db.Find(&roles, authList)
 	}
 	if res.Error != nil {
-		return roles, fmt.Errorf("error getting list of roles: %w", res.Error)
+		return roles, 0, fmt.Errorf("error getting list of roles: %w", res.Error)
 	}
 
 	var filtered []models.Role
@@ -74,7 +74,7 @@ func (r *RoleServiceImpl) ListRoles(authList []string, params models.RoleQueryPa
 		filtered = filtered[start:end]
 	}
 
-	return filtered, nil
+	return filtered, total, nil
 }
 
 func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {

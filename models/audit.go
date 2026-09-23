@@ -19,3 +19,8 @@ type AuditLog struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+type AuditQueryParams struct {
+	Limit  int `form:"limit" binding:"omitempty,min=0"`
+	Offset int `form:"offset" binding:"omitempty,min=0"`
+}

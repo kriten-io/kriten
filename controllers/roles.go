@@ -83,7 +83,7 @@ func (rc *RoleController) ListRoles(ctx *gin.Context) {
 		params.Limit = 100
 	}
 
-	roles, err := rc.RoleService.ListRoles(authList, params)
+	roles, total, err := rc.RoleService.ListRoles(authList, params)
 
 	if err != nil {
 		ctx.Error(err)
@@ -91,7 +91,7 @@ func (rc *RoleController) ListRoles(ctx *gin.Context) {
 	}
 
 	//audit.Status = "success"
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(roles)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(roles) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)

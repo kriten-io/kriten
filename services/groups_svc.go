@@ -14,7 +14,7 @@ import (
 )
 
 type GroupService interface {
-	ListGroups([]string, models.GroupQueryParams) ([]models.Group, error)
+	ListGroups([]string, models.GroupQueryParams) ([]models.Group, int, error)
 	GetGroup(string) (models.Group, error)
 	GetUserGroups(string) ([]models.UserGroup, error)
 	GetGroupByID(string) (models.Group, error)
@@ -44,12 +44,12 @@ func NewGroupService(database *gorm.DB, us UserService, config config.Config) Gr
 	}
 }
 
-func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQueryParams) ([]models.Group, error) {
+func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQueryParams) ([]models.Group, int, error) {
 	var groups []models.Group
 	var res *gorm.DB
 
 	if len(authList) == 0 {
-		return groups, nil
+		return groups, 0, nil
 	}
 
 	if slices.Contains(authList, "*") {
@@ -58,7 +58,7 @@ func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQuer
 		res = g.db.Find(&groups, authList)
 	}
 	if res.Error != nil {
-		return groups, fmt.Errorf("groups: %w", res.Error)
+		return groups, 0, fmt.Errorf("groups: %w", res.Error)
 	}
 
 	var filtered []models.Group
@@ -83,7 +83,7 @@ func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQuer
 		filtered = filtered[start:end]
 	}
 
-	return filtered, nil
+	return filtered, total, nil
 
 }
 

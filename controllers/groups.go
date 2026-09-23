@@ -94,14 +94,14 @@ func (gc *GroupController) ListGroups(ctx *gin.Context) {
 		params.Limit = 100
 	}
 
-	groups, err := gc.GroupService.ListGroups(authList, params)
+	groups, total, err := gc.GroupService.ListGroups(authList, params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
 	if len(groups) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)

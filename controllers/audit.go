@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/middlewares"
+	"github.com/kriten-io/kriten/models"
 	"github.com/kriten-io/kriten/services"
 
 	"github.com/gin-gonic/gin"
@@ -50,34 +50,29 @@ func (ac *AuditController) SetAuditRoutes(rg *gin.RouterGroup, config config.Con
 //	@Security		Bearer
 func (ac *AuditController) ListAuditLogs(ctx *gin.Context) {
 	var err error
-	// Default limit
-	maxDefault := 100
-	param := ctx.Request.URL.Query().Get("max")
-
-	if param != "" {
-		maxDefault, err = strconv.Atoi(param)
-		if err != nil {
-			ctx.Error(errors.New("invalid query parameters"))
-			ctx.Status(http.StatusBadRequest)
-		}
+	var params models.AuditQueryParams
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		ctx.Error(errors.New("invalid query parameters"))
+		ctx.Status(http.StatusBadRequest)
+		return
 	}
 
-	groups, err := ac.AuditService.ListAuditLogs(maxDefault)
+	auditLogs, total, err := ac.AuditService.ListAuditLogs(params)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	ctx.Header("Content-range", fmt.Sprintf("%v", len(groups)))
-	if len(groups) == 0 {
+	ctx.Header("Content-range", fmt.Sprintf("%v", total))
+	if len(auditLogs) == 0 {
 		var arr [0]int
 		ctx.JSON(http.StatusOK, arr)
 		return
 	}
 
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.JSON(http.StatusOK, groups)
+	ctx.JSON(http.StatusOK, auditLogs)
 }
 
 // GetAuditLog godoc
