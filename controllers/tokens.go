@@ -19,38 +19,34 @@ type ApiTokenController struct {
 	ApiTokenService services.ApiTokenService
 	AuthService     services.AuthService
 	providers       []string
-	AuditService    services.AuditService
-	AuditCategory   string
 }
 
-func NewApiTokenController(apiTokenService services.ApiTokenService, as services.AuthService, als services.AuditService, p []string) ApiTokenController {
+func NewApiTokenController(apiTokenService services.ApiTokenService, as services.AuthService, p []string) ApiTokenController {
 	return ApiTokenController{
 		ApiTokenService: apiTokenService,
 		AuthService:     as,
 		providers:       p,
-		AuditService:    als,
-		AuditCategory:   "apiTokens",
 	}
 }
 
-func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config config.Config) {
+func (atc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.AuthenticationMiddleware(uc.AuthService, config.JWT))
+		middlewares.AuthenticationMiddleware(atc.AuthService, config.JWT))
 
 	// Authorizations is set in the svc, only returning own tokens
-	r.GET("", uc.ListApiTokens)
+	r.GET("", atc.ListApiTokens)
 
-	r.GET("/all", middlewares.SetAuthorizationListMiddleware(uc.AuthService, "apiTokens"), uc.ListAllApiTokens)
-	r.GET("/:id", middlewares.AuthorizationMiddleware(uc.AuthService, "apiTokens", "read"), uc.GetApiToken)
+	r.GET("/all", middlewares.SetAuthorizationListMiddleware(atc.AuthService, "apiTokens"), atc.ListAllApiTokens)
+	r.GET("/:id", middlewares.AuthorizationMiddleware(atc.AuthService, "apiTokens", "read"), atc.GetApiToken)
 
-	r.POST("", uc.CreateApiToken)
-	r.PUT("", uc.CreateApiToken)
+	r.POST("", atc.CreateApiToken)
+	r.PUT("", atc.CreateApiToken)
 
-	r.Use(middlewares.AuthorizationMiddleware(uc.AuthService, "apiTokens", "write"))
+	r.Use(middlewares.AuthorizationMiddleware(atc.AuthService, "apiTokens", "write"))
 	{
-		r.PATCH("/:id", uc.UpdateApiToken)
-		r.PUT("/:id", uc.UpdateApiToken)
-		r.DELETE("/:id", uc.DeleteApiToken)
+		r.PATCH("/:id", atc.UpdateApiToken)
+		r.PUT("/:id", atc.UpdateApiToken)
+		r.DELETE("/:id", atc.DeleteApiToken)
 	}
 }
 
@@ -65,9 +61,9 @@ func (uc *ApiTokenController) SetApiTokenRoutes(rg *gin.RouterGroup, config conf
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api-tokens [get]
 //	@Security		Bearer
-func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
+func (atc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 	userid := ctx.MustGet("userID").(uuid.UUID)
-	apiTokens, err := uc.ApiTokenService.ListApiTokens(userid)
+	apiTokens, err := atc.ApiTokenService.ListApiTokens(userid)
 
 	if err != nil {
 		ctx.Error(err)
@@ -96,9 +92,9 @@ func (uc *ApiTokenController) ListApiTokens(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api-tokens/all [get]
 //	@Security		Bearer
-func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
+func (atc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 	authList := ctx.MustGet("authList").([]string)
-	apiTokens, err := uc.ApiTokenService.ListAllApiTokens(authList)
+	apiTokens, err := atc.ApiTokenService.ListAllApiTokens(authList)
 
 	if err != nil {
 		ctx.Error(err)
@@ -130,7 +126,7 @@ func (uc *ApiTokenController) ListAllApiTokens(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api-tokens/{id} [get]
 //	@Security		Bearer
-func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
+func (atc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
 
 	_, err := uuid.FromString(apiTokenID)
@@ -139,7 +135,7 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	apiToken, err := uc.ApiTokenService.GetApiToken(apiTokenID)
+	apiToken, err := atc.ApiTokenService.GetApiToken(apiTokenID)
 
 	if err != nil {
 		ctx.Error(err)
@@ -163,30 +159,20 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 //	@Router			/api-tokens [post]
 //	@Security		Bearer
 func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
-	userid := ctx.MustGet("userID").(uuid.UUID)
-	audit := atc.AuditService.InitialiseAuditLog(ctx, "create", atc.AuditCategory, "*")
 	var apiToken models.ApiToken
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
-		atc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid api token payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = apiToken.Key
-	apiToken.Owner = userid
 
-	apiToken, err := atc.ApiTokenService.CreateApiToken(apiToken)
+	apiToken, err := atc.ApiTokenService.CreateApiToken(getActor(ctx), apiToken)
 	if err != nil {
-		atc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
-	if audit.EventTarget == "" {
-		audit.EventTarget = apiToken.Key
-	}
 
-	audit.Status = "success"
 	ctx.JSON(http.StatusOK, apiToken)
 }
 
@@ -205,14 +191,12 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 //	@Failure		500		{object}	helpers.HTTPError
 //	@Router			/api-tokens/{id} [patch]
 //	@Security		Bearer
-func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
+func (atc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "update", uc.AuditCategory, apiTokenID)
 	var apiToken models.ApiToken
 	var err error
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid api token payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
@@ -220,20 +204,16 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 
 	apiToken.ID, err = uuid.FromString(apiTokenID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		helpers.BadRequestError(ctx, err)
 		return
 	}
 
-	apiToken, err = uc.ApiTokenService.UpdateApiToken(apiToken)
+	apiToken, err = atc.ApiTokenService.UpdateApiToken(getActor(ctx), apiToken)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, apiToken)
 }
 
@@ -251,9 +231,8 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //	@Failure		500	{object}	helpers.HTTPError
 //	@Router			/api-tokens/{id} [delete]
 //	@Security		Bearer
-func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
+func (atc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "delete", uc.AuditCategory, apiTokenID)
 
 	_, err := uuid.FromString(apiTokenID)
 	if err != nil {
@@ -261,14 +240,11 @@ func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	err = uc.ApiTokenService.DeleteApiToken(apiTokenID)
+	err = atc.ApiTokenService.DeleteApiToken(getActor(ctx), apiTokenID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "api token deleted successfully"})
 }

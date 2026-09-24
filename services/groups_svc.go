@@ -18,29 +18,33 @@ type GroupService interface {
 	GetGroup(string) (models.Group, error)
 	GetUserGroups(string) ([]models.UserGroup, error)
 	GetGroupByID(string) (models.Group, error)
-	CreateGroup(models.Group) (models.Group, error)
-	UpdateGroup(models.Group) (models.Group, error)
+	CreateGroup(models.Actor, models.Group) (models.Group, error)
+	UpdateGroup(models.Actor, models.Group) (models.Group, error)
 	ListGroupUsers(string) ([]models.GroupUser, error)
-	AddUsersToGroup(string, []models.GroupUser) (models.Group, error)
-	RemoveUsersFromGroup(string, []models.GroupUser) (models.Group, error)
-	DeleteGroup(string) error
+	AddUsersToGroup(models.Actor, string, []models.GroupUser) (models.Group, error)
+	RemoveUsersFromGroup(models.Actor, string, []models.GroupUser) (models.Group, error)
+	DeleteGroup(models.Actor, string) error
 	GetGroupRoles(string) ([]models.Role, error)
-	AddRolesToGroup(string, []models.GroupRole) (models.Group, error)
-	RemoveRolesFromGroup(string, []models.GroupRole) (models.Group, error)
+	AddRolesToGroup(models.Actor, string, []models.GroupRole) (models.Group, error)
+	RemoveRolesFromGroup(models.Actor, string, []models.GroupRole) (models.Group, error)
 	ListGroupRoles(string) ([]models.GroupRole, error)
 }
+
+const groupsCategory = "groups"
 
 type GroupServiceImpl struct {
 	db          *gorm.DB
 	UserService UserService
 	config      config.Config
+	audit       AuditService
 }
 
-func NewGroupService(database *gorm.DB, us UserService, config config.Config) GroupService {
+func NewGroupService(database *gorm.DB, us UserService, config config.Config, als AuditService) GroupService {
 	return &GroupServiceImpl{
 		db:          database,
 		UserService: us,
 		config:      config,
+		audit:       als,
 	}
 }
 
@@ -115,19 +119,24 @@ func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 	return group, nil
 }
 
-func (g *GroupServiceImpl) CreateGroup(group models.Group) (models.Group, error) {
+func (g *GroupServiceImpl) CreateGroup(actor models.Actor, group models.Group) (models.Group, error) {
+	audit := g.audit.NewAuditLog(actor, "create", groupsCategory, group.Name)
+
 	res := g.db.Create(&group)
 	if res.Error != nil {
+		g.audit.CreateAudit(audit)
 		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
 			return models.Group{}, fmt.Errorf("error creating group '%s': %w", group.Name, ErrSvcDBDuplicatedKey)
 		}
 		return models.Group{}, fmt.Errorf("error creating group '%s': %w", group.Name, res.Error)
 	}
 
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return group, nil
 }
 
-func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error) {
+func (g *GroupServiceImpl) updateGroup(group models.Group) (models.Group, error) {
 	res := g.db.Updates(group)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -140,6 +149,20 @@ func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("group '%s': %w", group.Name, err)
 	}
+	return newGroup, nil
+}
+
+func (g *GroupServiceImpl) UpdateGroup(actor models.Actor, group models.Group) (models.Group, error) {
+	audit := g.audit.NewAuditLog(actor, "update", groupsCategory, group.Name)
+
+	newGroup, err := g.updateGroup(group)
+	if err != nil {
+		g.audit.CreateAudit(audit)
+		return models.Group{}, err
+	}
+
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return newGroup, nil
 }
 
@@ -198,9 +221,12 @@ func (g *GroupServiceImpl) ListGroupUsers(id string) ([]models.GroupUser, error)
 	return users, nil
 }
 
-func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) (models.Group, error) {
+func (g *GroupServiceImpl) AddUsersToGroup(actor models.Actor, id string, users []models.GroupUser) (models.Group, error) {
+	audit := g.audit.NewAuditLog(actor, "add_users", groupsCategory, id)
+
 	group, err := g.GetGroupByID(id)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
@@ -208,6 +234,7 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 
 	for _, u := range users {
 		if u.Provider != groupProvider {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("group provider '%s', user provider '%s': %w",
 				groupProvider,
 				u.Provider,
@@ -221,6 +248,7 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 	for _, u := range users {
 		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
 		if err != nil {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("failed to get user: %w", err)
 		}
 		usersID = append(usersID, user.ID.String())
@@ -228,17 +256,23 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 
 	group.User_IDs = RemoveDuplicates(append(group.User_IDs, usersID...))
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("update group: %w", err)
 	}
 
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupUser) (models.Group, error) {
+func (g *GroupServiceImpl) RemoveUsersFromGroup(actor models.Actor, id string, users []models.GroupUser) (models.Group, error) {
+	audit := g.audit.NewAuditLog(actor, "remove_users", groupsCategory, id)
+
 	group, err := g.GetGroupByID(id)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
@@ -247,6 +281,7 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupU
 	for _, u := range users {
 		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
 		if err != nil {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("failed to get user: %w", err)
 		}
 		usersID = append(usersID, user.ID.String())
@@ -254,28 +289,38 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupU
 
 	group.User_IDs = RemoveFromSlice(group.User_IDs, usersID)
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("update groups: %w", err)
 	}
 
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) DeleteGroup(id string) error {
+func (g *GroupServiceImpl) DeleteGroup(actor models.Actor, id string) error {
+	audit := g.audit.NewAuditLog(actor, "delete", groupsCategory, id)
+
 	group, err := g.GetGroupByID(id)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to get group: %w", err)
 	}
 
 	if len(group.User_IDs) != 0 {
+		g.audit.CreateAudit(audit)
 		return fmt.Errorf("group '%s' in use, remove users first: %w", id, ErrSvcObjInUse)
 	}
 
 	res := g.db.Unscoped().Delete(&group)
 	if res.Error != nil {
+		g.audit.CreateAudit(audit)
 		return fmt.Errorf("group '%s': %w", id, res.Error)
 	}
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return nil
 }
 
@@ -323,10 +368,13 @@ func RemoveFromSlice(current []string, input []string) []string {
 	return current
 }
 
-func (g *GroupServiceImpl) AddRolesToGroup(id string, roles []models.GroupRole) (models.Group, error) {
+func (g *GroupServiceImpl) AddRolesToGroup(actor models.Actor, id string, roles []models.GroupRole) (models.Group, error) {
 	var roleIDs []string
+	audit := g.audit.NewAuditLog(actor, "add_roles", groupsCategory, id)
+
 	group, err := g.GetGroupByID(id)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
@@ -334,9 +382,11 @@ func (g *GroupServiceImpl) AddRolesToGroup(id string, roles []models.GroupRole) 
 		var role models.Role
 		res := g.db.Model(&models.Role{}).Where("name = ?", r.Name).Find(&role)
 		if res.Error != nil {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, res.Error)
 		}
 		if res.RowsAffected == 0 {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, ErrSvcObjNotFound)
 		}
 		roleIDs = append(roleIDs, role.ID.String())
@@ -344,29 +394,36 @@ func (g *GroupServiceImpl) AddRolesToGroup(id string, roles []models.GroupRole) 
 
 	group.Role_IDs = RemoveDuplicates(append(group.Role_IDs, roleIDs...))
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("update group: %w", err)
 	}
 
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveRolesFromGroup(id string, roles []models.GroupRole) (models.Group, error) {
+func (g *GroupServiceImpl) RemoveRolesFromGroup(actor models.Actor, id string, roles []models.GroupRole) (models.Group, error) {
+	var roleIDs []string
+	audit := g.audit.NewAuditLog(actor, "remove_roles", groupsCategory, id)
+
 	group, err := g.GetGroupByID(id)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
-
-	var roleIDs []string
 
 	for _, r := range roles {
 		var role models.Role
 		res := g.db.Model(&models.Role{}).Where("name = ?", r.Name).Find(&role)
 		if res.Error != nil {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, res.Error)
 		}
 		if res.RowsAffected == 0 {
+			g.audit.CreateAudit(audit)
 			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, ErrSvcObjNotFound)
 		}
 		roleIDs = append(roleIDs, role.ID.String())
@@ -374,11 +431,14 @@ func (g *GroupServiceImpl) RemoveRolesFromGroup(id string, roles []models.GroupR
 
 	group.Role_IDs = RemoveFromSlice(group.Role_IDs, roleIDs)
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
+		g.audit.CreateAudit(audit)
 		return models.Group{}, fmt.Errorf("update groups: %w", err)
 	}
 
+	audit.Status = "success"
+	g.audit.CreateAudit(audit)
 	return newGroup, nil
 }
 

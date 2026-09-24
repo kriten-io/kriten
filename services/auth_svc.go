@@ -38,19 +38,24 @@ type AuthServiceImpl struct {
 	UserService UserService
 	RoleService RoleService
 	config      config.Config
+	audit       AuditService
 }
+
+const authCategory = "authentication"
 
 func NewAuthService(
 	config config.Config,
 	us UserService,
 	rls RoleService,
 	database *gorm.DB,
+	als AuditService,
 ) AuthService {
 	return &AuthServiceImpl{
 		config:      config,
 		UserService: us,
 		RoleService: rls,
 		db:          database,
+		audit:       als,
 	}
 }
 
@@ -59,43 +64,55 @@ func NewAuthService(
 func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, error) {
 	var user models.User
 	var err error
+	audit := a.audit.NewAuditLog(models.Actor{Username: credentials.Username, Provider: credentials.Provider}, "login", authCategory, credentials.Username)
 
 	if credentials.Provider == "local" {
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
+			a.audit.CreateAudit(audit)
 			return "", -1, fmt.Errorf("user not found: %w", err)
 		}
 		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password))
 		if err != nil {
+			a.audit.CreateAudit(audit)
 			return "", -1, fmt.Errorf("incorrect password: %w", err)
 		}
 	} else if credentials.Provider == "active_directory" {
 		err := helpers.BindAndSearch(a.config.LDAP, credentials.Username, credentials.Password)
 		if err != nil {
+			a.audit.CreateAudit(audit)
 			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
 		}
-		_, err = a.UserService.CreateUser(models.User{
+		_, err = a.UserService.CreateUser(models.Actor{Username: credentials.Username, Provider: credentials.Provider}, models.User{
 			Username: credentials.Username,
 			Provider: credentials.Provider,
 		})
 		if err != nil && !strings.Contains(err.Error(), "ERROR: duplicate key value violates unique constraint") {
 			log.Println(err.Error())
+			a.audit.CreateAudit(audit)
 			return "", -1, fmt.Errorf("failed to create ldap user into local user db: %w", err)
 		}
 		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
 		if err != nil {
+			a.audit.CreateAudit(audit)
 			return "", -1, fmt.Errorf("failed to get user credentials: %w", err)
 		}
 	} else {
 		err := errors.New("provider does not exist")
+		a.audit.CreateAudit(audit)
 		return "", -1, fmt.Errorf("unknown provider: %w", err)
 	}
 
 	token, err := helpers.CreateJWTToken(credentials, user.ID, a.config.JWT)
 	if err != nil {
 		log.Println(err)
+		a.audit.CreateAudit(audit)
 		return "", -1, fmt.Errorf("failed to create token: %w", err)
 	}
+
+	audit.UserID = user.ID
+	audit.Status = "success"
+	a.audit.CreateAudit(audit)
 
 	return token, a.config.JWT.ExpirySeconds, nil
 }
@@ -141,7 +158,8 @@ func (a *AuthServiceImpl) ChangePassword(tokenStr string, creds *models.ChangePa
 
 	user.Password = creds.NewPassword
 
-	_, err = a.UserService.UpdateUser(user)
+	actor := models.Actor{UserID: claims.UserID, Username: claims.Username, Provider: claims.Provider}
+	_, err = a.UserService.UpdateUser(actor, user)
 	if err != nil {
 		return fmt.Errorf("failed to update user %s password in DB: %w", user.Username, err)
 	}

@@ -20,20 +20,24 @@ type ApiTokenService interface {
 	ListApiTokens(uuid.UUID) ([]models.ApiToken, error)
 	ListAllApiTokens([]string) ([]models.ApiToken, error)
 	GetApiToken(string) (models.ApiToken, error)
-	CreateApiToken(models.ApiToken) (models.ApiToken, error)
-	UpdateApiToken(models.ApiToken) (models.ApiToken, error)
-	DeleteApiToken(string) error
+	CreateApiToken(models.Actor, models.ApiToken) (models.ApiToken, error)
+	UpdateApiToken(models.Actor, models.ApiToken) (models.ApiToken, error)
+	DeleteApiToken(models.Actor, string) error
 }
+
+const tokensCategory = "apiTokens"
 
 type ApiTokenServiceImpl struct {
 	db     *gorm.DB
 	config config.Config
+	audit  AuditService
 }
 
-func NewApiTokenService(database *gorm.DB, config config.Config) ApiTokenService {
+func NewApiTokenService(database *gorm.DB, config config.Config, als AuditService) ApiTokenService {
 	return &ApiTokenServiceImpl{
 		db:     database,
 		config: config,
+		audit:  als,
 	}
 }
 
@@ -89,9 +93,12 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	return apiToken, nil
 }
 
-func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
+func (u *ApiTokenServiceImpl) CreateApiToken(actor models.Actor, apiToken models.ApiToken) (models.ApiToken, error) {
+	audit := u.audit.NewAuditLog(actor, "create", tokensCategory, apiToken.Key)
+
 	key, err := GenerateToken(40)
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return models.ApiToken{}, fmt.Errorf("error generating API token: %w", err)
 	}
 	var tokenEnabled = true
@@ -109,18 +116,25 @@ func (u *ApiTokenServiceImpl) CreateApiToken(apiToken models.ApiToken) (models.A
 
 	res := u.db.Create(&apiToken)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return models.ApiToken{}, fmt.Errorf("error creating API token: %w", res.Error)
 	}
 
 	// Passing unencripted key on creation
 	apiToken.Key = key
+	audit.EventTarget = apiToken.Key
 
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return apiToken, nil
 }
 
-func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.ApiToken, error) {
+func (u *ApiTokenServiceImpl) UpdateApiToken(actor models.Actor, apiToken models.ApiToken) (models.ApiToken, error) {
+	audit := u.audit.NewAuditLog(actor, "update", tokensCategory, apiToken.ID.String())
+
 	oldToken, err := u.GetApiToken(apiToken.ID.String())
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return models.ApiToken{}, fmt.Errorf("error getting API token: %w", err)
 	}
 
@@ -136,26 +150,36 @@ func (u *ApiTokenServiceImpl) UpdateApiToken(apiToken models.ApiToken) (models.A
 
 	res := u.db.Updates(oldToken)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return models.ApiToken{}, fmt.Errorf("error updating API token: %w", res.Error)
 	}
 
 	newToken, err := u.GetApiToken(apiToken.ID.String())
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return models.ApiToken{}, fmt.Errorf("error getting token: %w", err)
 	}
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return newToken, nil
 }
 
-func (u *ApiTokenServiceImpl) DeleteApiToken(id string) error {
+func (u *ApiTokenServiceImpl) DeleteApiToken(actor models.Actor, id string) error {
+	audit := u.audit.NewAuditLog(actor, "delete", tokensCategory, id)
+
 	apiToken, err := u.GetApiToken(id)
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("error getting API token: %w", err)
 	}
 
 	res := u.db.Unscoped().Delete(&apiToken)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("error deleting API token '%s': %w", id, res.Error)
 	}
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return nil
 }
 

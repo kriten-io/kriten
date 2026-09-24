@@ -16,20 +16,15 @@ import (
 type CronJobController struct {
 	CronJobService services.CronJobService
 	AuthService    services.AuthService
-	AuditService   services.AuditService
-	AuditCategory  string
 }
 
 func NewCronJobController(
 	js services.CronJobService,
 	as services.AuthService,
-	als services.AuditService,
 ) CronJobController {
 	return CronJobController{
 		CronJobService: js,
 		AuthService:    as,
-		AuditService:   als,
-		AuditCategory:  "cronjobs",
 	}
 }
 
@@ -125,34 +120,25 @@ func (jc *CronJobController) GetCronJob(ctx *gin.Context) {
 //	@Security		Bearer
 func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 	var cronjob models.CronJob
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "create", jc.AuditCategory, "*")
-	username := ctx.MustGet("username").(string)
 
 	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
-		jc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid cronjob payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = cronjob.Task
 
-	cronjob.Owner = username
-	job, err := jc.CronJobService.CreateCronJob(cronjob)
+	job, err := jc.CronJobService.CreateCronJob(getActor(ctx), cronjob)
 
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-
 	if job.Name != "" {
-		jc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
-	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.Name})
 }
 
@@ -173,25 +159,18 @@ func (jc *CronJobController) CreateCronJob(ctx *gin.Context) {
 func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
 	var cronjob models.CronJob
 	var err error
-	name := ctx.Param("name")
-	username := ctx.MustGet("username").(string)
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "update", jc.AuditCategory, name)
 
 	if err := ctx.ShouldBindJSON(&cronjob); err != nil {
-		jc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid cronjob payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	cronjob.Owner = username
-	cronjob, err = jc.CronJobService.UpdateCronJob(cronjob)
+	cronjob, err = jc.CronJobService.UpdateCronJob(getActor(ctx), cronjob)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
-	audit.Status = "success"
-	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, cronjob)
 }
 
@@ -210,16 +189,13 @@ func (jc *CronJobController) UpdateCronJob(ctx *gin.Context) {
 //	@Security		Bearer
 func (jc *CronJobController) DeleteCronJob(ctx *gin.Context) {
 	name := ctx.Param("name")
-	audit := jc.AuditService.InitialiseAuditLog(ctx, "delete", jc.AuditCategory, name)
 
-	err := jc.CronJobService.DeleteCronJob(name)
+	err := jc.CronJobService.DeleteCronJob(getActor(ctx), name)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	jc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "cronjob deleted successfully"})
 }
 

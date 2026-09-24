@@ -17,23 +17,27 @@ import (
 type RunnerService interface {
 	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, int, error)
 	GetRunner(string) (*models.Runner, error)
-	CreateRunner(models.Runner) (*models.Runner, error)
-	UpdateRunner(models.Runner) (*models.Runner, error)
-	DeleteRunner(string) error
+	CreateRunner(models.Actor, models.Runner) (*models.Runner, error)
+	UpdateRunner(models.Actor, models.Runner) (*models.Runner, error)
+	DeleteRunner(models.Actor, string) error
 	GetAdminGroups(string) (string, error)
 	ListAllJobs() ([]models.Job, error)
 	GetSecret(string) (map[string]string, error)
-	UpdateSecret(string, map[string]string) (map[string]string, error)
-	DeleteSecret(string) error
+	UpdateSecret(models.Actor, string, map[string]string) (map[string]string, error)
+	DeleteSecret(models.Actor, string) error
 }
+
+const runnersCategory = "runners"
 
 type RunnerServiceImpl struct {
 	config config.Config
+	audit  AuditService
 }
 
-func NewRunnerService(config config.Config) RunnerService {
+func NewRunnerService(config config.Config, als AuditService) RunnerService {
 	return &RunnerServiceImpl{
 		config: config,
+		audit:  als,
 	}
 }
 
@@ -134,9 +138,12 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 	return &runnerData, nil
 }
 
-func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
+func (r *RunnerServiceImpl) CreateRunner(actor models.Actor, runner models.Runner) (*models.Runner, error) {
+	audit := r.audit.NewAuditLog(actor, "create", runnersCategory, runner.Name)
+
 	err := helpers.ValidateK8sConfigMapName(runner.Name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("runner '%s': %w",
 			runner.Name,
 			ErrSvcObjNameK8sConfMap)
@@ -154,6 +161,7 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 
 	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		if k8sErrors.IsAlreadyExists(err) {
 			return nil, fmt.Errorf("runner '%s': %w", runner.Name, ErrSvcObjExists)
 		}
@@ -169,28 +177,36 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, "create")
 
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("runner '%s' create git repo token: %w", runner.Name, err)
 		}
 	}
 
 	if runner.Secret != nil {
-		_, err = r.UpdateSecret(runner.Name, runner.Secret)
+		_, err = r.UpdateSecret(actor, runner.Name, runner.Secret)
 
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("runner '%s' secrets update: %w", runner.Name, err)
 		}
 	}
 
 	runnerData, err := r.GetRunner(runner.Name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("get runner '%s': %w", runner.Name, err)
 	}
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return runnerData, err
 }
 
-func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, error) {
+func (r *RunnerServiceImpl) UpdateRunner(actor models.Actor, runner models.Runner) (*models.Runner, error) {
+	audit := r.audit.NewAuditLog(actor, "update", runnersCategory, runner.Name)
+
 	_, err := helpers.GetConfigMap(r.config.Kube, runner.Name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("runner '%s': %w", runner.Name, ErrSvcObjNotFound)
 		}
@@ -205,6 +221,7 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 
 	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "update")
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("runner '%s': %w", runner.Name, err)
 	}
 
@@ -220,39 +237,49 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 			if k8sErrors.IsNotFound(err) {
 				operation = "create"
 			} else {
+				r.audit.CreateAudit(audit)
 				return nil, fmt.Errorf("runner '%s' create git repo token: %w", runner.Name, err)
 			}
 		}
 		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, operation)
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("runner '%s' update git repo token: %w", runner.Name, err)
 		}
 	} else if runner.Token == "" {
 		err = helpers.DeleteSecret(r.config.Kube, tokenObjName)
 		if err != nil && !k8sErrors.IsNotFound(err) {
+			r.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("runner '%s' delete git repo token: %w", runner.Name, err)
 		}
 	}
 
 	if runner.Secret != nil {
-		_, err = r.UpdateSecret(runner.Name, runner.Secret)
+		_, err = r.UpdateSecret(actor, runner.Name, runner.Secret)
 
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("runner '%s' update secrets: %w", runner.Name, err)
 		}
 	}
 
 	updatedRunner, err := r.GetRunner(runner.Name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("get runner '%s': %w", runner.Name, err)
 	}
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return updatedRunner, nil
 }
 
-func (r *RunnerServiceImpl) DeleteRunner(name string) error {
+func (r *RunnerServiceImpl) DeleteRunner(actor models.Actor, name string) error {
+	audit := r.audit.NewAuditLog(actor, "delete", runnersCategory, name)
+
 	configMap, err := helpers.GetConfigMap(r.config.Kube, name)
 
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
 		}
@@ -260,11 +287,13 @@ func (r *RunnerServiceImpl) DeleteRunner(name string) error {
 	}
 
 	if configMap.Data["image"] == "" {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return err
 	}
 
@@ -272,11 +301,13 @@ func (r *RunnerServiceImpl) DeleteRunner(name string) error {
 	for _, configMap := range configMaps.Items {
 		runnerName := configMap.Data["runner"]
 		if runnerName == name {
+			r.audit.CreateAudit(audit)
 			return fmt.Errorf("runner is bound to task: %s , delete that first: %w", configMap.Data["name"], ErrSvcObjInUse)
 		}
 	}
 	err = helpers.DeleteConfigMap(r.config.Kube, name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
 		}
@@ -285,9 +316,12 @@ func (r *RunnerServiceImpl) DeleteRunner(name string) error {
 
 	err = helpers.DeleteSecret(r.config.Kube, name)
 	if err != nil && !k8sErrors.IsNotFound(err) {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("runner '%s' secrets: %w", name, err)
 	}
 
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return nil
 }
 
@@ -341,13 +375,16 @@ func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
 	return secretCleaned, nil
 }
 
-func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
+func (r *RunnerServiceImpl) UpdateSecret(actor models.Actor, name string, secret map[string]string) (map[string]string, error) {
+	audit := r.audit.NewAuditLog(actor, "update_secret", runnersCategory, name)
+
 	secretCleaned := make(map[string]string)
 	secretCurrent := make(map[string]string)
 	var operation string
 
 	secretObj, err := helpers.GetSecret(r.config.Kube, name)
 	if err != nil && !k8sErrors.IsNotFound(err) {
+		r.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("failed to get secret '%s': %w", name, err)
 	}
 	// converting k8s secret from v1.Secret into map[string]string
@@ -377,33 +414,44 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 	if len(secretCurrent) != 0 {
 		secretNew, err := helpers.CreateOrUpdateSecret(r.config.Kube, name, secretCurrent, operation)
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return secretCleaned, fmt.Errorf("failed to update secret '%s': %w", name, err)
 		}
 
 		for key := range secretNew.Data {
 			secretCleaned[key] = "************"
 		}
+		audit.Status = "success"
+		r.audit.CreateAudit(audit)
 		return secretCleaned, nil
 	} else {
 		err := helpers.DeleteSecret(r.config.Kube, name)
 		if err != nil {
+			r.audit.CreateAudit(audit)
 			return secretCleaned, fmt.Errorf("failed to delete secret '%s': %w", name, err)
 		}
+		audit.Status = "success"
+		r.audit.CreateAudit(audit)
 		return secretCleaned, nil
 	}
 }
 
-func (r *RunnerServiceImpl) DeleteSecret(name string) error {
+func (r *RunnerServiceImpl) DeleteSecret(actor models.Actor, name string) error {
+	audit := r.audit.NewAuditLog(actor, "delete_secret", runnersCategory, name)
 
 	_, err := r.GetRunner(name)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("runner %s not found: %w", name, err)
 	}
 
 	err = helpers.DeleteSecret(r.config.Kube, name)
 	if err != nil && !k8sErrors.IsNotFound(err) {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to delete secret '%s': %w", name, err)
 	}
 
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return nil
 }

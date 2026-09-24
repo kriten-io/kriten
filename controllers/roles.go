@@ -20,18 +20,14 @@ var resources = []string{"runners", "tasks", "jobs"}
 var access = []string{"read", "write", "execute"}
 
 type RoleController struct {
-	RoleService   services.RoleService
-	AuthService   services.AuthService
-	AuditService  services.AuditService
-	AuditCategory string
+	RoleService services.RoleService
+	AuthService services.AuthService
 }
 
-func NewRoleController(rs services.RoleService, as services.AuthService, als services.AuditService) RoleController {
+func NewRoleController(rs services.RoleService, as services.AuthService) RoleController {
 	return RoleController{
-		RoleService:   rs,
-		AuthService:   as,
-		AuditService:  als,
-		AuditCategory: "roles",
+		RoleService: rs,
+		AuthService: as,
 	}
 }
 
@@ -150,53 +146,43 @@ func (rc *RoleController) GetRole(ctx *gin.Context) {
 //	@Router			/roles [post]
 //	@Security		Bearer
 func (rc *RoleController) CreateRole(ctx *gin.Context) {
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory, "*")
 	var role models.Role
 
 	if err := ctx.ShouldBindJSON(&role); err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid role payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = role.Name
 
 	if !slices.Contains(resources, role.Resource) {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("invalid role resource, supported options: %s", resources))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 	if !slices.Contains(access, role.Access) {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("access type not allowed, supported options: %s", access))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if role.Access == "execute" && role.Resource != "tasks" {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("access type 'execute' applied to resource 'tasks' only"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if role.Access != "read" && role.Resource == "jobs" {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("resource 'jobs' valid access type is 'read'"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	role, err := rc.RoleService.CreateRole(role)
+	role, err := rc.RoleService.CreateRole(getActor(ctx), role)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -217,12 +203,10 @@ func (rc *RoleController) CreateRole(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory, roleID)
 	var role models.Role
 	var err error
 
 	if err := ctx.ShouldBindJSON(&role); err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid role payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
@@ -230,47 +214,39 @@ func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 
 	role.ID, err = uuid.FromString(roleID)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid role id format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if !slices.Contains(resources, role.Resource) {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("invalid role resource, supported options: %s", resources))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 	if !slices.Contains(access, role.Access) {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("access type not allowed, supported options: %s", access))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if role.Access == "run" && role.Resource != "tasks" {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("access type 'execute' applied to 'tasks' only"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if role.Access != "read" && role.Resource == "jobs" {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("resource 'jobs' valid access type is 'read'"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	role, err = rc.RoleService.UpdateRole(role)
+	role, err = rc.RoleService.UpdateRole(getActor(ctx), role)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, role)
 }
 
@@ -290,7 +266,6 @@ func (rc *RoleController) UpdateRole(ctx *gin.Context) {
 //	@Security		Bearer
 func (rc *RoleController) DeleteRole(ctx *gin.Context) {
 	roleID := ctx.Param("id")
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory, roleID)
 
 	_, err := uuid.FromString(roleID)
 	if err != nil {
@@ -298,13 +273,11 @@ func (rc *RoleController) DeleteRole(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	err = rc.RoleService.DeleteRole(roleID)
+	err = rc.RoleService.DeleteRole(getActor(ctx), roleID)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "role deleted successfully"})
 }
 

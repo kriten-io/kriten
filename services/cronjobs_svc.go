@@ -20,19 +20,23 @@ import (
 type CronJobService interface {
 	ListCronJobs([]string) ([]models.CronJob, error)
 	GetCronJob(string) (models.CronJob, error)
-	CreateCronJob(models.CronJob) (models.CronJob, error)
-	UpdateCronJob(models.CronJob) (models.CronJob, error)
-	DeleteCronJob(string) error
+	CreateCronJob(models.Actor, models.CronJob) (models.CronJob, error)
+	UpdateCronJob(models.Actor, models.CronJob) (models.CronJob, error)
+	DeleteCronJob(models.Actor, string) error
 	GetSchema(string) (map[string]interface{}, error)
 }
 
+const cronjobsCategory = "cronjobs"
+
 type CronJobServiceImpl struct {
 	config config.Config
+	audit  AuditService
 }
 
-func NewCronJobService(config config.Config) CronJobService {
+func NewCronJobService(config config.Config, als AuditService) CronJobService {
 	return &CronJobServiceImpl{
 		config: config,
+		audit:  als,
 	}
 }
 
@@ -111,42 +115,61 @@ func (j *CronJobServiceImpl) GetCronJob(name string) (models.CronJob, error) {
 	return cronjob, nil
 }
 
-func (j *CronJobServiceImpl) CreateCronJob(cronjob models.CronJob) (models.CronJob, error) {
+func (j *CronJobServiceImpl) CreateCronJob(actor models.Actor, cronjob models.CronJob) (models.CronJob, error) {
+	audit := j.audit.NewAuditLog(actor, "create", cronjobsCategory, cronjob.Task)
+	cronjob.Owner = actor.Username
+
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w, %v", cronjob.Name, ErrSvcCronJobPrecheck, err)
 	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "create")
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, err)
 	}
 
+	audit.Status = "success"
+	j.audit.CreateAudit(audit)
 	return cronjob, nil
 }
 
-func (j *CronJobServiceImpl) UpdateCronJob(cronjob models.CronJob) (models.CronJob, error) {
+func (j *CronJobServiceImpl) UpdateCronJob(actor models.Actor, cronjob models.CronJob) (models.CronJob, error) {
+	audit := j.audit.NewAuditLog(actor, "update", cronjobsCategory, cronjob.Name)
+	cronjob.Owner = actor.Username
+
 	_, err := helpers.GetCronJob(j.config.Kube, cronjob.Name)
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, ErrSvcObjNotFound)
 		}
+		return models.CronJob{}, err
 	}
 	runner, command, err := PreFlightChecks(j.config.Kube, cronjob)
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w, %v", cronjob.Name, ErrSvcCronJobPrecheck, err)
 	}
 
 	_, err = helpers.CreateOrUpdateCronJob(j.config.Kube, cronjob, runner, command, "update")
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		return models.CronJob{}, fmt.Errorf("cronjob '%s': %w", cronjob.Name, err)
 	}
+	audit.Status = "success"
+	j.audit.CreateAudit(audit)
 	return cronjob, err
 }
 
-func (j *CronJobServiceImpl) DeleteCronJob(name string) error {
+func (j *CronJobServiceImpl) DeleteCronJob(actor models.Actor, name string) error {
+	audit := j.audit.NewAuditLog(actor, "delete", cronjobsCategory, name)
+
 	_, err := helpers.GetCronJob(j.config.Kube, name)
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("cronjob '%s': %w", name, ErrSvcObjNotFound)
 		}
@@ -155,9 +178,12 @@ func (j *CronJobServiceImpl) DeleteCronJob(name string) error {
 
 	err = helpers.DeleteCronJob(j.config.Kube, name)
 	if err != nil {
+		j.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to delete cronjob %s: %w", name, err)
 	}
 
+	audit.Status = "success"
+	j.audit.CreateAudit(audit)
 	return nil
 }
 

@@ -16,22 +16,18 @@ import (
 )
 
 type UserController struct {
-	UserService   services.UserService
-	GroupService  services.GroupService
-	AuthService   services.AuthService
-	providers     []string
-	AuditService  services.AuditService
-	AuditCategory string
+	UserService  services.UserService
+	GroupService services.GroupService
+	AuthService  services.AuthService
+	providers    []string
 }
 
-func NewUserController(userService services.UserService, gs services.GroupService, as services.AuthService, als services.AuditService, p []string) UserController {
+func NewUserController(userService services.UserService, gs services.GroupService, as services.AuthService, p []string) UserController {
 	return UserController{
-		UserService:   userService,
-		GroupService:  gs,
-		AuthService:   as,
-		providers:     p,
-		AuditService:  als,
-		AuditCategory: "users",
+		UserService:  userService,
+		GroupService: gs,
+		AuthService:  as,
+		providers:    p,
 	}
 }
 
@@ -178,32 +174,26 @@ func (uc *UserController) GetUserGroups(ctx *gin.Context) {
 //	@Router			/users [post]
 //	@Security		Bearer
 func (uc *UserController) CreateUser(ctx *gin.Context) {
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, "*")
 	var user models.User
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid user payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = user.Username
 
 	if !slices.Contains(uc.providers, user.Provider) {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("invalid provider, supported providers: %s", uc.providers))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	user, err := uc.UserService.CreateUser(user)
+	user, err := uc.UserService.CreateUser(getActor(ctx), user)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -224,19 +214,16 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *UserController) UpdateUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 	var user models.User
 	var err error
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid user payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if !slices.Contains(uc.providers, user.Provider) {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("invalid provider, supported providers: %s", uc.providers))
 		ctx.Status(http.StatusBadRequest)
 		return
@@ -244,20 +231,16 @@ func (uc *UserController) UpdateUser(ctx *gin.Context) {
 
 	user.ID, err = uuid.FromString(userID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid user id format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	user, err = uc.UserService.UpdateUser(user)
+	user, err = uc.UserService.UpdateUser(getActor(ctx), user)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, user)
 }
 
@@ -278,7 +261,6 @@ func (uc *UserController) UpdateUser(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *UserController) DeleteUser(ctx *gin.Context) {
 	userID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "list", uc.AuditCategory, userID)
 
 	_, err := uuid.FromString(userID)
 	if err != nil {
@@ -286,13 +268,10 @@ func (uc *UserController) DeleteUser(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	err = uc.UserService.DeleteUser(userID)
+	err = uc.UserService.DeleteUser(getActor(ctx), userID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "user deleted successfully"})
 }

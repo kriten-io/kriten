@@ -17,22 +17,26 @@ import (
 type UserService interface {
 	ListUsers([]string, models.UserQueryParams) ([]models.User, int, error)
 	GetUser(string) (models.User, error)
-	CreateUser(models.User) (models.User, error)
-	UpdateUser(models.User) (models.User, error)
-	DeleteUser(string) error
+	CreateUser(models.Actor, models.User) (models.User, error)
+	UpdateUser(models.Actor, models.User) (models.User, error)
+	DeleteUser(models.Actor, string) error
 	GetByUsernameAndProvider(string, string) (models.User, error)
 	GetUserRoles(string) ([]models.Role, error)
 }
 
+const usersCategory = "users"
+
 type UserServiceImpl struct {
 	db     *gorm.DB
 	config config.Config
+	audit  AuditService
 }
 
-func NewUserService(database *gorm.DB, config config.Config) UserService {
+func NewUserService(database *gorm.DB, config config.Config, als AuditService) UserService {
 	return &UserServiceImpl{
 		db:     database,
 		config: config,
+		audit:  als,
 	}
 }
 
@@ -93,10 +97,13 @@ func (u *UserServiceImpl) GetUser(id string) (models.User, error) {
 	return user, nil
 }
 
-func (u *UserServiceImpl) CreateUser(user models.User) (models.User, error) {
+func (u *UserServiceImpl) CreateUser(actor models.Actor, user models.User) (models.User, error) {
+	audit := u.audit.NewAuditLog(actor, "create", usersCategory, user.Username)
+
 	if user.Provider == "local" {
 		password, err := HashPassword(user.Password)
 		if err != nil {
+			u.audit.CreateAudit(audit)
 			return models.User{}, fmt.Errorf("failed to generate hash for user password: %w", err)
 		}
 		user.Password = password
@@ -104,47 +111,62 @@ func (u *UserServiceImpl) CreateUser(user models.User) (models.User, error) {
 
 	res := u.db.Create(&user)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
 			return models.User{}, fmt.Errorf("failed to create user '%s': %w", user.Username, ErrSvcDBDuplicatedKey)
 		}
 		return models.User{}, fmt.Errorf("failed to create user '%s': %w", user.Username, res.Error)
 	}
 
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return user, nil
 }
 
-func (u *UserServiceImpl) UpdateUser(user models.User) (models.User, error) {
+func (u *UserServiceImpl) UpdateUser(actor models.Actor, user models.User) (models.User, error) {
+	audit := u.audit.NewAuditLog(actor, "update", usersCategory, user.ID.String())
+
 	password, err := HashPassword(user.Password)
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return models.User{}, fmt.Errorf("failed to generate hash for user password: %w", err)
 	}
 
 	user.Password = password
 	res := u.db.Updates(user)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return models.User{}, fmt.Errorf("failed to update user '%s': %w", user.ID.String(), res.Error)
 	}
 
 	newUser, err := u.GetUser(user.ID.String())
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return models.User{}, fmt.Errorf("failed to get user '%s': %w", user.ID.String(), err)
 	}
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return newUser, nil
 }
 
-func (u *UserServiceImpl) DeleteUser(userID string) error {
+func (u *UserServiceImpl) DeleteUser(actor models.Actor, userID string) error {
+	audit := u.audit.NewAuditLog(actor, "delete", usersCategory, userID)
+
 	var userGroups []models.Group
 	user, err := u.GetUser(userID)
 	if err != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to get user '%s': %w", userID, err)
 	}
 
 	res := u.db.Model(&models.Group{}).Where("? = ANY(users)", userID).Find(&userGroups)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to get user '%s' groups: %w", userID, res.Error)
 	}
 
 	if len(userGroups) != 0 {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("cannot delete user: %w", ErrSvcUserGroupMembership)
 	}
 
@@ -152,16 +174,21 @@ func (u *UserServiceImpl) DeleteUser(userID string) error {
 	res = u.db.Where("owner = ?", userID).Find(&apiTokens)
 
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to get API tokens for user: %w", res.Error)
 	}
 	if res.RowsAffected != 0 {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("found user owned API tokens, delete those first: %w", ErrSvcObjInUse)
 	}
 
 	res = u.db.Unscoped().Delete(&user)
 	if res.Error != nil {
+		u.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to delete user '%s': %w", userID, res.Error)
 	}
+	audit.Status = "success"
+	u.audit.CreateAudit(audit)
 	return nil
 }
 

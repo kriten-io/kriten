@@ -17,23 +17,27 @@ import (
 type RoleService interface {
 	ListRoles([]string, models.RoleQueryParams) ([]models.Role, int, error)
 	GetRole(string) (models.Role, error)
-	CreateRole(models.Role) (models.Role, error)
-	UpdateRole(models.Role) (models.Role, error)
-	DeleteRole(string) error
+	CreateRole(models.Actor, models.Role) (models.Role, error)
+	UpdateRole(models.Actor, models.Role) (models.Role, error)
+	DeleteRole(models.Actor, string) error
 	ListRoleGroups(string) ([]models.RoleGroup, error)
 }
+
+const rolesCategory = "roles"
 
 type RoleServiceImpl struct {
 	db           *gorm.DB
 	config       config.Config
 	GroupService GroupService
+	audit        AuditService
 }
 
-func NewRoleService(database *gorm.DB, config config.Config, gs GroupService) RoleService {
+func NewRoleService(database *gorm.DB, config config.Config, gs GroupService, als AuditService) RoleService {
 	return &RoleServiceImpl{
 		db:           database,
 		config:       config,
 		GroupService: gs,
+		audit:        als,
 	}
 }
 
@@ -91,67 +95,87 @@ func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {
 	return role, nil
 }
 
-func (r *RoleServiceImpl) CreateRole(role models.Role) (models.Role, error) {
+func (r *RoleServiceImpl) CreateRole(actor models.Actor, role models.Role) (models.Role, error) {
+	audit := r.audit.NewAuditLog(actor, "create", rolesCategory, role.Name)
+
 	err := r.CheckRole(role)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return models.Role{}, fmt.Errorf("role '%s': %w, %s", role.Name, ErrSvcRoleValidation, err.Error())
 	}
 	res := r.db.Create(&role)
 	if res.Error != nil {
+		r.audit.CreateAudit(audit)
 		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
 			return models.Role{}, fmt.Errorf("error creating role '%s': %w", role.Name, ErrSvcDBDuplicatedKey)
 		}
 		return models.Role{}, fmt.Errorf("error creating role '%s': %w", role.Name, res.Error)
 	}
 
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return role, nil
 }
 
-func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
+func (r *RoleServiceImpl) UpdateRole(actor models.Actor, role models.Role) (models.Role, error) {
+	audit := r.audit.NewAuditLog(actor, "update", rolesCategory, role.ID.String())
 
 	_, err := r.GetRole(role.ID.String())
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return models.Role{}, fmt.Errorf("error getting role: %w", err)
 	}
 
 	err = r.CheckRole(role)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return models.Role{}, fmt.Errorf("role '%s': %w, %s", role.Name, ErrSvcRoleValidation, err.Error())
 	}
 
 	res := r.db.Updates(role)
 	if res.Error != nil {
+		r.audit.CreateAudit(audit)
 		return models.Role{}, fmt.Errorf("error updating role '%s': %w", role.ID.String(), res.Error)
 	}
 
 	newRole, err := r.GetRole(role.ID.String())
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return models.Role{}, fmt.Errorf("error getting role: %w", err)
 	}
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return newRole, nil
 }
 
-func (r *RoleServiceImpl) DeleteRole(id string) error {
+func (r *RoleServiceImpl) DeleteRole(actor models.Actor, id string) error {
+	audit := r.audit.NewAuditLog(actor, "delete", rolesCategory, id)
+
 	var groups []models.Group
 	role, err := r.GetRole(id)
 	if err != nil {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("error getting role: %w", err)
 	}
 
 	if role.Builtin {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("error deleting role '%s': %w", id, ErrSvcDeleteBuiltin)
 	}
 
 	res := r.db.Model(&models.Group{}).Where("? = ANY(roles)", id).Find(&groups)
 	if len(groups) != 0 {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("role %s is used, please remove role from groups first: %w", role.ID, ErrSvcObjInUse)
 	}
 
 	res = r.db.Unscoped().Delete(&role)
 	if res.Error != nil {
+		r.audit.CreateAudit(audit)
 		return fmt.Errorf("error deleting role '%s': %w", id, res.Error)
 	}
-
+	audit.Status = "success"
+	r.audit.CreateAudit(audit)
 	return nil
 }
 

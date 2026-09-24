@@ -29,25 +29,30 @@ import (
 type TaskService interface {
 	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, int, error)
 	GetTask(string) (*models.Task, error)
-	CreateTask(models.Task) (*models.Task, error)
-	UpdateTask(models.Task) (*models.Task, error)
-	DeleteTask(string) error
+	CreateTask(models.Actor, models.Task) (*models.Task, error)
+	UpdateTask(models.Actor, models.Task) (*models.Task, error)
+	DeleteTask(models.Actor, string) error
 	GetSchema(string) (map[string]interface{}, error)
-	DeleteSchema(string) error
-	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
-	RunTask(string, string, string) (models.Job, error)
+	DeleteSchema(models.Actor, string) error
+	UpdateSchema(models.Actor, string, map[string]interface{}) (map[string]interface{}, error)
+	RunTask(models.Actor, string, string) (models.Job, error)
 }
+
+const tasksCategory = "tasks"
 
 type TaskServiceImpl struct {
 	WebhookService WebhookService
 	JobService     JobService
 	config         config.Config
+	audit          AuditService
 }
 
-func NewTaskService(ws WebhookService, config config.Config) TaskService {
+func NewTaskService(ws WebhookService, config config.Config, js JobService, als AuditService) TaskService {
 	return &TaskServiceImpl{
 		WebhookService: ws,
 		config:         config,
+		JobService:     js,
+		audit:          als,
 	}
 }
 
@@ -142,33 +147,40 @@ func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
 	return &taskData, nil
 }
 
-func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
+func (t *TaskServiceImpl) CreateTask(actor models.Actor, task models.Task) (*models.Task, error) {
+	audit := t.audit.NewAuditLog(actor, "create", tasksCategory, task.Name)
+
 	var jsonData []byte
 	err := helpers.ValidateK8sConfigMapName(task.Name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': %w",
 			task.Name,
 			ErrSvcObjNameK8sConfMap)
 	}
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 		}
 		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
 	}
 	if runner.Data["image"] == "" {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
+			t.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
+			t.audit.CreateAudit(audit)
 			errString := strings.ReplaceAll(err.Error(), "\"", "'")
 			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 		}
@@ -184,6 +196,7 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsAlreadyExists(err) {
 			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjExists)
 		}
@@ -192,16 +205,22 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 
 	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return configuredTask, nil
 }
 
-func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
+func (t *TaskServiceImpl) UpdateTask(actor models.Actor, task models.Task) (*models.Task, error) {
+	audit := t.audit.NewAuditLog(actor, "update", tasksCategory, task.Name)
+
 	var jsonData []byte
 
 	_, err := helpers.GetConfigMap(t.config.Kube, task.Name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjNotFound)
 		}
@@ -210,6 +229,7 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 		}
@@ -217,17 +237,20 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 	}
 
 	if runner.Data["image"] == "" {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
 		jsonData, err = json.Marshal(task.Schema)
 		if err != nil {
+			t.audit.CreateAudit(audit)
 			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
+			t.audit.CreateAudit(audit)
 			errString := strings.ReplaceAll(err.Error(), "\"", "'")
 			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 		}
@@ -242,30 +265,40 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
 	configuredTask, err := t.GetTask(task.Name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return configuredTask, nil
 }
 
-func (t *TaskServiceImpl) DeleteTask(name string) error {
+func (t *TaskServiceImpl) DeleteTask(actor models.Actor, name string) error {
+	audit := t.audit.NewAuditLog(actor, "delete", tasksCategory, name)
+
 	res, err := t.WebhookService.ListTaskWebhooks(name)
 	if len(res) != 0 {
+		t.audit.CreateAudit(audit)
 		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", name, ErrSvcObjInUse)
 	}
 
 	err = helpers.DeleteConfigMap(t.config.Kube, name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 		}
 		return fmt.Errorf("task '%s': %w", name, err)
 	}
 
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return nil
 }
 
@@ -293,9 +326,12 @@ func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error)
 	return data, nil
 }
 
-func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{}) (map[string]interface{}, error) {
+func (t *TaskServiceImpl) UpdateSchema(actor models.Actor, name string, schema map[string]interface{}) (map[string]interface{}, error) {
+	audit := t.audit.NewAuditLog(actor, "update_schema", tasksCategory, name)
+
 	task, err := helpers.GetConfigMap(t.config.Kube, name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		if k8sErrors.IsNotFound(err) {
 			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 		}
@@ -303,16 +339,19 @@ func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{
 
 	}
 	if task.Data["runner"] == "" {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
 	}
 
 	data, err := json.Marshal(schema)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
 	err = ValidateSchema(data)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		errString := strings.ReplaceAll(err.Error(), "\"", "'")
 		return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 	}
@@ -320,19 +359,27 @@ func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{
 	task.Data["schema"] = string(data)
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, task.Data, "update")
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return schema, nil
 }
 
-func (t *TaskServiceImpl) DeleteSchema(name string) error {
+func (t *TaskServiceImpl) DeleteSchema(actor models.Actor, name string) error {
+	audit := t.audit.NewAuditLog(actor, "delete_schema", tasksCategory, name)
+
 	task, err := t.GetTask(name)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return fmt.Errorf("%w", err)
 	}
 
 	if task.Schema == nil {
+		audit.Status = "success"
+		t.audit.CreateAudit(audit)
 		return nil
 	}
 
@@ -343,9 +390,12 @@ func (t *TaskServiceImpl) DeleteSchema(name string) error {
 	delete(data, "schema")
 	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return fmt.Errorf("task '%s' schema: %w", name, err)
 	}
 
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return nil
 }
 
@@ -371,12 +421,14 @@ func ValidateSchema(schema []byte) error {
 	return nil
 }
 
-func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars string) (models.Job, error) {
+func (t *TaskServiceImpl) RunTask(actor models.Actor, taskName string, extraVars string) (models.Job, error) {
 	ctx := context.Background()
 	var jobStatus models.Job
+	audit := t.audit.NewAuditLog(actor, "run", tasksCategory, taskName)
 
 	task, err := helpers.GetConfigMap(t.config.Kube, taskName)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return jobStatus, err
 	}
 	runnerName := task.Data["runner"]
@@ -393,6 +445,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		// strfmt.Default is the registry of recognized formats
 		err = validate.AgainstSchema(schema, input, strfmt.Default)
 		if err != nil {
+			t.audit.CreateAudit(audit)
 			log.Printf("JSON does not validate against schema: %v", err)
 			return models.Job{}, err
 		}
@@ -400,6 +453,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 
 	runner, err := helpers.GetConfigMap(t.config.Kube, runnerName)
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return jobStatus, err
 	}
 	runnerImage := runner.Data["image"]
@@ -413,6 +467,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 	token, err := helpers.GetSecret(t.config.Kube, tokenObjName)
 	if err != nil {
 		if !k8sErrors.IsNotFound(err) {
+			t.audit.CreateAudit(audit)
 			return jobStatus, err
 		}
 	} else {
@@ -427,7 +482,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		taskName,
 		runnerName,
 		runnerImage,
-		username,
+		actor.Username,
 		extraVars,
 		task.Data["command"],
 		gitURL,
@@ -437,6 +492,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 	jobStatus.Name = jobName
 
 	if err != nil {
+		t.audit.CreateAudit(audit)
 		return jobStatus, err
 	}
 
@@ -458,9 +514,23 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 				return false, nil
 			})
 
-		ret, err := t.JobService.GetJob(username, jobName)
-		return ret, err
+		if err != nil {
+			t.audit.CreateAudit(audit)
+			return models.Job{}, err
+		}
+
+		ret, err := t.JobService.GetJob(actor.Username, jobName)
+		if err != nil {
+			t.audit.CreateAudit(audit)
+			return ret, err
+		}
+
+		audit.Status = "success"
+		t.audit.CreateAudit(audit)
+		return ret, nil
 	}
 
+	audit.Status = "success"
+	t.audit.CreateAudit(audit)
 	return jobStatus, nil
 }

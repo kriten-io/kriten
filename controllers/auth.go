@@ -14,18 +14,14 @@ import (
 )
 
 type AuthController struct {
-	AuthService   services.AuthService
-	providers     []string
-	AuditService  services.AuditService
-	AuditCategory string
+	AuthService services.AuthService
+	providers   []string
 }
 
-func NewAuthController(as services.AuthService, als services.AuditService, p []string) AuthController {
+func NewAuthController(as services.AuthService, p []string) AuthController {
 	return AuthController{
-		AuthService:   as,
-		AuditService:  als,
-		AuditCategory: "authentication",
-		providers:     p,
+		AuthService: as,
+		providers:   p,
 	}
 }
 
@@ -49,22 +45,15 @@ func (ac *AuthController) SetAuthRoutes(rg *gin.RouterGroup) {
 //	@Failure		500			{object}	helpers.HTTPError
 //	@Router			/login [post]
 func (ac *AuthController) Login(ctx *gin.Context) {
-	// timestamp := time.Now().UTC()
 	var credentials models.Credentials
-	audit := ac.AuditService.InitialiseAuditLog(ctx, "login", ac.AuditCategory, "*")
 
 	if err := ctx.ShouldBindJSON(&credentials); err != nil {
-		ac.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid login payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	audit.UserName = credentials.Username
-	audit.Provider = credentials.Provider
-
 	if !slices.Contains(ac.providers, credentials.Provider) {
-		ac.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid authentication provider"))
 		ctx.Status(http.StatusBadRequest)
 		return
@@ -72,14 +61,10 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	token, expiry, err := ac.AuthService.Login(&credentials)
 	if err != nil {
-		ac.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid credentials"))
 		ctx.Status(http.StatusUnauthorized)
 		return
 	}
-
-	audit.Status = "success"
-	ac.AuditService.CreateAudit(audit)
 
 	ctx.SetSameSite(http.SameSiteNoneMode)
 	ctx.SetCookie("token", token, expiry, "", "", false, true)

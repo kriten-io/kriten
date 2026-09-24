@@ -17,19 +17,23 @@ type WebhookService interface {
 	ListTaskWebhooks(string) ([]models.Webhook, error)
 	ListAllWebhooks([]string) ([]models.Webhook, error)
 	GetWebhook(string) (models.Webhook, error)
-	CreateWebhook(models.Webhook) (models.Webhook, error)
-	DeleteWebhook(string) error
+	CreateWebhook(models.Actor, models.Webhook) (models.Webhook, error)
+	DeleteWebhook(models.Actor, string) error
 }
+
+const webhooksCategory = "webHooks"
 
 type WebhookServiceImpl struct {
 	db     *gorm.DB
 	config config.Config
+	audit  AuditService
 }
 
-func NewWebhookService(database *gorm.DB, config config.Config) WebhookService {
+func NewWebhookService(database *gorm.DB, config config.Config, als AuditService) WebhookService {
 	return &WebhookServiceImpl{
 		db:     database,
 		config: config,
+		audit:  als,
 	}
 }
 
@@ -99,22 +103,34 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	return webHook, nil
 }
 
-func (w *WebhookServiceImpl) CreateWebhook(webHook models.Webhook) (models.Webhook, error) {
+func (w *WebhookServiceImpl) CreateWebhook(actor models.Actor, webHook models.Webhook) (models.Webhook, error) {
+	audit := w.audit.NewAuditLog(actor, "create", webhooksCategory, webHook.Task)
+	webHook.Owner = actor.UserID
+
 	res := w.db.Create(&webHook)
 	if res.Error != nil {
+		w.audit.CreateAudit(audit)
 		return models.Webhook{}, fmt.Errorf("failed to create webhook: %w", res.Error)
 	}
+	audit.Status = "success"
+	w.audit.CreateAudit(audit)
 	return webHook, nil
 }
 
-func (w *WebhookServiceImpl) DeleteWebhook(id string) error {
+func (w *WebhookServiceImpl) DeleteWebhook(actor models.Actor, id string) error {
+	audit := w.audit.NewAuditLog(actor, "delete", webhooksCategory, id)
+
 	webHook, err := w.GetWebhook(id)
 	if err != nil {
+		w.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to get webhook '%s': %w", id, err)
 	}
 	res := w.db.Unscoped().Delete(&webHook)
 	if res.Error != nil {
+		w.audit.CreateAudit(audit)
 		return fmt.Errorf("failed to delete webhook '%s': %w", id, res.Error)
 	}
+	audit.Status = "success"
+	w.audit.CreateAudit(audit)
 	return nil
 }
