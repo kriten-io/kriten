@@ -304,13 +304,13 @@ info:
     email: info@kubecode.io
     name: Kubecode Support
     url: https://www.kubecode.io/contact
-  description: API Gateway for your kubernetes services.
+  description: Automation code execution platform.
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   termsOfService: http://swagger.io/terms/
   title: Swagger Kriten
-  version: v0.3
+  version: v1.0.0
 paths:
   /api-tokens:
     get:
@@ -759,7 +759,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get task schema for the job info and input parameters
+      description: Get schema for the job info and input parameters
       parameters:
       - description: Task  name
         in: path
@@ -774,6 +774,10 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
         "404":
           description: Not Found
           schema:
@@ -784,9 +788,9 @@ paths:
             $ref: '#/definitions/helpers.HTTPError'
       security:
       - Bearer: []
-      summary: Get task schema
+      summary: Get schema
       tags:
-      - jobs
+      - cronjobs
   /groups:
     get:
       consumes:

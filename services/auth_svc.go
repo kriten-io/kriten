@@ -286,7 +286,7 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 		}
 		// permission to run tasks gives also permissions to read associated jobs and tasks
 		if (auth.Resource == "jobs" || auth.Resource == "tasks") && auth.Access == "read" &&
-			slices.Contains(role.Resource_Names, auth.ResourceName) &&
+			(slices.Contains(role.Resource_Names, auth.ResourceName) || slices.Contains(role.Resource_Names, "*")) &&
 			role.Resource == "tasks" && role.Access == "execute" {
 			return true, nil
 		}

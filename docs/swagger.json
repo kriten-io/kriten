@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "API Gateway for your kubernetes services.",
+        "description": "Automation code execution platform.",
         "title": "Swagger Kriten",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
@@ -13,7 +13,7 @@
             "name": "Apache 2.0",
             "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
         },
-        "version": "v0.3"
+        "version": "v1.0.0"
     },
     "basePath": "/api/v1",
     "paths": {
@@ -723,7 +723,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Get task schema for the job info and input parameters",
+                "description": "Get schema for the job info and input parameters",
                 "consumes": [
                     "application/json"
                 ],
@@ -731,9 +731,9 @@
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "cronjobs"
                 ],
-                "summary": "Get task schema",
+                "summary": "Get schema",
                 "parameters": [
                     {
                         "type": "string",
@@ -749,6 +749,12 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "404": {

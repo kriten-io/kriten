@@ -730,7 +730,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Get task schema for the job info and input parameters",
+                "description": "Get schema for the job info and input parameters",
                 "consumes": [
                     "application/json"
                 ],
@@ -738,9 +738,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "cronjobs"
                 ],
-                "summary": "Get task schema",
+                "summary": "Get schema",
                 "parameters": [
                     {
                         "type": "string",
@@ -756,6 +756,12 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
                         }
                     },
                     "404": {
@@ -4084,12 +4090,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "v0.3",
+	Version:          "v1.0.0",
 	Host:             "",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Swagger Kriten",
-	Description:      "API Gateway for your kubernetes services.",
+	Description:      "Automation code execution platform.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

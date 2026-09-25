@@ -241,7 +241,7 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 //	@Security		Signature
 func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
-	taskID := ctx.MustGet("taskID").(string)
+	task := ctx.MustGet("task").(string)
 	username := ctx.MustGet("username").(string)
 
 	_, err := uuid.FromString(webhookID)
@@ -263,7 +263,7 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 		return
 	}
 
-	job, err := wc.TaskService.RunTask(username, taskID, string(extraVars))
+	job, err := wc.TaskService.RunTask(username, task, string(extraVars))
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)

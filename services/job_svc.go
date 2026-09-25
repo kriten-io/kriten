@@ -19,7 +19,6 @@ type JobService interface {
 	ListJobs([]string, models.JobQueryParams) ([]models.Job, int, error)
 	GetJob(string, string) (models.Job, error)
 	GetLog(string, string) (string, error)
-	GetSchema(string) (map[string]interface{}, error)
 }
 
 type JobServiceImpl struct {
@@ -306,28 +305,4 @@ func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error)
 	}
 
 	return logs, nil
-}
-
-func (j *JobServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
-	var data map[string]interface{}
-
-	configMap, err := helpers.GetConfigMap(j.config.Kube, name)
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("failed to get task '%s': %w", name, err)
-	}
-	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-	}
-
-	if configMap.Data["schema"] != "" {
-		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
-		if err != nil {
-			return nil, fmt.Errorf("task '%s': failed to convert schema to json format: %w", name, err)
-		}
-	}
-
-	return data, nil
 }

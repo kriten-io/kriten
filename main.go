@@ -155,8 +155,8 @@ func init() {
 }
 
 //	@title			  Swagger Kriten
-//	@version		  v0.3
-//	@description	  API Gateway for your kubernetes services.
+//	@version		  v1.0.0
+//	@description	  Automation code execution platform.
 //  @externalDocs.url https://kriten.io
 //	@termsOfService	  http://swagger.io/terms/
 
