@@ -173,7 +173,7 @@ func (a *AuthServiceImpl) ValidateAPIToken(key string) (models.User, error) {
 
 	// Token is Valid, retrieving User info
 	var user models.User
-	res = a.db.Where("user_id = ?", apiToken.Owner).Find(&user)
+	res = a.db.Where("id = ?", apiToken.Owner).Find(&user)
 	if res.Error != nil {
 		return models.User{}, res.Error
 	}
@@ -217,7 +217,7 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	}
 
 	var user models.User
-	res = a.db.Where("user_id = ?", webhook.Owner).Find(&user)
+	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
 		return models.User{}, "", res.Error
 	}

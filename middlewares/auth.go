@@ -41,7 +41,7 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 			}
 
 			if webhookMsgID != "" && webhookTimestamp != "" && webhookSig != "" {
-				owner, taskID, err := as.ValidateWebhookSignatureInfraHub(
+				owner, task, err := as.ValidateWebhookSignatureInfraHub(
 					webhookID,
 					webhookMsgID,
 					webhookTimestamp,
@@ -54,9 +54,9 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 				ctx.Set("userID", owner.ID)
 				ctx.Set("username", owner.Username)
 				ctx.Set("provider", owner.Provider)
-				ctx.Set("taskID", taskID)
+				ctx.Set("task", task)
 			} else if signature != "" {
-				owner, taskID, err := as.ValidateWebhookSignatureCommon(
+				owner, task, err := as.ValidateWebhookSignatureCommon(
 					webhookID,
 					signature,
 					body)
@@ -67,7 +67,7 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 				ctx.Set("userID", owner.ID)
 				ctx.Set("username", owner.Username)
 				ctx.Set("provider", owner.Provider)
-				ctx.Set("taskID", taskID)
+				ctx.Set("task", task)
 			} else {
 				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "webhook authentication failed."})
 				return
@@ -116,12 +116,13 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)
 		provider := ctx.MustGet("provider").(string)
+		task := ctx.GetString("task")
 
 		resourceName := ""
 		if ctx.Param("name") != "" {
 			resourceName = ctx.Param("name")
-		} else {
-			resourceName = ctx.Param("id")
+		} else if task != "" {
+			resourceName = task
 		}
 
 		if resourceName == "" {

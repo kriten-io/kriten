@@ -54,7 +54,7 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 	r.POST("", wc.CreateWebhook)
 	r.PUT("", wc.CreateWebhook)
 
-	r.POST("/run/:id", middlewares.AuthorizationMiddleware(wc.AuthService, "jobs", "write"), wc.RunWebhook)
+	r.POST("/run/:id", middlewares.AuthorizationMiddleware(wc.AuthService, "tasks", "execute"), wc.RunWebhook)
 
 	r.Use(middlewares.AuthorizationMiddleware(wc.AuthService, "webHooks", "write"))
 	{

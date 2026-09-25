@@ -44,9 +44,10 @@ type TaskServiceImpl struct {
 	config         config.Config
 }
 
-func NewTaskService(ws WebhookService, config config.Config) TaskService {
+func NewTaskService(ws WebhookService, config config.Config, js JobService) TaskService {
 	return &TaskServiceImpl{
 		WebhookService: ws,
+		JobService:     js,
 		config:         config,
 	}
 }
