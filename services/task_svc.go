@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -394,8 +393,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		// strfmt.Default is the registry of recognized formats
 		err = validate.AgainstSchema(schema, input, strfmt.Default)
 		if err != nil {
-			log.Printf("JSON does not validate against schema: %v", err)
-			return models.Job{}, err
+			return models.Job{}, fmt.Errorf("task '%s' schema: %w, %s", taskName, ErrSvcTaskSchemaValidation, err)
 		}
 	}
 
