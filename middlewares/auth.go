@@ -123,6 +123,8 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 			resourceName = ctx.Param("name")
 		} else if task != "" {
 			resourceName = task
+		} else if ctx.Param("id") != "" {
+			resourceName = ctx.Param("id")
 		}
 
 		if resourceName == "" {
