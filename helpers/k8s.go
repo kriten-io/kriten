@@ -264,14 +264,14 @@ func JobObject(name string,
 	command string,
 	gitURL string,
 	gitBranch string) *batchv1.Job {
-
+	var job *batchv1.Job
 	var ttlSeconds = int32(kube.JobsTTL)
 	var backoffLimit int32 = 1
 
 	optionalSecret := true
 
 	// Removing output of remote URL to hide git Token
-	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote -q", gitBranch, gitURL)
+	initCmd := fmt.Sprintf("GIT_SSL_NO_VERIFY=true git clone -b %s %s . ; GIT_SSL_NO_VERIFY=true git ls-remote -q", gitBranch, gitURL)
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
@@ -282,7 +282,7 @@ func JobObject(name string,
 		})
 	}
 
-	return &batchv1.Job{
+	job = &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: name + "-",
 			Namespace:    kube.Namespace,
@@ -352,29 +352,34 @@ func JobObject(name string,
 							},
 						},
 					},
-					InitContainers: []corev1.Container{
-						{
-							Name:            "init-" + name,
-							Image:           "bitnami/git",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command: []string{
-								"sh",
-								"-c",
-								initCmd,
-							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-								},
-							},
-						},
-					},
 				},
 			},
 		},
 	}
+
+	if gitURL != "" {
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{
+			{
+				Name:            "init-" + name,
+				Image:           "bitnami/git",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command: []string{
+					"sh",
+					"-c",
+					initCmd,
+				},
+				WorkingDir: "/mnt/repo",
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "repo",
+						MountPath: "/mnt/repo",
+					},
+				},
+			},
+		}
+	}
+
+	return job
 }
 
 func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.CronJobList, error) {

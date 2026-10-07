@@ -283,23 +283,27 @@ func (j *JobServiceImpl) GetLog(username string, jobName string) (string, error)
 
 	for _, pod := range pods.Items {
 		// TODO: this will only retrieve logs for now, can be extended if needed
-		logs += "\n\n## init container logs\n"
 		for c := range pod.Spec.InitContainers {
 			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.InitContainers[c].Name)
 			if err != nil {
 				logs += fmt.Sprintf("error reading logs from init container: %v", err)
 			} else {
-				logs += jobLog
+				if jobLog != "" {
+					logs += "\n\n## init container logs\n"
+					logs += jobLog
+				}
 			}
 		}
 		// resetting jobLog to avoid duplications
-		logs += "\n\n##application container logs \n"
 		for c := range pod.Spec.Containers {
 			jobLog, err := helpers.GetLogs(j.config.Kube, pod.Name, pod.Spec.Containers[c].Name)
 			if err != nil {
 				logs += fmt.Sprintf("error reading logs from application container: %v", err)
 			} else {
-				logs += jobLog
+				if jobLog != "" {
+					logs += "\n\n##application container logs \n"
+					logs += jobLog
+				}
 			}
 		}
 	}
