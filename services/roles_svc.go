@@ -160,16 +160,28 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 
 	for _, c := range role.Resource_Names {
+		if c == "*" {
+			continue
+		}
+
+		// runners now live in the database
+		if role.Resource == "runners" {
+			var runner models.Runner
+			if err := r.db.Where("name = ?", c).First(&runner).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("runner %s not found", c)
+				}
+				return err
+			}
+			continue
+		}
+
 		configMap, err := helpers.GetConfigMap(r.config.Kube, c)
 		if err != nil {
 			return err
 		}
 		// configmaps are all stored in the same namespace, so we need to identify the resource
-		if role.Resource == "runners" {
-			if configMap.Data["image"] == "" {
-				return fmt.Errorf("runner %s not found", c)
-			}
-		} else if role.Resource == "tasks" {
+		if role.Resource == "tasks" {
 			if configMap.Data["runner"] == "" {
 				return fmt.Errorf("task %s not found", c)
 			}

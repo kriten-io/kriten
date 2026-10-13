@@ -44,6 +44,7 @@ type Config struct {
 	Environment  string
 	RootPassword string
 	APISecret    string
+	SecretsKey   []byte
 	LDAP         LDAPConfig
 	Kube         KubeConfig
 	JWT          JWTConfig
@@ -57,7 +58,10 @@ func NewConfig(gitBranch string) Config {
 		Environment:  getEnv("ENV", "development"),
 		RootPassword: getEnv("ROOT_PASSWORD", "root"),
 		APISecret:    getEnv("API_SECRET_KEY", "api-secret"),
-		DebugMode:    getEnvAsBool("DEBUG_MODE", true),
+		// SecretsKey is the master key used to encrypt runner secrets at rest.
+		// It is hashed to 32 bytes before use, so any non-empty string works.
+		SecretsKey: []byte(getEnv("SECRETS_ENCRYPTION_KEY", "kriten-dev-secrets-key")),
+		DebugMode:  getEnvAsBool("DEBUG_MODE", true),
 		LDAP: LDAPConfig{
 			BindUser: getEnv("LDAP_BIND_USER", ""),
 			BindPass: getEnv("LDAP_BIND_PASS", ""),

@@ -11,7 +11,6 @@ var (
 	ErrSvcObjExists             = errors.New("object already exists")
 	ErrSvcTaskSchemaValidation  = errors.New("schema validation error")
 	ErrSvcTaskNoRunner          = errors.New("runner not found")
-	ErrSvcCronJobPrecheck       = errors.New("cronjob precheck error")
 	ErrSvcAuthProviderMismatch  = errors.New("auth providers mismatch")
 	ErrSvcUserGroupMembership   = errors.New("user is a member of group")
 	ErrSvcRoleValidation        = errors.New("role validation error")

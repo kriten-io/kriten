@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -40,13 +41,15 @@ type TaskService interface {
 type TaskServiceImpl struct {
 	WebhookService WebhookService
 	JobService     JobService
+	RunnerService  RunnerService
 	config         config.Config
 }
 
-func NewTaskService(ws WebhookService, config config.Config, js JobService) TaskService {
+func NewTaskService(ws WebhookService, config config.Config, js JobService, rs RunnerService) TaskService {
 	return &TaskServiceImpl{
 		WebhookService: ws,
 		JobService:     js,
+		RunnerService:  rs,
 		config:         config,
 	}
 }
@@ -150,15 +153,12 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 			task.Name,
 			ErrSvcObjNameK8sConfMap)
 	}
-	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
+	_, err = t.RunnerService.GetRunner(task.Runner)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
+		if errors.Is(err, ErrSvcObjNotFound) {
 			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 		}
 		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
-	}
-	if runner.Data["image"] == "" {
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
@@ -208,16 +208,12 @@ func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
 		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
-	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
+	_, err = t.RunnerService.GetRunner(task.Runner)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
+		if errors.Is(err, ErrSvcObjNotFound) {
 			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 		}
 		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
-	}
-
-	if runner.Data["image"] == "" {
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
 	}
 
 	if task.Schema != nil {
@@ -397,34 +393,56 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		}
 	}
 
-	runner, err := helpers.GetConfigMap(t.config.Kube, runnerName)
+	runner, err := t.RunnerService.GetRunnerForExecution(runnerName)
 	if err != nil {
 		return jobStatus, err
 	}
-	runnerImage := runner.Data["image"]
-	gitURL := runner.Data["gitURL"]
-	gitBranch := runner.Data["branch"]
+	runnerImage := runner.Image
+	gitURL := runner.GitURL
+	gitBranch := runner.Branch
 
 	if gitBranch == "" {
 		gitBranch = "main"
 	}
-	tokenObjName := runnerName + "-token"
-	token, err := helpers.GetSecret(t.config.Kube, tokenObjName)
-	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
+
+	// Custom runner secrets are materialised into a short lived Kubernetes
+	// secret referenced by the job pod; it is garbage collected with the job.
+	envSecret := ""
+	if len(runner.Secret) != 0 {
+		envSecret, err = helpers.GenerateName("kriten-run")
+		if err != nil {
 			return jobStatus, err
 		}
-	} else {
-		gitToken := string(token.Data["token"])
-		if gitToken != "" {
-			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
+		if _, err = helpers.CreateOrUpdateSecret(t.config.Kube, envSecret, runner.Secret, "create"); err != nil {
+			return jobStatus, fmt.Errorf("task '%s' secrets: %w", taskName, err)
 		}
 	}
 
-	jobName, err := helpers.CreateJob(
+	// The git token is kept in a separate secret only referenced by the init
+	// container so that it is never exposed to the task container.
+	tokenSecret := ""
+	if runner.Token != "" && gitURL != "" {
+		tokenSecret, err = helpers.GenerateName("kriten-token")
+		if err != nil {
+			if envSecret != "" {
+				_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+			}
+			return jobStatus, err
+		}
+		token := map[string]string{"GIT_TOKEN": runner.Token}
+		if _, err = helpers.CreateOrUpdateSecret(t.config.Kube, tokenSecret, token, "create"); err != nil {
+			if envSecret != "" {
+				_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+			}
+			return jobStatus, fmt.Errorf("task '%s' git repo token: %w", taskName, err)
+		}
+	}
+
+	job, err := helpers.CreateJob(
 		t.config.Kube,
 		taskName,
-		runnerName,
+		envSecret,
+		tokenSecret,
 		runnerImage,
 		username,
 		extraVars,
@@ -433,10 +451,29 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		gitBranch,
 	)
 
+	if err != nil {
+		if envSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+		}
+		if tokenSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, tokenSecret)
+		}
+		return jobStatus, err
+	}
+
+	jobName := job.Name
 	jobStatus.Name = jobName
 
-	if err != nil {
-		return jobStatus, err
+	// Tie the secrets lifetime to the job so they are garbage collected.
+	if envSecret != "" {
+		if err := helpers.SetSecretOwnerReference(t.config.Kube, envSecret, job); err != nil {
+			fmt.Println(err)
+		}
+	}
+	if tokenSecret != "" {
+		if err := helpers.SetSecretOwnerReference(t.config.Kube, tokenSecret, job); err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	if task.Data["synchronous"] == "true" {

@@ -47,16 +47,6 @@ class Job:
 
 
 @dataclass
-class CronJob:
-    name: str
-    task: str
-    schedule: str
-    owner: str = ""
-    extra_vars: dict[str, Any] = field(default_factory=dict)
-    disable: bool = False
-
-
-@dataclass
 class User:
     username: str
     password: str

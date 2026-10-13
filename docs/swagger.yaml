@@ -73,22 +73,6 @@ definitions:
     - provider
     - username
     type: object
-  models.CronJob:
-    properties:
-      disable:
-        type: boolean
-      extra_vars:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      owner:
-        type: string
-      schedule:
-        type: string
-      task:
-        type: string
-    type: object
   models.Group:
     properties:
       created_at:
@@ -217,7 +201,11 @@ definitions:
     properties:
       branch:
         type: string
+      created_at:
+        type: string
       gitURL:
+        type: string
+      id:
         type: string
       image:
         type: string
@@ -229,8 +217,9 @@ definitions:
         type: object
       token:
         type: string
+      updated_at:
+        type: string
     required:
-    - gitURL
     - image
     - name
     type: object
@@ -601,196 +590,6 @@ paths:
       summary: Change Local Password
       tags:
       - authenticate
-  /cronjobs:
-    get:
-      consumes:
-      - application/json
-      description: List all Cronjobs
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.CronJob'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: List all Cronjobs
-      tags:
-      - cronjobs
-    post:
-      consumes:
-      - application/json
-      description: Add a job to the cluster
-      parameters:
-      - description: New cronjob
-        in: body
-        name: cronjob
-        required: true
-        schema:
-          $ref: '#/definitions/models.CronJob'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Create a new job
-      tags:
-      - cronjobs
-  /cronjobs/{name}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete by CronJob ID
-      parameters:
-      - description: CronJob name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ResponseMessage'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Delete a CronJob
-      tags:
-      - cronjobs
-    get:
-      consumes:
-      - application/json
-      description: Get information about a specific job
-      parameters:
-      - description: CronJob  name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get job info
-      tags:
-      - cronjobs
-    patch:
-      consumes:
-      - application/json
-      description: Update a cronjob in the cluster
-      parameters:
-      - description: Update CronJob
-        in: body
-        name: cronjob
-        required: true
-        schema:
-          $ref: '#/definitions/models.CronJob'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Update a cronjob
-      tags:
-      - cronjobs
-  /cronjobs/{name}/schema:
-    get:
-      consumes:
-      - application/json
-      description: Get schema for the job info and input parameters
-      parameters:
-      - description: Task  name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get schema
-      tags:
-      - cronjobs
   /groups:
     get:
       consumes:

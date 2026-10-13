@@ -480,305 +480,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/cronjobs": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "List all Cronjobs",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "List all Cronjobs",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.CronJob"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Add a job to the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Create a new job",
-                "parameters": [
-                    {
-                        "description": "New cronjob",
-                        "name": "cronjob",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/cronjobs/{name}": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get information about a specific job",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Get job info",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob  name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Delete by CronJob ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Delete a CronJob",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ResponseMessage"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update a cronjob in the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Update a cronjob",
-                "parameters": [
-                    {
-                        "description": "Update CronJob",
-                        "name": "cronjob",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/cronjobs/{name}/schema": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get schema for the job info and input parameters",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Get schema",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task  name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
         "/groups": {
             "get": {
                 "security": [
@@ -3739,30 +3440,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CronJob": {
-            "type": "object",
-            "properties": {
-                "disable": {
-                    "type": "boolean"
-                },
-                "extra_vars": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "owner": {
-                    "type": "string"
-                },
-                "schedule": {
-                    "type": "string"
-                },
-                "task": {
-                    "type": "string"
-                }
-            }
-        },
         "models.Group": {
             "type": "object",
             "required": [
@@ -3952,7 +3629,6 @@ const docTemplate = `{
         "models.Runner": {
             "type": "object",
             "required": [
-                "gitURL",
                 "image",
                 "name"
             ],
@@ -3960,7 +3636,13 @@ const docTemplate = `{
                 "branch": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "gitURL": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "image": {
@@ -3976,6 +3658,9 @@ const docTemplate = `{
                     }
                 },
                 "token": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }

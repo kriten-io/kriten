@@ -3,13 +3,13 @@ package helpers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/models"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -203,20 +203,59 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 	return job, nil
 }
 
-// TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string,
-	extraVars string, command string, gitURL string, gitBranch string) (string, error) {
-	job := JobObject(name, kube, runnerName, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+// GenerateName returns a DNS-1123 compatible name with a random suffix, used
+// for ephemeral per-job secrets.
+func GenerateName(prefix string) (string, error) {
+	suffix := make([]byte, 4)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", fmt.Errorf("failed to generate random name: %w", err)
+	}
 
-	job, err := kube.Clientset.BatchV1().Jobs(
+	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(suffix)), nil
+}
+
+// TODO: Too many arguments, will need a rework
+func CreateJob(kube config.KubeConfig, name string, envSecret string, tokenSecret string, runnerImage string, owner string,
+	extraVars string, command string, gitURL string, gitBranch string) (*batchv1.Job, error) {
+	job := JobObject(name, kube, envSecret, tokenSecret, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+
+	created, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Create(
 		context.TODO(), job, metav1.CreateOptions{})
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create job: %w", err)
+		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	return job.Name, nil
+	return created, nil
+}
+
+// SetSecretOwnerReference makes the given job the owner of the secret so that
+// Kubernetes garbage collects the secret when the job (and its TTL) is removed.
+func SetSecretOwnerReference(kube config.KubeConfig, secretName string, job *batchv1.Job) error {
+	secret, err := kube.Clientset.CoreV1().Secrets(
+		kube.Namespace).Get(
+		context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get secret %s: %w", secretName, err)
+	}
+
+	controller := true
+	secret.OwnerReferences = append(secret.OwnerReferences, metav1.OwnerReference{
+		APIVersion: "batch/v1",
+		Kind:       "Job",
+		Name:       job.Name,
+		UID:        job.UID,
+		Controller: &controller,
+	})
+
+	if _, err := kube.Clientset.CoreV1().Secrets(
+		kube.Namespace).Update(
+		context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to set owner reference on secret %s: %w", secretName, err)
+	}
+
+	return nil
 }
 
 func ListPods(kube config.KubeConfig, labelSelector string) (*corev1.PodList, error) {
@@ -258,7 +297,8 @@ func GetLogs(kube config.KubeConfig, podName string, containerName string) (stri
 
 func JobObject(name string,
 	kube config.KubeConfig,
-	runnerName string,
+	envSecret string,
+	tokenSecret string,
 	image string, owner string,
 	extraVars string,
 	command string,
@@ -270,8 +310,9 @@ func JobObject(name string,
 
 	optionalSecret := true
 
-	// Removing output of remote URL to hide git Token
-	initCmd := fmt.Sprintf("GIT_SSL_NO_VERIFY=true git clone -b %s %s . ; GIT_SSL_NO_VERIFY=true git ls-remote -q", gitBranch, gitURL)
+	// The git token is provided through the token secret as an environment
+	// variable so that it never appears in the pod spec.
+	initCmd := `if [ -n "$GIT_TOKEN" ]; then REPO_URL=$(printf '%s' "$GIT_URL" | sed "s#://#://$GIT_TOKEN@#"); else REPO_URL="$GIT_URL"; fi; git clone -b "$GIT_BRANCH" "$REPO_URL" . ; git ls-remote -q`
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
@@ -279,6 +320,51 @@ func JobObject(name string,
 		env = append(env, corev1.EnvVar{
 			Name:  "EXTRA_VARS",
 			Value: extraVars,
+		})
+	}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "repo",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "repo",
+			MountPath: "/mnt/repo",
+			ReadOnly:  false,
+		},
+	}
+
+	envFrom := []corev1.EnvFromSource{}
+
+	// Custom runner secrets are injected as a batch through the per-job secret.
+	if envSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: envSecret,
+					Optional:   &optionalSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "secret",
+			MountPath: "/etc/secret/",
+			ReadOnly:  true,
+		})
+		envFrom = append(envFrom, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: envSecret,
+				},
+				Optional: &optionalSecret,
+			},
 		})
 	}
 
@@ -298,23 +384,7 @@ func JobObject(name string,
 					},
 				},
 				Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: "secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: runnerName,
-									Optional:   &optionalSecret,
-								},
-							},
-						},
-						{
-							Name: "repo",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:       volumes,
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -326,30 +396,10 @@ func JobObject(name string,
 								"-c",
 								command,
 							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "secret",
-									MountPath: "/etc/secret/",
-									ReadOnly:  true,
-								},
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-									ReadOnly:  false,
-								},
-							},
-							Env: env,
-							EnvFrom: []corev1.EnvFromSource{
-								{
-									SecretRef: &corev1.SecretEnvSource{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: runnerName,
-										},
-										Optional: &optionalSecret,
-									},
-								},
-							},
+							WorkingDir:   "/mnt/repo",
+							VolumeMounts: volumeMounts,
+							Env:          env,
+							EnvFrom:      envFrom,
 						},
 					},
 				},
@@ -358,6 +408,31 @@ func JobObject(name string,
 	}
 
 	if gitURL != "" {
+		initEnv := []corev1.EnvVar{
+			{
+				Name:  "GIT_URL",
+				Value: gitURL,
+			},
+			{
+				Name:  "GIT_BRANCH",
+				Value: gitBranch,
+			},
+		}
+
+		if tokenSecret != "" {
+			initEnv = append(initEnv, corev1.EnvVar{
+				Name: "GIT_TOKEN",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: tokenSecret,
+						},
+						Key: "GIT_TOKEN",
+					},
+				},
+			})
+		}
+
 		job.Spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "init-" + name,
@@ -375,120 +450,10 @@ func JobObject(name string,
 						MountPath: "/mnt/repo",
 					},
 				},
+				Env: initEnv,
 			},
 		}
 	}
 
 	return job
-}
-
-func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.CronJobList, error) {
-	var jobsList *batchv1.CronJobList
-	var err error
-
-	if len(labelSelectors) == 0 {
-		jobsList, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).List(
-			context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list cronjobs: %w", err)
-		}
-	} else {
-		for _, labelSelector := range labelSelectors {
-			job, err := kube.Clientset.BatchV1().CronJobs(
-				kube.Namespace).List(
-				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
-			if err != nil {
-				return nil, fmt.Errorf("failed to list cronjobs with selector %s: %w", labelSelector, err)
-			}
-			if jobsList == nil {
-				jobsList = job
-			} else {
-				jobsList.Items = append(jobsList.Items, job.Items...)
-			}
-		}
-	}
-
-	return jobsList, nil
-}
-
-func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
-	job, err := kube.Clientset.BatchV1().CronJobs(
-		kube.Namespace).Get(
-		context.TODO(), name, metav1.GetOptions{})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cronjob %s: %w", name, err)
-	}
-
-	return job, nil
-}
-
-func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runner *corev1.ConfigMap, command string, operation string) (*batchv1.CronJob, error) {
-	var extraVars string
-	var err error
-
-	if len(cronjob.ExtraVars) > 0 {
-		varsParsed, err := json.Marshal(cronjob.ExtraVars)
-		if err != nil {
-			return nil, err
-		}
-		extraVars = string(varsParsed)
-	}
-
-	jobObj := JobObject(cronjob.Task,
-		kube,
-		runner.Data["name"],
-		runner.Data["image"],
-		cronjob.Owner,
-		extraVars,
-		command,
-		runner.Data["gitURL"],
-		runner.Data["branch"],
-	)
-	cron := CronJobObject(kube, cronjob, jobObj.Spec)
-
-	if operation == "create" {
-		cron, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).Create(
-			context.TODO(), cron, metav1.CreateOptions{})
-	} else if operation == "update" {
-		cron, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).Update(
-			context.TODO(), cron, metav1.UpdateOptions{})
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to %s cronjob: %w", operation, err)
-	}
-
-	return cron, nil
-}
-
-func DeleteCronJob(kube config.KubeConfig, name string) error {
-	err := kube.Clientset.BatchV1().CronJobs(
-		kube.Namespace).Delete(
-		context.TODO(), name, metav1.DeleteOptions{})
-
-	if err != nil {
-		return fmt.Errorf("failed to delete cronjob %s: %w", name, err)
-	}
-
-	return nil
-}
-
-func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
-	return &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cronjob.Name,
-			Namespace: kube.Namespace,
-		},
-		Spec: batchv1.CronJobSpec{
-			Schedule: cronjob.Schedule,
-			Suspend:  &cronjob.Disable,
-			JobTemplate: batchv1.JobTemplateSpec{
-				Spec: jobSpec,
-			},
-		},
-	}
 }

@@ -34,7 +34,6 @@ var (
 	rs         services.RunnerService
 	ts         services.TaskService
 	js         services.JobService
-	cjs        services.CronJobService
 	us         services.UserService
 	ats        services.ApiTokenService
 	ws         services.WebhookService
@@ -46,7 +45,6 @@ var (
 	rc         controllers.RunnerController
 	tc         controllers.TaskController
 	jc         controllers.JobController
-	cjc        controllers.CronJobController
 	uc         controllers.UserController
 	atc        controllers.ApiTokenController
 	wc         controllers.WebhookController
@@ -134,10 +132,9 @@ func init() {
 	as = services.NewAuthService(conf, us, rls, db)
 	als = services.NewAuditService(db, conf)
 
-	rs = services.NewRunnerService(conf)
+	rs = services.NewRunnerService(db, conf)
 	js = services.NewJobService(conf)
-	ts = services.NewTaskService(ws, conf, js)
-	cjs = services.NewCronJobService(conf)
+	ts = services.NewTaskService(ws, conf, js, rs)
 
 	// Controllers
 	uc = controllers.NewUserController(us, gs, as, als, authProviders)
@@ -151,7 +148,6 @@ func init() {
 	rc = controllers.NewRunnerController(rs, as, als)
 	tc = controllers.NewTaskController(ts, as, als)
 	jc = controllers.NewJobController(js, as, als)
-	cjc = controllers.NewCronJobController(cjs, as, als)
 }
 
 //	@title			  Swagger Kriten
@@ -198,7 +194,6 @@ func main() {
 		runners := basepath.Group("/runners")
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
-		cronjobs := basepath.Group("/cronjobs")
 		users := basepath.Group("/users")
 		tokens := basepath.Group("/api-tokens")
 		groups := basepath.Group("/groups")
@@ -209,7 +204,6 @@ func main() {
 			rc.SetRunnerRoutes(runners, conf)
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)
-			cjc.SetCronJobRoutes(cronjobs, conf)
 			uc.SetUserRoutes(users, conf)
 			atc.SetApiTokenRoutes(tokens, conf)
 			wc.SetWebhookRoutes(webhooks, conf)
