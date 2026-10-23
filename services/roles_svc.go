@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
 	"golang.org/x/exp/slices"
@@ -164,8 +163,9 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 			continue
 		}
 
-		// runners now live in the database
-		if role.Resource == "runners" {
+		switch role.Resource {
+		// runners and tasks now live in the database
+		case "runners":
 			var runner models.Runner
 			if err := r.db.Where("name = ?", c).First(&runner).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -173,21 +173,22 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 				}
 				return err
 			}
-			continue
-		}
-
-		configMap, err := helpers.GetConfigMap(r.config.Kube, c)
-		if err != nil {
-			return err
-		}
-		// configmaps are all stored in the same namespace, so we need to identify the resource
-		if role.Resource == "tasks" {
-			if configMap.Data["runner"] == "" {
-				return fmt.Errorf("task %s not found", c)
+		case "tasks":
+			var task models.Task
+			if err := r.db.Where("name = ?", c).First(&task).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("task %s not found", c)
+				}
+				return err
 			}
-		} else if role.Resource == "jobs" {
-			if configMap.Data["runner"] == "" {
-				return fmt.Errorf("job %s not found", c)
+		case "jobs":
+			// jobs are ephemeral, their resource names reference the owning task
+			var task models.Task
+			if err := r.db.Where("name = ?", c).First(&task).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("job %s not found", c)
+				}
+				return err
 			}
 		}
 	}

@@ -227,6 +227,10 @@ definitions:
     properties:
       command:
         type: string
+      created_at:
+        type: string
+      id:
+        type: string
       name:
         type: string
       runner:
@@ -236,6 +240,8 @@ definitions:
         type: object
       synchronous:
         type: boolean
+      updated_at:
+        type: string
     required:
     - command
     - name

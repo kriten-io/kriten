@@ -3676,6 +3676,12 @@ const docTemplate = `{
                 "command": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3688,6 +3694,9 @@ const docTemplate = `{
                 },
                 "synchronous": {
                     "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },

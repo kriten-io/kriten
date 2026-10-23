@@ -1,11 +1,20 @@
 package models
 
+import (
+	"time"
+
+	uuid "github.com/satori/go.uuid"
+)
+
 type Task struct {
-	Schema      map[string]any `json:"schema,omitempty"`
-	Name        string         `json:"name" binding:"required"`
+	ID          uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
+	Schema      map[string]any `gorm:"serializer:json;type:jsonb" json:"schema,omitempty"`
+	Name        string         `gorm:"uniqueIndex;<-:create" json:"name" binding:"required"`
 	Runner      string         `json:"runner" binding:"required"`
 	Command     string         `json:"command" binding:"required"`
 	Synchronous bool           `json:"synchronous"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 type TaskQueryParams struct {

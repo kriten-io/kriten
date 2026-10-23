@@ -134,7 +134,7 @@ func init() {
 
 	rs = services.NewRunnerService(db, conf)
 	js = services.NewJobService(conf)
-	ts = services.NewTaskService(ws, conf, js, rs)
+	ts = services.NewTaskService(db, ws, conf, js, rs)
 
 	// Controllers
 	uc = controllers.NewUserController(us, gs, as, als, authProviders)

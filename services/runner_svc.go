@@ -252,16 +252,12 @@ func (r *RunnerServiceImpl) DeleteRunner(name string) error {
 		return err
 	}
 
-	// Tasks are still stored as ConfigMaps and reference runners by name.
-	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
-	if err != nil {
+	// Tasks live in the database and reference runners by name.
+	var boundTask models.Task
+	if err := r.db.Where("runner = ?", name).First(&boundTask).Error; err == nil {
+		return fmt.Errorf("runner is bound to task: %s , delete that first: %w", boundTask.Name, ErrSvcObjInUse)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
-	}
-
-	for _, configMap := range configMaps.Items {
-		if configMap.Data["runner"] == name {
-			return fmt.Errorf("runner is bound to task: %s , delete that first: %w", configMap.Data["name"], ErrSvcObjInUse)
-		}
 	}
 
 	if err := r.db.Where("runner_id = ?", runner.ID).Delete(&models.RunnerSecret{}).Error; err != nil {

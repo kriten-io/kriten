@@ -3669,6 +3669,12 @@
                 "command": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3681,6 +3687,9 @@
                 },
                 "synchronous": {
                     "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
