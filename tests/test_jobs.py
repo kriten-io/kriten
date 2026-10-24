@@ -30,7 +30,6 @@ class TestJobs:
         resp = api_client.get(f"{api_base}/jobs/nonexistent-job/log")
         assert resp.status_code == 404
 
-
     @pytest.mark.negative
     def test_jobs_unauthorized(self, noauth_client, api_base):
         resp = noauth_client.get(f"{api_base}/jobs")
@@ -38,23 +37,26 @@ class TestJobs:
 
     def test_get_job(self, api_client, api_base, random_name):
         runner_name = f"{random_name}-runner"
-        api_client.post(f"{api_base}/runners", json={
+        runner_resp = api_client.post(f"{api_base}/runners", json={
             "name": runner_name,
             "gitURL": "https://github.com/example/test-repo.git",
             "image": "python:3.11",
         })
+        assert runner_resp.status_code == 200
+        runner_id = runner_resp.json()["id"]
 
-        task_name = random_name
-        api_client.post(f"{api_base}/tasks", json={
-            "name": task_name,
+        task_resp = api_client.post(f"{api_base}/tasks", json={
+            "name": random_name,
             "command": "python -c 'print(\"hello\")'",
-            "runner": runner_name,
+            "runner_id": runner_id,
         })
+        assert task_resp.status_code == 200
+        task_id = task_resp.json()["id"]
 
-        create_resp = api_client.post(f"{api_base}/tasks/{task_name}/run", json={})
+        create_resp = api_client.post(f"{api_base}/tasks/{task_id}/run", json={})
         assert create_resp.status_code == 200
-        job_id = create_resp.json().get("id", "")
+        job_name = create_resp.json().get("name", "")
 
-        if job_id:
-            resp = api_client.get(f"{api_base}/jobs/{job_id}")
+        if job_name:
+            resp = api_client.get(f"{api_base}/jobs/{job_name}")
             assert resp.status_code == 200

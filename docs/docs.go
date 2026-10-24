@@ -514,7 +514,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by group name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -1184,7 +1184,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by task/job name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -1235,7 +1235,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Job Name",
-                        "name": "name",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1290,7 +1290,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Job  name",
-                        "name": "name",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1457,7 +1457,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by role name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -1809,7 +1809,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by runner name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -1857,7 +1857,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "New runner",
-                        "name": "runner",
+                        "name": "runner_id",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -1899,7 +1899,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}": {
+        "/runners/{id}": {
             "get": {
                 "security": [
                     {
@@ -1920,8 +1920,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1967,8 +1967,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2020,14 +2020,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "description": "Update runner",
-                        "name": "runner",
+                        "name": "runner_id",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -2063,7 +2063,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}/schema": {
+        "/runners/{id}/schema": {
             "delete": {
                 "security": [
                     {
@@ -2084,8 +2084,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2113,7 +2113,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}/secret": {
+        "/runners/{id}/secret": {
             "get": {
                 "security": [
                     {
@@ -2134,8 +2134,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2203,7 +2203,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by task name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -2293,7 +2293,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}": {
+        "/tasks/{id}": {
             "get": {
                 "security": [
                     {
@@ -2314,8 +2314,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2367,8 +2367,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2420,8 +2420,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -2463,7 +2463,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}/run": {
+        "/tasks/{id}/run": {
             "post": {
                 "security": [
                     {
@@ -2484,8 +2484,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task  name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -2526,7 +2526,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}/schema": {
+        "/tasks/{id}/schema": {
             "get": {
                 "security": [
                     {
@@ -2547,8 +2547,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2601,8 +2601,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -2665,8 +2665,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2734,7 +2734,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by user name",
-                        "name": "name",
+                        "name": "id",
                         "in": "query"
                     }
                 ],
@@ -3670,7 +3670,7 @@ const docTemplate = `{
             "required": [
                 "command",
                 "name",
-                "runner"
+                "runner_id"
             ],
             "properties": {
                 "command": {
@@ -3685,7 +3685,7 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "runner": {
+                "runner_id": {
                     "type": "string"
                 },
                 "schema": {
@@ -3760,7 +3760,7 @@ const docTemplate = `{
                 "secret": {
                     "type": "string"
                 },
-                "task": {
+                "task_id": {
                     "type": "string"
                 },
                 "updated_at": {

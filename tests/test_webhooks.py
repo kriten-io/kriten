@@ -3,8 +3,27 @@ import pytest
 
 pytestmark = pytest.mark.crud
 
+MISSING_ID = "00000000-0000-0000-0000-000000000000"
+
 
 class TestWebhooks:
+    def create_task(self, api_client, api_base, random_name):
+        runner_resp = api_client.post(f"{api_base}/runners", json={
+            "name": f"runner-{random_name}",
+            "gitURL": "https://github.com/example/test-repo.git",
+            "image": "python:3.11",
+        })
+        assert runner_resp.status_code == 200
+        runner_id = runner_resp.json()["id"]
+
+        task_resp = api_client.post(f"{api_base}/tasks", json={
+            "name": random_name,
+            "command": "python -c 'print(\"hello\")'",
+            "runner_id": runner_id,
+        })
+        assert task_resp.status_code == 200
+        return task_resp.json()["id"]
+
     @pytest.mark.smoke
     def test_list_webhooks(self, api_client, api_base):
         resp = api_client.get(f"{api_base}/webhooks")
@@ -19,20 +38,40 @@ class TestWebhooks:
 
     @pytest.mark.smoke
     def test_create_webhook(self, api_client, api_base, random_name):
+        task_id = self.create_task(api_client, api_base, random_name)
         webhook = {
             "description": f"Test webhook {random_name}",
-            "task": random_name.replace("webhook", "task"),
+            "task_id": task_id,
             "secret": "test-secret-key",
         }
         resp = api_client.post(f"{api_base}/webhooks", json=webhook)
         assert resp.status_code == 200
         data = resp.json()
         assert "id" in data
+        assert data["task_id"] == task_id
 
-    def test_get_webhook(self, api_client, api_base, random_name):
+    @pytest.mark.negative
+    def test_create_webhook_unknown_task(self, api_client, api_base, random_name):
         webhook = {
             "description": f"Test webhook {random_name}",
-            "task": random_name.replace("webhook", "task"),
+            "task_id": MISSING_ID,
+        }
+        resp = api_client.post(f"{api_base}/webhooks", json=webhook)
+        assert resp.status_code == 404
+
+    @pytest.mark.negative
+    def test_create_webhook_missing_task(self, api_client, api_base, random_name):
+        webhook = {
+            "description": f"Test webhook {random_name}",
+        }
+        resp = api_client.post(f"{api_base}/webhooks", json=webhook)
+        assert resp.status_code == 400
+
+    def test_get_webhook(self, api_client, api_base, random_name):
+        task_id = self.create_task(api_client, api_base, random_name)
+        webhook = {
+            "description": f"Test webhook {random_name}",
+            "task_id": task_id,
         }
         create_resp = api_client.post(f"{api_base}/webhooks", json=webhook)
         assert create_resp.status_code == 200
@@ -44,9 +83,10 @@ class TestWebhooks:
         assert data["id"] == webhook_id
 
     def test_delete_webhook(self, api_client, api_base, random_name):
+        task_id = self.create_task(api_client, api_base, random_name)
         webhook = {
             "description": f"Test webhook {random_name}",
-            "task": random_name.replace("webhook", "task"),
+            "task_id": task_id,
         }
         create_resp = api_client.post(f"{api_base}/webhooks", json=webhook)
         assert create_resp.status_code == 200
@@ -60,12 +100,12 @@ class TestWebhooks:
 
     @pytest.mark.negative
     def test_get_webhook_not_found(self, api_client, api_base):
-        resp = api_client.get(f"{api_base}/webhooks/00000000-0000-0000-0000-000000000000")
+        resp = api_client.get(f"{api_base}/webhooks/{MISSING_ID}")
         assert resp.status_code == 404
 
     @pytest.mark.negative
     def test_delete_webhook_not_found(self, api_client, api_base):
-        resp = api_client.delete(f"{api_base}/webhooks/00000000-0000-0000-0000-000000000000")
+        resp = api_client.delete(f"{api_base}/webhooks/{MISSING_ID}")
         assert resp.status_code == 404
 
     @pytest.mark.negative
@@ -77,16 +117,17 @@ class TestWebhooks:
     def test_create_webhook_unauthorized(self, noauth_client, api_base, random_name):
         webhook = {
             "description": f"Test {random_name}",
-            "task": "test-task",
+            "task_id": MISSING_ID,
         }
         resp = noauth_client.post(f"{api_base}/webhooks", json=webhook)
         assert resp.status_code == 401
 
     @pytest.mark.skip(reason="POST /webhooks/run/{id} uses Signature auth, not Bearer")
     def test_run_webhook(self, api_client, api_base, random_name):
+        task_id = self.create_task(api_client, api_base, random_name)
         webhook = {
             "description": f"Test {random_name}",
-            "task": "test-task",
+            "task_id": task_id,
         }
         create_resp = api_client.post(f"{api_base}/webhooks", json=webhook)
         assert create_resp.status_code == 200

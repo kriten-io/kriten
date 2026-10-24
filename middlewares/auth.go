@@ -116,7 +116,16 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)
 		provider := ctx.MustGet("provider").(string)
-		task := ctx.GetString("task")
+
+		var task string
+		if value, ok := ctx.Get("task"); ok {
+			switch t := value.(type) {
+			case string:
+				task = t
+			case uuid.UUID:
+				task = t.String()
+			}
+		}
 
 		resourceName := ""
 		if ctx.Param("name") != "" {

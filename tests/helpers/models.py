@@ -23,15 +23,17 @@ class Runner:
     branch: str = ""
     secret: dict[str, str] = field(default_factory=dict)
     token: str = ""
+    id: str = ""
 
 
 @dataclass
 class Task:
     name: str
     command: str
-    runner: str
+    runner_id: str
     schema: dict[str, Any] = field(default_factory=dict)
     synchronous: bool = False
+    id: str = ""
 
 
 @dataclass
@@ -117,7 +119,7 @@ class Webhook:
     id: str = ""
     owner: str = ""
     secret: str = ""
-    task: str = ""
+    task_id: str = ""
     created_at: str = ""
     updated_at: str = ""
 

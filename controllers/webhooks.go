@@ -177,6 +177,19 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 
 	webhook.Owner = userid
 
+	if webhook.TaskID == uuid.Nil {
+		wc.AuditService.CreateAudit(audit)
+		ctx.Error(errors.New("invalid task_id"))
+		ctx.Status(http.StatusBadRequest)
+		return
+	}
+
+	if _, err := wc.TaskService.GetTask(webhook.TaskID); err != nil {
+		wc.AuditService.CreateAudit(audit)
+		ctx.Error(err)
+		return
+	}
+
 	webhook, err := wc.WebhookService.CreateWebhook(webhook)
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)
@@ -241,7 +254,7 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 //	@Security		Signature
 func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
-	task := ctx.MustGet("task").(string)
+	taskID := ctx.MustGet("task").(uuid.UUID)
 	username := ctx.MustGet("username").(string)
 
 	_, err := uuid.FromString(webhookID)
@@ -263,7 +276,7 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 		return
 	}
 
-	job, err := wc.TaskService.RunTask(username, task, string(extraVars))
+	job, err := wc.TaskService.RunTask(username, taskID, string(extraVars))
 
 	if err != nil {
 		wc.AuditService.CreateAudit(audit)

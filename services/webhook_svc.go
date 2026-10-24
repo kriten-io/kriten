@@ -14,7 +14,7 @@ import (
 
 type WebhookService interface {
 	ListWebhooks(uuid.UUID) ([]models.Webhook, error)
-	ListTaskWebhooks(string) ([]models.Webhook, error)
+	ListTaskWebhooks(uuid.UUID) ([]models.Webhook, error)
 	ListAllWebhooks([]string) ([]models.Webhook, error)
 	GetWebhook(string) (models.Webhook, error)
 	CreateWebhook(models.Webhook) (models.Webhook, error)
@@ -36,7 +36,7 @@ func NewWebhookService(database *gorm.DB, config config.Config) WebhookService {
 func (w *WebhookServiceImpl) ListWebhooks(userid uuid.UUID) ([]models.Webhook, error) {
 	var webHooks []models.Webhook
 
-	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
+	res := w.db.Select("id", "owner", "secret", "description", "task_id", "created_at", "updated_at").
 		Where("owner = ?", userid).
 		Find(&webHooks)
 
@@ -47,11 +47,11 @@ func (w *WebhookServiceImpl) ListWebhooks(userid uuid.UUID) ([]models.Webhook, e
 	return webHooks, nil
 }
 
-func (w *WebhookServiceImpl) ListTaskWebhooks(taskName string) ([]models.Webhook, error) {
+func (w *WebhookServiceImpl) ListTaskWebhooks(taskID uuid.UUID) ([]models.Webhook, error) {
 	var webHooks []models.Webhook
 
-	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
-		Where("task = ?", taskName).
+	res := w.db.Select("id", "owner", "secret", "description", "task_id", "created_at", "updated_at").
+		Where("task_id = ?", taskID).
 		Find(&webHooks)
 
 	if res.Error != nil {
@@ -84,7 +84,7 @@ func (w *WebhookServiceImpl) ListAllWebhooks(authList []string) ([]models.Webhoo
 func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	var webHook models.Webhook
 
-	res := w.db.Select("id", "owner", "secret", "description", "task", "created_at", "updated_at").
+	res := w.db.Select("id", "owner", "secret", "description", "task_id", "created_at", "updated_at").
 		Where("id = ?", id).
 		Find(&webHook)
 

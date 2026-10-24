@@ -8,6 +8,7 @@ import (
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 
 	"gorm.io/gorm"
@@ -164,18 +165,26 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 		}
 
 		switch role.Resource {
-		// runners and tasks now live in the database
+		// runners, tasks and jobs reference resources by UUID
 		case "runners":
+			id, err := uuid.FromString(c)
+			if err != nil {
+				return fmt.Errorf("runner %s not found", c)
+			}
 			var runner models.Runner
-			if err := r.db.Where("name = ?", c).First(&runner).Error; err != nil {
+			if err := r.db.Where("id = ?", id).First(&runner).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return fmt.Errorf("runner %s not found", c)
 				}
 				return err
 			}
 		case "tasks":
+			id, err := uuid.FromString(c)
+			if err != nil {
+				return fmt.Errorf("task %s not found", c)
+			}
 			var task models.Task
-			if err := r.db.Where("name = ?", c).First(&task).Error; err != nil {
+			if err := r.db.Where("id = ?", id).First(&task).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return fmt.Errorf("task %s not found", c)
 				}
@@ -183,8 +192,12 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 			}
 		case "jobs":
 			// jobs are ephemeral, their resource names reference the owning task
+			id, err := uuid.FromString(c)
+			if err != nil {
+				return fmt.Errorf("job %s not found", c)
+			}
 			var task models.Task
-			if err := r.db.Where("name = ?", c).First(&task).Error; err != nil {
+			if err := r.db.Where("id = ?", id).First(&task).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return fmt.Errorf("job %s not found", c)
 				}

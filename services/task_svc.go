@@ -18,6 +18,7 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 
@@ -26,14 +27,14 @@ import (
 
 type TaskService interface {
 	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, int, error)
-	GetTask(string) (*models.Task, error)
+	GetTask(uuid.UUID) (*models.Task, error)
 	CreateTask(models.Task) (*models.Task, error)
-	UpdateTask(models.Task) (*models.Task, error)
-	DeleteTask(string) error
-	GetSchema(string) (map[string]interface{}, error)
-	DeleteSchema(string) error
-	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
-	RunTask(string, string, string) (models.Job, error)
+	UpdateTask(uuid.UUID, models.Task) (*models.Task, error)
+	DeleteTask(uuid.UUID) error
+	GetSchema(uuid.UUID) (map[string]interface{}, error)
+	DeleteSchema(uuid.UUID) error
+	UpdateSchema(uuid.UUID, map[string]interface{}) (map[string]interface{}, error)
+	RunTask(string, uuid.UUID, string) (models.Job, error)
 }
 
 type TaskServiceImpl struct {
@@ -54,17 +55,17 @@ func NewTaskService(database *gorm.DB, ws WebhookService, config config.Config, 
 	}
 }
 
-// getTaskByName fetches a task model from the database, translating the
+// getTaskByID fetches a task model from the database, translating the
 // not found error into the service level error.
-func (t *TaskServiceImpl) getTaskByName(name string) (*models.Task, error) {
+func (t *TaskServiceImpl) getTaskByID(id uuid.UUID) (*models.Task, error) {
 	var task models.Task
 
-	res := t.db.Where("name = ?", name).First(&task)
+	res := t.db.Where("id = ?", id).First(&task)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+			return nil, fmt.Errorf("task '%s': %w", id, ErrSvcObjNotFound)
 		}
-		return nil, fmt.Errorf("task '%s': %w", name, res.Error)
+		return nil, fmt.Errorf("task '%s': %w", id, res.Error)
 	}
 
 	return &task, nil
@@ -87,7 +88,7 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 		authorised = tasks
 	} else {
 		for _, task := range tasks {
-			if slices.Contains(authList, task.Name) {
+			if slices.Contains(authList, task.ID.String()) {
 				authorised = append(authorised, task)
 			}
 		}
@@ -118,23 +119,23 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 	return filtered, total, nil
 }
 
-func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
-	return t.getTaskByName(name)
+func (t *TaskServiceImpl) GetTask(id uuid.UUID) (*models.Task, error) {
+	return t.getTaskByID(id)
 }
 
 func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
-	err := helpers.ValidateK8sConfigMapName(task.Name)
+	err := helpers.ValidateK8sObjName(task.Name)
 	if err != nil {
 		return nil, fmt.Errorf("task '%s': %w",
 			task.Name,
 			ErrSvcObjNameK8sConfMap)
 	}
-	_, err = t.RunnerService.GetRunner(task.Runner)
+	_, err = t.RunnerService.GetRunner(task.RunnerID)
 	if err != nil {
 		if errors.Is(err, ErrSvcObjNotFound) {
-			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.RunnerID, ErrSvcTaskNoRunner)
 		}
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.RunnerID, err)
 	}
 
 	if task.Schema != nil {
@@ -153,7 +154,7 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	newTask := models.Task{
 		Schema:      task.Schema,
 		Name:        task.Name,
-		Runner:      task.Runner,
+		RunnerID:    task.RunnerID,
 		Command:     task.Command,
 		Synchronous: task.Synchronous,
 	}
@@ -169,65 +170,65 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 	return &newTask, nil
 }
 
-func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
-	existing, err := t.getTaskByName(task.Name)
+func (t *TaskServiceImpl) UpdateTask(id uuid.UUID, task models.Task) (*models.Task, error) {
+	existing, err := t.getTaskByID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = t.RunnerService.GetRunner(task.Runner)
+	_, err = t.RunnerService.GetRunner(task.RunnerID)
 	if err != nil {
 		if errors.Is(err, ErrSvcObjNotFound) {
-			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", existing.Name, task.RunnerID, ErrSvcTaskNoRunner)
 		}
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", existing.Name, task.RunnerID, err)
 	}
 
 	if task.Schema != nil {
 		jsonData, err := json.Marshal(task.Schema)
 		if err != nil {
-			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
+			return nil, fmt.Errorf("task '%s' schema: %w", existing.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
 			errString := strings.ReplaceAll(err.Error(), "\"", "'")
-			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
+			return nil, fmt.Errorf("task '%s' schema: %w, %s", existing.Name, ErrSvcTaskSchemaValidation, errString)
 		}
 	}
 
 	existing.Schema = task.Schema
-	existing.Runner = task.Runner
+	existing.RunnerID = task.RunnerID
 	existing.Command = task.Command
 	existing.Synchronous = task.Synchronous
 
 	if res := t.db.Save(existing); res.Error != nil {
-		return nil, fmt.Errorf("task '%s': %w", task.Name, res.Error)
+		return nil, fmt.Errorf("task '%s': %w", existing.Name, res.Error)
 	}
 
 	return existing, nil
 }
 
-func (t *TaskServiceImpl) DeleteTask(name string) error {
-	res, err := t.WebhookService.ListTaskWebhooks(name)
-	if err == nil && len(res) != 0 {
-		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", name, ErrSvcObjInUse)
-	}
-
-	task, err := t.getTaskByName(name)
+func (t *TaskServiceImpl) DeleteTask(id uuid.UUID) error {
+	task, err := t.getTaskByID(id)
 	if err != nil {
 		return err
 	}
 
+	res, err := t.WebhookService.ListTaskWebhooks(task.ID)
+	if err == nil && len(res) != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", task.Name, ErrSvcObjInUse)
+	}
+
 	if err := t.db.Delete(task).Error; err != nil {
-		return fmt.Errorf("task '%s': %w", name, err)
+		return fmt.Errorf("task '%s': %w", task.Name, err)
 	}
 
 	return nil
 }
 
-func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
-	task, err := t.getTaskByName(name)
+func (t *TaskServiceImpl) GetSchema(id uuid.UUID) (map[string]interface{}, error) {
+	task, err := t.getTaskByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -235,33 +236,33 @@ func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error)
 	return task.Schema, nil
 }
 
-func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{}) (map[string]interface{}, error) {
-	task, err := t.getTaskByName(name)
+func (t *TaskServiceImpl) UpdateSchema(id uuid.UUID, schema map[string]interface{}) (map[string]interface{}, error) {
+	task, err := t.getTaskByID(id)
 	if err != nil {
 		return nil, err
 	}
 
 	data, err := json.Marshal(schema)
 	if err != nil {
-		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
+		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
 
 	err = ValidateSchema(data)
 	if err != nil {
 		errString := strings.ReplaceAll(err.Error(), "\"", "'")
-		return nil, fmt.Errorf("task '%s' schema: %w, %s", name, ErrSvcTaskSchemaValidation, errString)
+		return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 	}
 
 	task.Schema = schema
 	if err := t.db.Save(task).Error; err != nil {
-		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
+		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
 
 	return schema, nil
 }
 
-func (t *TaskServiceImpl) DeleteSchema(name string) error {
-	task, err := t.getTaskByName(name)
+func (t *TaskServiceImpl) DeleteSchema(id uuid.UUID) error {
+	task, err := t.getTaskByID(id)
 	if err != nil {
 		return fmt.Errorf("%w", err)
 	}
@@ -272,7 +273,7 @@ func (t *TaskServiceImpl) DeleteSchema(name string) error {
 
 	task.Schema = nil
 	if err := t.db.Save(task).Error; err != nil {
-		return fmt.Errorf("task '%s' schema: %w", name, err)
+		return fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
 
 	return nil
@@ -300,15 +301,15 @@ func ValidateSchema(schema []byte) error {
 	return nil
 }
 
-func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars string) (models.Job, error) {
+func (t *TaskServiceImpl) RunTask(username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
 	ctx := context.Background()
 	var jobStatus models.Job
 
-	task, err := t.getTaskByName(taskName)
+	task, err := t.getTaskByID(taskID)
 	if err != nil {
 		return jobStatus, err
 	}
-	runnerName := task.Runner
+	taskName := task.Name
 
 	if task.Schema != nil {
 		schemaData, err := json.Marshal(task.Schema)
@@ -331,7 +332,7 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 		}
 	}
 
-	runner, err := t.RunnerService.GetRunnerForExecution(runnerName)
+	runner, err := t.RunnerService.GetRunnerForExecution(task.RunnerID)
 	if err != nil {
 		return jobStatus, err
 	}
@@ -378,7 +379,8 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 
 	job, err := helpers.CreateJob(
 		t.config.Kube,
-		taskName,
+		task.ID,
+		task.Name,
 		envSecret,
 		tokenSecret,
 		runnerImage,

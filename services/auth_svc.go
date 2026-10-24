@@ -17,6 +17,7 @@ import (
 	"github.com/kriten-io/kriten/models"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
@@ -29,8 +30,8 @@ type AuthService interface {
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
 	ValidateAPIToken(string) (models.User, error)
-	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, string, error)
-	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, string, error)
+	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, uuid.UUID, error)
+	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, uuid.UUID, error)
 }
 
 type AuthServiceImpl struct {
@@ -186,11 +187,11 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	msgTimestamp string,
 	signature string,
 	body []byte,
-) (models.User, string, error) {
+) (models.User, uuid.UUID, error) {
 	// Splitting the signature to get the to remove prepended "v1," from InfraHub
 	split := strings.Split(signature, ",")
 	if len(split) != 2 {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 	signature = split[1]
 	data := []byte(fmt.Sprintf("%s.%s.", msgID, msgTimestamp))
@@ -199,11 +200,11 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
 	// checking if there's any result
 	if res.RowsAffected == 0 {
-		return models.User{}, "", errors.New("invalid webhook")
+		return models.User{}, uuid.Nil, errors.New("invalid webhook")
 	}
 	// checking if the signature is valid
 	// Validating the signature
@@ -213,30 +214,30 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	expectedSignature := base64.StdEncoding.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 
 	var user models.User
 	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
-	return user, webhook.Task, nil
+	return user, webhook.TaskID, nil
 }
 
 func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 	id string,
 	signature string,
 	body []byte,
-) (models.User, string, error) {
+) (models.User, uuid.UUID, error) {
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
 	// checking if there's any result
 	if res.RowsAffected == 0 {
-		return models.User{}, "", errors.New("invalid webhook")
+		return models.User{}, uuid.Nil, errors.New("invalid webhook")
 	}
 	// checking if the signature is valid
 	// Validating the signature
@@ -246,15 +247,15 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 	expectedSignature := hex.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 
 	var user models.User
 	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
-	return user, webhook.Task, nil
+	return user, webhook.TaskID, nil
 }
 
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {

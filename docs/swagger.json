@@ -1892,7 +1892,7 @@
                 }
             }
         },
-        "/runners/{name}": {
+        "/runners/{id}": {
             "get": {
                 "security": [
                     {
@@ -2286,7 +2286,7 @@
                 }
             }
         },
-        "/tasks/{name}": {
+        "/tasks/{id}": {
             "get": {
                 "security": [
                     {

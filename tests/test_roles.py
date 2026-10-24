@@ -13,6 +13,13 @@ class TestRoles:
             "branch": "main",
             "token": "",
         }
+
+    def create_runner(self, api_client, api_base, random_name):
+        runner = self.setup_runner(random_name)
+        resp = api_client.post(f"{api_base}/runners", json=runner)
+        assert resp.status_code == 200
+        return resp.json()["id"]
+
     @pytest.mark.smoke
     def test_list_roles(self, api_client, api_base):
         resp = api_client.get(f"{api_base}/roles")
@@ -21,29 +28,36 @@ class TestRoles:
 
     @pytest.mark.smoke
     def test_create_role(self, api_client, api_base, random_name):
-        runner = self.setup_runner(random_name)
-        resp = api_client.post(f"{api_base}/runners", json=runner)
-        assert resp.status_code == 200
+        runner_id = self.create_runner(api_client, api_base, random_name)
         role = {
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_names": [f"{runner["name"]}"],
+            "resource_names": [runner_id],
         }
         resp = api_client.post(f"{api_base}/roles", json=role)
         assert resp.status_code == 200
         data = resp.json()
         assert data["name"] == random_name
 
-    def test_get_role(self, api_client, api_base, random_name):
-        runner = self.setup_runner(random_name)
-        resp = api_client.post(f"{api_base}/runners", json=runner)
-        assert resp.status_code == 200
+    @pytest.mark.negative
+    def test_create_role_unknown_runner(self, api_client, api_base, random_name):
         role = {
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_names": [f"{runner["name"]}"],
+            "resource_names": ["00000000-0000-0000-0000-000000000000"],
+        }
+        resp = api_client.post(f"{api_base}/roles", json=role)
+        assert resp.status_code == 400
+
+    def test_get_role(self, api_client, api_base, random_name):
+        runner_id = self.create_runner(api_client, api_base, random_name)
+        role = {
+            "name": random_name,
+            "access": "read",
+            "resource": "runners",
+            "resource_names": [runner_id],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -55,14 +69,12 @@ class TestRoles:
         assert data["name"] == random_name
 
     def test_update_role(self, api_client, api_base, random_name):
-        runner = self.setup_runner(random_name)
-        resp = api_client.post(f"{api_base}/runners", json=runner)
-        assert resp.status_code == 200
+        runner_id = self.create_runner(api_client, api_base, random_name)
         role = {
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_names": [f"{runner["name"]}"],
+            "resource_names": [runner_id],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -72,7 +84,7 @@ class TestRoles:
             "name": random_name,
             "access": "write",
             "resource": "runners",
-            "resource_names": [f"{runner["name"]}"],
+            "resource_names": [runner_id],
         }
         resp = api_client.patch(f"{api_base}/roles/{role_id}", json=update_data)
         assert resp.status_code == 200
@@ -80,14 +92,12 @@ class TestRoles:
         assert data["access"] == "write"
 
     def test_delete_role(self, api_client, api_base, random_name):
-        runner = self.setup_runner(random_name)
-        resp = api_client.post(f"{api_base}/runners", json=runner)
-        assert resp.status_code == 200
+        runner_id = self.create_runner(api_client, api_base, random_name)
         role = {
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_names": [f"{runner["name"]}"],
+            "resource_names": [runner_id],
         }
         create_resp = api_client.post(f"{api_base}/roles", json=role)
         assert create_resp.status_code == 200
@@ -128,7 +138,7 @@ class TestRoles:
             "name": random_name,
             "access": "read",
             "resource": "runners",
-            "resource_ids": ["*"],
+            "resource_names": ["*"],
         }
         resp = noauth_client.post(f"{api_base}/roles", json=role)
         assert resp.status_code == 401

@@ -28,6 +28,16 @@ func InitDB(db *gorm.DB, rp string) {
 		log.Println(err)
 	}
 
+	// Legacy name based references replaced by UUIDs.
+	if err := db.Exec("ALTER TABLE tasks DROP COLUMN IF EXISTS runner;").Error; err != nil {
+		log.Println("Error dropping legacy tasks.runner column")
+		log.Println(err)
+	}
+	if err := db.Exec("ALTER TABLE webhooks DROP COLUMN IF EXISTS task;").Error; err != nil {
+		log.Println("Error dropping legacy webhooks.task column")
+		log.Println(err)
+	}
+
 	bytes, err := bcrypt.GenerateFromPassword([]byte(rp), bcrypt.DefaultCost)
 	if err != nil {
 		return

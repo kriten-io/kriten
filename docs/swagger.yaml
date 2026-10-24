@@ -233,7 +233,7 @@ definitions:
         type: string
       name:
         type: string
-      runner:
+      runner_id:
         type: string
       schema:
         additionalProperties: {}
@@ -245,7 +245,7 @@ definitions:
     required:
     - command
     - name
-    - runner
+    - runner_id
     type: object
   models.User:
     properties:
@@ -287,7 +287,7 @@ definitions:
         type: string
       secret:
         type: string
-      task:
+      task_id:
         type: string
       updated_at:
         type: string
@@ -1504,15 +1504,15 @@ paths:
       summary: Create a new runner
       tags:
       - runners
-  /runners/{name}:
+  /runners/{id}:
     delete:
       consumes:
       - application/json
       description: Delete by runner name
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1544,9 +1544,9 @@ paths:
       - application/json
       description: Get information about a specific runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1574,9 +1574,9 @@ paths:
       - application/json
       description: Update a runner in the cluster
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: Update runner
@@ -1609,15 +1609,15 @@ paths:
       summary: Update a runner
       tags:
       - runners
-  /runners/{name}/schema:
+  /runners/{id}/schema:
     delete:
       consumes:
       - application/json
       description: Remove secret associated with runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1641,15 +1641,15 @@ paths:
       summary: Delete secret
       tags:
       - runners
-  /runners/{name}/secret:
+  /runners/{id}/secret:
     get:
       consumes:
       - application/json
       description: Update secret associated with runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1756,15 +1756,15 @@ paths:
       summary: Create a new task
       tags:
       - tasks
-  /tasks/{name}:
+  /tasks/{id}:
     delete:
       consumes:
       - application/json
       description: Delete by task name
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1796,9 +1796,9 @@ paths:
       - application/json
       description: Get information about a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1830,9 +1830,9 @@ paths:
       - application/json
       description: Update a task in the cluster
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: Update task
@@ -1865,15 +1865,15 @@ paths:
       summary: Update a task
       tags:
       - tasks
-  /tasks/{name}/run:
+  /tasks/{id}/run:
     post:
       consumes:
       - application/json
       description: Run Task
       parameters:
-      - description: Task  name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: Extra vars
@@ -1905,15 +1905,15 @@ paths:
       summary: Run Task
       tags:
       - tasks
-  /tasks/{name}/schema:
+  /tasks/{id}/schema:
     delete:
       consumes:
       - application/json
       description: Remove validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1946,9 +1946,9 @@ paths:
       - application/json
       description: Get validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1981,9 +1981,9 @@ paths:
       - application/json
       description: Add or Update validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: New schema

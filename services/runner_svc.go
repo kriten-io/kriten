@@ -10,24 +10,25 @@ import (
 	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
 
 type RunnerService interface {
 	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, int, error)
-	GetRunner(string) (*models.Runner, error)
+	GetRunner(uuid.UUID) (*models.Runner, error)
 	CreateRunner(models.Runner) (*models.Runner, error)
-	UpdateRunner(models.Runner) (*models.Runner, error)
-	DeleteRunner(string) error
+	UpdateRunner(uuid.UUID, models.Runner) (*models.Runner, error)
+	DeleteRunner(uuid.UUID) error
 	ListAllJobs() ([]models.Job, error)
-	GetSecret(string) (map[string]string, error)
-	UpdateSecret(string, map[string]string) (map[string]string, error)
-	DeleteSecret(string) error
+	GetSecret(uuid.UUID) (map[string]string, error)
+	UpdateSecret(uuid.UUID, map[string]string) (map[string]string, error)
+	DeleteSecret(uuid.UUID) error
 	// GetRunnerForExecution returns a runner with the git token and custom
 	// secrets decrypted. It must only be used internally to launch jobs and
 	// never returned to an API client.
-	GetRunnerForExecution(string) (*models.Runner, error)
+	GetRunnerForExecution(uuid.UUID) (*models.Runner, error)
 }
 
 type RunnerServiceImpl struct {
@@ -42,17 +43,17 @@ func NewRunnerService(database *gorm.DB, config config.Config) RunnerService {
 	}
 }
 
-// getRunnerByName fetches a runner model from the database, translating the
+// getRunnerByID fetches a runner model from the database, translating the
 // not found error into the service level error.
-func (r *RunnerServiceImpl) getRunnerByName(name string) (*models.Runner, error) {
+func (r *RunnerServiceImpl) getRunnerByID(id uuid.UUID) (*models.Runner, error) {
 	var runner models.Runner
 
-	res := r.db.Where("name = ?", name).First(&runner)
+	res := r.db.Where("id = ?", id).First(&runner)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
+			return nil, fmt.Errorf("runner '%s': %w", id, ErrSvcObjNotFound)
 		}
-		return nil, fmt.Errorf("runner '%s': %w", name, res.Error)
+		return nil, fmt.Errorf("runner '%s': %w", id, res.Error)
 	}
 
 	return &runner, nil
@@ -75,7 +76,7 @@ func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQ
 		authorised = runnersList
 	} else {
 		for _, runner := range runnersList {
-			if slices.Contains(authList, runner.Name) {
+			if slices.Contains(authList, runner.ID.String()) {
 				authorised = append(authorised, runner)
 			}
 		}
@@ -106,8 +107,8 @@ func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQ
 	return filtered, total, nil
 }
 
-func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
-	runner, err := r.getRunnerByName(name)
+func (r *RunnerServiceImpl) GetRunner(id uuid.UUID) (*models.Runner, error) {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -117,17 +118,17 @@ func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
 		runner.Token = "************"
 	}
 
-	secret, err := r.GetSecret(name)
+	secret, err := r.GetSecret(id)
 	if err != nil {
-		return nil, fmt.Errorf("runner '%s' secrets: %w", name, err)
+		return nil, fmt.Errorf("runner '%s' secrets: %w", id, err)
 	}
 	runner.Secret = secret
 
 	return runner, nil
 }
 
-func (r *RunnerServiceImpl) GetRunnerForExecution(name string) (*models.Runner, error) {
-	runner, err := r.getRunnerByName(name)
+func (r *RunnerServiceImpl) GetRunnerForExecution(id uuid.UUID) (*models.Runner, error) {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -135,21 +136,21 @@ func (r *RunnerServiceImpl) GetRunnerForExecution(name string) (*models.Runner, 
 	if runner.TokenEncrypted != "" {
 		token, err := helpers.DecryptSecret(r.config.SecretsKey, runner.TokenEncrypted)
 		if err != nil {
-			return nil, fmt.Errorf("runner '%s' git repo token: %w", name, err)
+			return nil, fmt.Errorf("runner '%s' git repo token: %w", id, err)
 		}
 		runner.Token = token
 	}
 
 	var secrets []models.RunnerSecret
 	if err := r.db.Where("runner_id = ?", runner.ID).Find(&secrets).Error; err != nil {
-		return nil, fmt.Errorf("failed to get secrets for runner '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to get secrets for runner '%s': %w", id, err)
 	}
 
 	secretMap := make(map[string]string)
 	for _, s := range secrets {
 		value, err := helpers.DecryptSecret(r.config.SecretsKey, s.ValueEncrypted)
 		if err != nil {
-			return nil, fmt.Errorf("runner '%s' secret '%s': %w", name, s.Key, err)
+			return nil, fmt.Errorf("runner '%s' secret '%s': %w", id, s.Key, err)
 		}
 		secretMap[s.Key] = value
 	}
@@ -159,7 +160,7 @@ func (r *RunnerServiceImpl) GetRunnerForExecution(name string) (*models.Runner, 
 }
 
 func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
-	err := helpers.ValidateK8sConfigMapName(runner.Name)
+	err := helpers.ValidateK8sObjName(runner.Name)
 	if err != nil {
 		return nil, fmt.Errorf("runner '%s': %w",
 			runner.Name,
@@ -194,16 +195,16 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 	}
 
 	if runner.Secret != nil {
-		if _, err := r.UpdateSecret(runner.Name, runner.Secret); err != nil {
+		if _, err := r.UpdateSecret(newRunner.ID, runner.Secret); err != nil {
 			return nil, fmt.Errorf("runner '%s' secrets update: %w", runner.Name, err)
 		}
 	}
 
-	return r.GetRunner(runner.Name)
+	return r.GetRunner(newRunner.ID)
 }
 
-func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, error) {
-	current, err := r.getRunnerByName(runner.Name)
+func (r *RunnerServiceImpl) UpdateRunner(id uuid.UUID, runner models.Runner) (*models.Runner, error) {
+	current, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 	default:
 		tokenEncrypted, err := helpers.EncryptSecret(r.config.SecretsKey, runner.Token)
 		if err != nil {
-			return nil, fmt.Errorf("runner '%s' update git repo token: %w", runner.Name, err)
+			return nil, fmt.Errorf("runner '%s' update git repo token: %w", current.Name, err)
 		}
 		current.TokenEncrypted = tokenEncrypted
 	}
@@ -238,35 +239,35 @@ func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, 
 	}
 
 	if runner.Secret != nil {
-		if _, err := r.UpdateSecret(runner.Name, runner.Secret); err != nil {
-			return nil, fmt.Errorf("runner '%s' update secrets: %w", runner.Name, err)
+		if _, err := r.UpdateSecret(id, runner.Secret); err != nil {
+			return nil, fmt.Errorf("runner '%s' update secrets: %w", id, err)
 		}
 	}
 
-	return r.GetRunner(runner.Name)
+	return r.GetRunner(id)
 }
 
-func (r *RunnerServiceImpl) DeleteRunner(name string) error {
-	runner, err := r.getRunnerByName(name)
+func (r *RunnerServiceImpl) DeleteRunner(id uuid.UUID) error {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return err
 	}
 
-	// Tasks live in the database and reference runners by name.
+	// Tasks live in the database and reference runners by UUID.
 	var boundTask models.Task
-	if err := r.db.Where("runner = ?", name).First(&boundTask).Error; err == nil {
+	if err := r.db.Where("runner_id = ?", id).First(&boundTask).Error; err == nil {
 		return fmt.Errorf("runner is bound to task: %s , delete that first: %w", boundTask.Name, ErrSvcObjInUse)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 
 	if err := r.db.Where("runner_id = ?", runner.ID).Delete(&models.RunnerSecret{}).Error; err != nil {
-		return fmt.Errorf("runner '%s' secrets: %w", name, err)
+		return fmt.Errorf("runner '%s' secrets: %w", id, err)
 	}
 
 	res := r.db.Delete(&models.Runner{}, "id = ?", runner.ID)
 	if res.Error != nil {
-		return fmt.Errorf("runner '%s': %w", name, res.Error)
+		return fmt.Errorf("runner '%s': %w", id, res.Error)
 	}
 
 	return nil
@@ -295,17 +296,17 @@ func (r *RunnerServiceImpl) ListAllJobs() ([]models.Job, error) {
 	return jobsRet, nil
 }
 
-func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
+func (r *RunnerServiceImpl) GetSecret(id uuid.UUID) (map[string]string, error) {
 	secretCleaned := make(map[string]string)
 
-	runner, err := r.getRunnerByName(name)
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var secrets []models.RunnerSecret
 	if err := r.db.Where("runner_id = ?", runner.ID).Find(&secrets).Error; err != nil {
-		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", id, err)
 	}
 
 	for _, s := range secrets {
@@ -315,15 +316,15 @@ func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
 	return secretCleaned, nil
 }
 
-func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
-	runner, err := r.getRunnerByName(name)
+func (r *RunnerServiceImpl) UpdateSecret(id uuid.UUID, secret map[string]string) (map[string]string, error) {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var currentSecrets []models.RunnerSecret
 	if err := r.db.Where("runner_id = ?", runner.ID).Find(&currentSecrets).Error; err != nil {
-		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", id, err)
 	}
 
 	currentMap := make(map[string]models.RunnerSecret, len(currentSecrets))
@@ -340,19 +341,19 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 		case value == "":
 			if ok {
 				if err := r.db.Delete(&existing).Error; err != nil {
-					return nil, fmt.Errorf("failed to delete secret '%s' for runner '%s': %w", key, name, err)
+					return nil, fmt.Errorf("failed to delete secret '%s' for runner '%s': %w", key, id, err)
 				}
 			}
 		default:
 			valueEncrypted, err := helpers.EncryptSecret(r.config.SecretsKey, value)
 			if err != nil {
-				return nil, fmt.Errorf("failed to encrypt secret '%s' for runner '%s': %w", key, name, err)
+				return nil, fmt.Errorf("failed to encrypt secret '%s' for runner '%s': %w", key, id, err)
 			}
 
 			if ok {
 				existing.ValueEncrypted = valueEncrypted
 				if err := r.db.Save(&existing).Error; err != nil {
-					return nil, fmt.Errorf("failed to update secret '%s' for runner '%s': %w", key, name, err)
+					return nil, fmt.Errorf("failed to update secret '%s' for runner '%s': %w", key, id, err)
 				}
 			} else {
 				newSecret := models.RunnerSecret{
@@ -361,23 +362,23 @@ func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) 
 					ValueEncrypted: valueEncrypted,
 				}
 				if err := r.db.Create(&newSecret).Error; err != nil {
-					return nil, fmt.Errorf("failed to create secret '%s' for runner '%s': %w", key, name, err)
+					return nil, fmt.Errorf("failed to create secret '%s' for runner '%s': %w", key, id, err)
 				}
 			}
 		}
 	}
 
-	return r.GetSecret(name)
+	return r.GetSecret(id)
 }
 
-func (r *RunnerServiceImpl) DeleteSecret(name string) error {
-	runner, err := r.getRunnerByName(name)
+func (r *RunnerServiceImpl) DeleteSecret(id uuid.UUID) error {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
-		return fmt.Errorf("runner %s not found: %w", name, err)
+		return fmt.Errorf("runner %s not found: %w", id, err)
 	}
 
 	if err := r.db.Where("runner_id = ?", runner.ID).Delete(&models.RunnerSecret{}).Error; err != nil {
-		return fmt.Errorf("failed to delete secret '%s': %w", name, err)
+		return fmt.Errorf("failed to delete secret '%s': %w", id, err)
 	}
 
 	return nil

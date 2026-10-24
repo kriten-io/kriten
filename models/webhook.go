@@ -11,7 +11,7 @@ type Webhook struct {
 	Owner       uuid.UUID `gorm:"type:uuid" json:"owner"`
 	Secret      string    `json:"secret,omitempty"`
 	Description string    `json:"description,omitempty"`
-	Task        string    `json:"task,omitempty"`
+	TaskID      uuid.UUID `gorm:"type:uuid;index;not null;default:'00000000-0000-0000-0000-000000000000'" json:"task_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

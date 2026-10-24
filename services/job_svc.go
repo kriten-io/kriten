@@ -71,7 +71,7 @@ func (j *JobServiceImpl) ListJobs(authList []string, params models.JobQueryParam
 
 	if authList[0] != "*" {
 		for _, s := range authList {
-			labelSelector = append(labelSelector, "task-name="+s)
+			labelSelector = append(labelSelector, "task-id="+s)
 		}
 	}
 
