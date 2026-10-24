@@ -1213,7 +1213,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/jobs/{name}": {
+        "/jobs/{id}": {
             "get": {
                 "security": [
                     {
@@ -1234,7 +1234,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job Name",
+                        "description": "Job ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1244,7 +1244,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/models.Job"
                         }
                     },
                     "400": {
@@ -1268,7 +1268,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/jobs/{name}/log": {
+        "/jobs/{id}/log": {
             "get": {
                 "security": [
                     {
@@ -1289,7 +1289,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job  name",
+                        "description": "Job ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1299,7 +1299,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "type": "string"
                         }
                     },
                     "400": {
@@ -3521,10 +3521,16 @@ const docTemplate = `{
                 "completion_time": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "failed": {
                     "type": "integer"
                 },
                 "failed_reason": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "json_data": {
@@ -3545,12 +3551,24 @@ const docTemplate = `{
                 },
                 "stdout": {
                     "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
         "models.JobMessage": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
                 },

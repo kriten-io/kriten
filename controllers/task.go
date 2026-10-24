@@ -403,5 +403,5 @@ func (tc *TaskController) RunTask(ctx *gin.Context) {
 	}
 
 	tc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, models.JobMessage{Message: "job created successfully", JobName: job.Name})
+	ctx.JSON(http.StatusOK, models.JobMessage{Message: "job created successfully", JobID: job.ID, JobName: job.Name})
 }

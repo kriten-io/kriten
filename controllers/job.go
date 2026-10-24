@@ -34,8 +34,8 @@ func (jc *JobController) SetJobRoutes(rg *gin.RouterGroup, config config.Config)
 		middlewares.AuthenticationMiddleware(jc.AuthService, config.JWT))
 
 	r.GET("", middlewares.SetAuthorizationListMiddleware(jc.AuthService, "jobs"), jc.ListJobs)
-	r.GET("/:name", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
-	r.GET("/:name/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
+	r.GET("/:id", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJob)
+	r.GET("/:id/log", middlewares.AuthorizationMiddleware(jc.AuthService, "jobs", "read"), jc.GetJobLog)
 
 }
 
@@ -95,17 +95,20 @@ func (jc *JobController) ListJobs(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			name	path		string	true	"Job Name"
-//	@Success		200	{object}	models.Task
+//	@Param			id	path		string	true	"Job ID"
+//	@Success		200	{object}	models.Job
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{name} [get]
+//	@Router			/jobs/{id} [get]
 //	@Security		Bearer
 func (jc *JobController) GetJob(ctx *gin.Context) {
-	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("name")
-	job, err := jc.JobService.GetJob(username, jobName)
+	jobID, ok := parseUUIDParam(ctx, "id", "job")
+	if !ok {
+		return
+	}
+
+	job, err := jc.JobService.GetJob(jobID)
 
 	if err != nil {
 		ctx.Error(err)
@@ -122,17 +125,20 @@ func (jc *JobController) GetJob(ctx *gin.Context) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Param			name	path		string	true	"Job  name"
-//	@Success		200	{object}	models.Task
+//	@Param			id	path		string	true	"Job ID"
+//	@Success		200	{string}	string	"Job log"
 //	@Failure		400	{object}	helpers.HTTPError
 //	@Failure		404	{object}	helpers.HTTPError
 //	@Failure		500	{object}	helpers.HTTPError
-//	@Router			/jobs/{name}/log [get]
+//	@Router			/jobs/{id}/log [get]
 //	@Security		Bearer
 func (jc *JobController) GetJobLog(ctx *gin.Context) {
-	username := ctx.MustGet("username").(string)
-	jobName := ctx.Param("name")
-	log, err := jc.JobService.GetLog(username, jobName)
+	jobID, ok := parseUUIDParam(ctx, "id", "job")
+	if !ok {
+		return
+	}
+
+	log, err := jc.JobService.GetLog(jobID)
 
 	if err != nil {
 		ctx.Error(err)

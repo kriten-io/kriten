@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 
@@ -22,12 +24,17 @@ class TestJobs:
 
     @pytest.mark.negative
     def test_get_job_not_found(self, api_client, api_base):
-        resp = api_client.get(f"{api_base}/jobs/nonexistent-job")
+        resp = api_client.get(f"{api_base}/jobs/{uuid.uuid4()}")
         assert resp.status_code == 404
 
     @pytest.mark.negative
+    def test_get_job_invalid_id(self, api_client, api_base):
+        resp = api_client.get(f"{api_base}/jobs/nonexistent-job")
+        assert resp.status_code == 400
+
+    @pytest.mark.negative
     def test_get_job_log_not_found(self, api_client, api_base):
-        resp = api_client.get(f"{api_base}/jobs/nonexistent-job/log")
+        resp = api_client.get(f"{api_base}/jobs/{uuid.uuid4()}/log")
         assert resp.status_code == 404
 
     @pytest.mark.negative
@@ -55,8 +62,12 @@ class TestJobs:
 
         create_resp = api_client.post(f"{api_base}/tasks/{task_id}/run", json={})
         assert create_resp.status_code == 200
-        job_name = create_resp.json().get("name", "")
+        job_id = create_resp.json().get("id", "")
 
-        if job_name:
-            resp = api_client.get(f"{api_base}/jobs/{job_name}")
+        if job_id:
+            resp = api_client.get(f"{api_base}/jobs/{job_id}")
             assert resp.status_code == 200
+            job = resp.json()
+            assert job["id"] == job_id
+            assert job["task_id"] == task_id
+            assert job["task_name"] == random_name

@@ -133,7 +133,7 @@ func init() {
 	als = services.NewAuditService(db, conf)
 
 	rs = services.NewRunnerService(db, conf)
-	js = services.NewJobService(conf)
+	js = services.NewJobService(db, conf)
 	ts = services.NewTaskService(db, ws, conf, js, rs)
 
 	// Controllers
@@ -211,6 +211,8 @@ func main() {
 			rlc.SetRoleRoutes(roles, conf)
 		}
 	}
+
+	js.StartWorkers()
 
 	log.Fatal(router.Run())
 

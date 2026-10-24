@@ -9,6 +9,8 @@ import (
 
 const (
 	JobsTTLDefault          = 3600
+	JobsWorkerCountDefault  = 2
+	JobsPollIntervalDefault = 5
 	JWTExpirySecondsDefault = 3600
 )
 
@@ -40,6 +42,11 @@ type DBConfig struct {
 	Port     int
 }
 
+type JobsConfig struct {
+	WorkerCount  int
+	PollInterval int
+}
+
 type Config struct {
 	Environment  string
 	RootPassword string
@@ -49,6 +56,7 @@ type Config struct {
 	Kube         KubeConfig
 	JWT          JWTConfig
 	DB           DBConfig
+	Jobs         JobsConfig
 	DebugMode    bool
 }
 
@@ -85,6 +93,10 @@ func NewConfig(gitBranch string) Config {
 			Password: getEnv("DB_PASSWORD", ""),
 			Port:     getEnvAsInt("DB_PORT", -1),
 			SSL:      getEnv("DB_SSL", "disabled"),
+		},
+		Jobs: JobsConfig{
+			WorkerCount:  getEnvAsInt("JOBS_WORKER_COUNT", JobsWorkerCountDefault),
+			PollInterval: getEnvAsInt("JOBS_POLL_INTERVAL", JobsPollIntervalDefault),
 		},
 		// ElasticSearch: ESConfig{
 		// 	CloudID: getEnv("ES_CLOUD_ID", ""),

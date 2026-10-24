@@ -29,6 +29,7 @@ type AuthService interface {
 	ChangePassword(string, *models.ChangePassword) error
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
+	GetJobTaskID(uuid.UUID) (uuid.UUID, error)
 	ValidateAPIToken(string) (models.User, error)
 	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, uuid.UUID, error)
 	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, uuid.UUID, error)
@@ -319,4 +320,18 @@ func (a *AuthServiceImpl) GetAuthorizationList(auth *models.Authorization) ([]st
 		}
 	}
 	return authList, nil
+}
+
+func (a *AuthServiceImpl) GetJobTaskID(id uuid.UUID) (uuid.UUID, error) {
+	var job models.Job
+
+	res := a.db.Select("task_id").Where("id = ?", id).First(&job)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return uuid.Nil, fmt.Errorf("job '%s': %w", id, ErrSvcObjNotFound)
+		}
+		return uuid.Nil, fmt.Errorf("job '%s': %w", id, res.Error)
+	}
+
+	return job.TaskID, nil
 }

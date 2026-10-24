@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 
 	uuid "github.com/satori/go.uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -190,6 +192,19 @@ func ListJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.JobList
 	}
 
 	return jobsList, nil
+}
+
+func DeleteJob(kube config.KubeConfig, name string) error {
+	propagation := metav1.DeletePropagationBackground
+	err := kube.Clientset.BatchV1().Jobs(
+		kube.Namespace).Delete(
+		context.TODO(), name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete job %s: %w", name, err)
+	}
+
+	return nil
 }
 
 func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
@@ -370,9 +385,13 @@ func JobObject(taskID uuid.UUID,
 		})
 	}
 
+	jobNamePrefix := strings.ReplaceAll(taskName, "_", "-")
+	if jobNamePrefix == "" {
+		jobNamePrefix = taskID.String()
+	}
 	job = &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: taskID.String() + "-",
+			GenerateName: jobNamePrefix + "-",
 			Namespace:    kube.Namespace,
 		},
 		Spec: batchv1.JobSpec{

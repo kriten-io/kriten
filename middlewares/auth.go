@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -128,22 +129,39 @@ func AuthorizationMiddleware(as services.AuthService, resource string, access st
 		}
 
 		resourceName := ""
-		if ctx.Param("name") != "" {
-			resourceName = ctx.Param("name")
-		} else if task != "" {
-			resourceName = task
-		} else if ctx.Param("id") != "" {
-			resourceName = ctx.Param("id")
-		}
-
-		if resourceName == "" {
-			resourceName = "*"
-		}
-
-		// trimming last 6 chars for jobs read because
-		// jobs include random caracters at the end
 		if resource == "jobs" && access == "read" {
-			resourceName = resourceName[:len(resourceName)-6]
+			jobID, err := uuid.FromString(ctx.Param("id"))
+			if err != nil {
+				ctx.Error(errors.New("invalid job id format"))
+				ctx.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+
+			taskID, err := as.GetJobTaskID(jobID)
+			if err != nil {
+				if errors.Is(err, services.ErrSvcObjNotFound) {
+					ctx.Error(err)
+					ctx.AbortWithStatus(http.StatusNotFound)
+					return
+				}
+				log.Println(err)
+				ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error."})
+				return
+			}
+
+			resourceName = taskID.String()
+		} else {
+			if ctx.Param("name") != "" {
+				resourceName = ctx.Param("name")
+			} else if task != "" {
+				resourceName = task
+			} else if ctx.Param("id") != "" {
+				resourceName = ctx.Param("id")
+			}
+
+			if resourceName == "" {
+				resourceName = "*"
+			}
 		}
 
 		isAuthorised, err := as.IsAutorised(

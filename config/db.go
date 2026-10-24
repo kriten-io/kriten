@@ -22,6 +22,7 @@ func InitDB(db *gorm.DB, rp string) {
 		&models.Runner{},
 		&models.RunnerSecret{},
 		&models.Task{},
+		&models.Job{},
 	)
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")

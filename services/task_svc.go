@@ -416,8 +416,29 @@ func (t *TaskServiceImpl) RunTask(username string, taskID uuid.UUID, extraVars s
 		}
 	}
 
+	storedJob, err := t.JobService.StoreJob(models.Job{
+		Name:      jobName,
+		TaskID:    task.ID,
+		TaskName:  taskName,
+		Owner:     username,
+		Status:    "running",
+		StartTime: job.CreationTimestamp.Format(time.UnixDate),
+	})
+	if err != nil {
+		if delErr := helpers.DeleteJob(t.config.Kube, jobName); delErr != nil {
+			fmt.Println(delErr)
+		}
+		if envSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+		}
+		if tokenSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, tokenSecret)
+		}
+		return jobStatus, fmt.Errorf("task '%s' store job: %w", taskName, err)
+	}
+
 	if task.Synchronous {
-		err = wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 20*time.Second, false,
+		waitErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 20*time.Second, false,
 			func(conditionCtx context.Context) (done bool, err error) {
 
 				job, err := helpers.GetJob(t.config.Kube, jobName)
@@ -433,10 +454,16 @@ func (t *TaskServiceImpl) RunTask(username string, taskID uuid.UUID, extraVars s
 
 				return false, nil
 			})
+		if waitErr != nil {
+			fmt.Printf("job '%s' wait: %v\n", jobName, waitErr)
+		}
 
-		ret, err := t.JobService.GetJob(username, jobName)
-		return ret, err
+		if err := t.JobService.RefreshJob(storedJob.ID); err != nil {
+			return jobStatus, err
+		}
+
+		return t.JobService.GetJob(storedJob.ID)
 	}
 
-	return jobStatus, nil
+	return storedJob, nil
 }

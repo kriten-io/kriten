@@ -127,9 +127,13 @@ definitions:
         type: integer
       completion_time:
         type: string
+      created_at:
+        type: string
       failed:
         type: integer
       failed_reason:
+        type: string
+      id:
         type: string
       json_data:
         additionalProperties: true
@@ -144,9 +148,17 @@ definitions:
         type: string
       stdout:
         type: string
+      task_id:
+        type: string
+      task_name:
+        type: string
+      updated_at:
+        type: string
     type: object
   models.JobMessage:
     properties:
+      id:
+        type: string
       message:
         type: string
       name:
@@ -1066,15 +1078,15 @@ paths:
       summary: List all jobs
       tags:
       - jobs
-  /jobs/{name}:
+  /jobs/{id}:
     get:
       consumes:
       - application/json
       description: Get information about a specific job
       parameters:
-      - description: Job Name
+      - description: Job ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1083,7 +1095,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Task'
+            $ref: '#/definitions/models.Job'
         "400":
           description: Bad Request
           schema:
@@ -1101,15 +1113,15 @@ paths:
       summary: Get job info
       tags:
       - jobs
-  /jobs/{name}/log:
+  /jobs/{id}/log:
     get:
       consumes:
       - application/json
       description: Get a job log as text
       parameters:
-      - description: Job  name
+      - description: Job ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1118,7 +1130,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Task'
+            type: string
         "400":
           description: Bad Request
           schema:

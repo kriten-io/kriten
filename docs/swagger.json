@@ -1206,7 +1206,7 @@
                 }
             }
         },
-        "/jobs/{name}": {
+        "/jobs/{id}": {
             "get": {
                 "security": [
                     {
@@ -1227,8 +1227,8 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job Name",
-                        "name": "name",
+                        "description": "Job ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1237,7 +1237,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/models.Job"
                         }
                     },
                     "400": {
@@ -1261,7 +1261,7 @@
                 }
             }
         },
-        "/jobs/{name}/log": {
+        "/jobs/{id}/log": {
             "get": {
                 "security": [
                     {
@@ -1282,8 +1282,8 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job  name",
-                        "name": "name",
+                        "description": "Job ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1292,7 +1292,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "type": "string"
                         }
                     },
                     "400": {
@@ -3514,10 +3514,16 @@
                 "completion_time": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "failed": {
                     "type": "integer"
                 },
                 "failed_reason": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "json_data": {
@@ -3538,12 +3544,24 @@
                 },
                 "stdout": {
                     "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
         "models.JobMessage": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
                 },

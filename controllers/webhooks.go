@@ -293,5 +293,5 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	}
 
 	wc.AuditService.CreateAudit(audit)
-	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.Name})
+	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
 }
