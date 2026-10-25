@@ -6,8 +6,6 @@ import (
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
-	"github.com/gin-gonic/gin"
-	uuid "github.com/satori/go.uuid"
 	"gorm.io/gorm"
 )
 
@@ -15,7 +13,7 @@ type AuditService interface {
 	ListAuditLogs(models.AuditQueryParams) ([]models.AuditLog, int, error)
 	GetAuditLog(string) (models.AuditLog, error)
 	CreateAudit(models.AuditLog)
-	InitialiseAuditLog(*gin.Context, string, string, string) models.AuditLog
+	InitialiseAuditLog(models.AuditMetadata, string, string, string) models.AuditLog
 }
 
 type AuditServiceImpl struct {
@@ -76,27 +74,15 @@ func (a *AuditServiceImpl) CreateAudit(auditlog models.AuditLog) {
 }
 
 func (a *AuditServiceImpl) InitialiseAuditLog(
-	ctx *gin.Context,
+	meta models.AuditMetadata,
 	eventType string,
 	category string,
 	target string,
 ) models.AuditLog {
-	var userID uuid.UUID
-	var username, provider string
-	uid, _ := ctx.Get("userID")
-	if uid != nil {
-		userID = uid.(uuid.UUID)
-		uname, _ := ctx.Get("username")
-		prov, _ := ctx.Get("provider")
-
-		username = uname.(string)
-		provider = prov.(string)
-	}
-
 	return models.AuditLog{
-		UserID:        userID,
-		UserName:      username,
-		Provider:      provider,
+		UserID:        meta.UserID,
+		UserName:      meta.UserName,
+		Provider:      meta.Provider,
 		EventType:     eventType,
 		EventCategory: category,
 		EventTarget:   target,

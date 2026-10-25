@@ -24,7 +24,7 @@ import (
 )
 
 type AuthService interface {
-	Login(*models.Credentials) (string, int, error)
+	Login(models.AuditMetadata, *models.Credentials) (string, int, error)
 	Refresh(string) (string, int, error)
 	ChangePassword(string, *models.ChangePassword) error
 	IsAutorised(*models.Authorization) (bool, error)
@@ -36,10 +36,11 @@ type AuthService interface {
 }
 
 type AuthServiceImpl struct {
-	db          *gorm.DB
-	UserService UserService
-	RoleService RoleService
-	config      config.Config
+	db           *gorm.DB
+	UserService  UserService
+	RoleService  RoleService
+	config       config.Config
+	auditService AuditService
 }
 
 func NewAuthService(
@@ -47,18 +48,25 @@ func NewAuthService(
 	us UserService,
 	rls RoleService,
 	database *gorm.DB,
+	als AuditService,
 ) AuthService {
 	return &AuthServiceImpl{
-		config:      config,
-		UserService: us,
-		RoleService: rls,
-		db:          database,
+		config:       config,
+		UserService:  us,
+		RoleService:  rls,
+		db:           database,
+		auditService: als,
 	}
 }
 
 // Login - TODO: This function is getting very crowded
 // might need to be refactored in the future.
-func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, error) {
+func (a *AuthServiceImpl) Login(meta models.AuditMetadata, credentials *models.Credentials) (string, int, error) {
+	audit := a.auditService.InitialiseAuditLog(meta, "login", "authentication", "*")
+	audit.UserName = credentials.Username
+	audit.Provider = credentials.Provider
+	defer func() { a.auditService.CreateAudit(audit) }()
+
 	var user models.User
 	var err error
 
@@ -76,17 +84,10 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		if err != nil {
 			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
 		}
-		_, err = a.UserService.CreateUser(models.User{
-			Username: credentials.Username,
-			Provider: credentials.Provider,
-		})
-		if err != nil && !strings.Contains(err.Error(), "ERROR: duplicate key value violates unique constraint") {
+		user, err = a.UserService.EnsureUser(credentials.Username, credentials.Provider)
+		if err != nil {
 			log.Println(err.Error())
 			return "", -1, fmt.Errorf("failed to create ldap user into local user db: %w", err)
-		}
-		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
-		if err != nil {
-			return "", -1, fmt.Errorf("failed to get user credentials: %w", err)
 		}
 	} else {
 		err := errors.New("provider does not exist")
@@ -98,7 +99,8 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		log.Println(err)
 		return "", -1, fmt.Errorf("failed to create token: %w", err)
 	}
-
+	audit.UserID = user.ID
+	audit.Status = "success"
 	return token, a.config.JWT.ExpirySeconds, nil
 }
 
@@ -141,9 +143,7 @@ func (a *AuthServiceImpl) ChangePassword(tokenStr string, creds *models.ChangePa
 		return errors.New("incorrect current password")
 	}
 
-	user.Password = creds.NewPassword
-
-	_, err = a.UserService.UpdateUser(user)
+	_, err = a.UserService.SetPassword(user, creds.NewPassword)
 	if err != nil {
 		return fmt.Errorf("failed to update user %s password in DB: %w", user.Username, err)
 	}

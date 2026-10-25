@@ -124,30 +124,29 @@ func init() {
 
 func init() {
 	// Services
-	us = services.NewUserService(db, conf)
-	ats = services.NewApiTokenService(db, conf)
-	ws = services.NewWebhookService(db, conf)
-	gs = services.NewGroupService(db, us, conf)
-	rls = services.NewRoleService(db, conf, gs)
-	as = services.NewAuthService(conf, us, rls, db)
 	als = services.NewAuditService(db, conf)
-
-	rs = services.NewRunnerService(db, conf)
+	us = services.NewUserService(db, conf, als)
+	ats = services.NewApiTokenService(db, conf, als)
+	gs = services.NewGroupService(db, us, conf, als)
+	rls = services.NewRoleService(db, conf, gs, als)
+	as = services.NewAuthService(conf, us, rls, db, als)
+	rs = services.NewRunnerService(db, conf, als)
 	js = services.NewJobService(db, conf)
-	ts = services.NewTaskService(db, ws, conf, js, rs)
+	ts = services.NewTaskService(db, conf, js, rs, als)
+	ws = services.NewWebhookService(db, conf, als, ts)
 
 	// Controllers
-	uc = controllers.NewUserController(us, gs, as, als, authProviders)
-	wc = controllers.NewWebhookController(ws, ts, as, als, authProviders)
-	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
-	gc = controllers.NewGroupController(gs, as, als, authProviders)
-	rlc = controllers.NewRoleController(rls, as, als)
-	ac = controllers.NewAuthController(as, als, authProviders)
+	uc = controllers.NewUserController(us, gs, as, authProviders)
+	wc = controllers.NewWebhookController(ws, ts, as, authProviders)
+	atc = controllers.NewApiTokenController(ats, as, authProviders)
+	gc = controllers.NewGroupController(gs, as, authProviders)
+	rlc = controllers.NewRoleController(rls, as)
+	ac = controllers.NewAuthController(as, authProviders)
 	alc = controllers.NewAuditController(als, as)
 
-	rc = controllers.NewRunnerController(rs, as, als)
-	tc = controllers.NewTaskController(ts, as, als)
-	jc = controllers.NewJobController(js, as, als)
+	rc = controllers.NewRunnerController(rs, as)
+	tc = controllers.NewTaskController(ts, as)
+	jc = controllers.NewJobController(js, as)
 }
 
 //	@title			  Swagger Kriten

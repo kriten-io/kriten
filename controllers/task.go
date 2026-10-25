@@ -15,18 +15,14 @@ import (
 )
 
 type TaskController struct {
-	TaskService   services.TaskService
-	AuthService   services.AuthService
-	AuditService  services.AuditService
-	AuditCategory string
+	TaskService services.TaskService
+	AuthService services.AuthService
 }
 
-func NewTaskController(taskservice services.TaskService, as services.AuthService, als services.AuditService) TaskController {
+func NewTaskController(taskservice services.TaskService, as services.AuthService) TaskController {
 	return TaskController{
-		TaskService:   taskservice,
-		AuthService:   as,
-		AuditService:  als,
-		AuditCategory: "tasks",
+		TaskService: taskservice,
+		AuthService: as,
 	}
 }
 
@@ -146,25 +142,20 @@ func (tc *TaskController) GetTask(ctx *gin.Context) {
 //	@Router			/tasks [post]
 //	@Security		Bearer
 func (tc *TaskController) CreateTask(ctx *gin.Context) {
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "create", tc.AuditCategory, "*")
 	var task models.Task
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid task payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = task.Name
 
-	taskConfig, err := tc.TaskService.CreateTask(task)
+	taskConfig, err := tc.TaskService.CreateTask(getAuditMetadata(ctx), task)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, taskConfig)
 }
 
@@ -189,26 +180,20 @@ func (tc *TaskController) UpdateTask(ctx *gin.Context) {
 		return
 	}
 
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "update", tc.AuditCategory, taskID.String())
 	var task models.Task
 
 	if err := ctx.ShouldBindJSON(&task); err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid task payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	taskConfig, err := tc.TaskService.UpdateTask(taskID, task)
+	taskConfig, err := tc.TaskService.UpdateTask(getAuditMetadata(ctx), taskID, task)
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.EventTarget = taskConfig.Name
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, taskConfig)
 }
 
@@ -232,16 +217,12 @@ func (tc *TaskController) DeleteTask(ctx *gin.Context) {
 		return
 	}
 
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete", tc.AuditCategory, taskID.String())
-
-	err := tc.TaskService.DeleteTask(taskID)
+	err := tc.TaskService.DeleteTask(getAuditMetadata(ctx), taskID)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "task deleted successfully"})
 }
 
@@ -296,25 +277,20 @@ func (tc *TaskController) UpdateSchema(ctx *gin.Context) {
 		return
 	}
 
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "update_schema", tc.AuditCategory, taskID.String())
 	var schema map[string]interface{}
 
 	if err := ctx.BindJSON(&schema); err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid schema payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	schema, err := tc.TaskService.UpdateSchema(taskID, schema)
+	schema, err := tc.TaskService.UpdateSchema(getAuditMetadata(ctx), taskID, schema)
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, schema)
 }
 
@@ -338,18 +314,13 @@ func (tc *TaskController) DeleteSchema(ctx *gin.Context) {
 		return
 	}
 
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "delete_schema", tc.AuditCategory, taskID.String())
-
-	err := tc.TaskService.DeleteSchema(taskID)
+	err := tc.TaskService.DeleteSchema(getAuditMetadata(ctx), taskID)
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "schema deleted successfully"})
 }
 
@@ -374,34 +345,27 @@ func (tc *TaskController) RunTask(ctx *gin.Context) {
 		return
 	}
 
-	audit := tc.AuditService.InitialiseAuditLog(ctx, "run", tc.AuditCategory, taskID.String())
 	username := ctx.MustGet("username").(string)
 
 	extraVars, err := io.ReadAll(ctx.Request.Body)
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	job, err := tc.TaskService.RunTask(username, taskID, string(extraVars))
+	job, err := tc.TaskService.RunTask(getAuditMetadata(ctx), username, taskID, string(extraVars))
 
 	if err != nil {
-		tc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-
 	if (job.Name != "") && (job.Completed != 0) {
-		tc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
-	tc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.JobMessage{Message: "job created successfully", JobID: job.ID, JobName: job.Name})
 }

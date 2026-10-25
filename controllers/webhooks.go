@@ -20,15 +20,12 @@ type WebhookController struct {
 	TaskService    services.TaskService
 	AuthService    services.AuthService
 	providers      []string
-	AuditService   services.AuditService
-	AuditCategory  string
 }
 
 func NewWebhookController(
 	ws services.WebhookService,
 	ts services.TaskService,
 	as services.AuthService,
-	als services.AuditService,
 	p []string,
 ) WebhookController {
 	return WebhookController{
@@ -36,8 +33,6 @@ func NewWebhookController(
 		TaskService:    ts,
 		AuthService:    as,
 		providers:      p,
-		AuditService:   als,
-		AuditCategory:  "webHooks",
 	}
 }
 
@@ -164,41 +159,31 @@ func (wc *WebhookController) GetWebhook(ctx *gin.Context) {
 //	@Router			/webhooks [post]
 //	@Security		Bearer
 func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
-	userid := ctx.MustGet("userID").(uuid.UUID)
-	audit := wc.AuditService.InitialiseAuditLog(ctx, "create", wc.AuditCategory, "*")
 	var webhook models.Webhook
 
 	if err := ctx.ShouldBindJSON(&webhook); err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid webhook payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	webhook.Owner = userid
-
 	if webhook.TaskID == uuid.Nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid task_id"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
 	if _, err := wc.TaskService.GetTask(webhook.TaskID); err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	webhook, err := wc.WebhookService.CreateWebhook(webhook)
+	webhook, err := wc.WebhookService.CreateWebhook(getAuditMetadata(ctx), webhook)
 	if err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	wc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, webhook)
 }
 
@@ -217,7 +202,6 @@ func (wc *WebhookController) CreateWebhook(ctx *gin.Context) {
 //	@Security		Bearer
 func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
-	audit := wc.AuditService.InitialiseAuditLog(ctx, "delete", wc.AuditCategory, webhookID)
 
 	_, err := uuid.FromString(webhookID)
 	if err != nil {
@@ -225,15 +209,12 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	err = wc.WebhookService.DeleteWebhook(webhookID)
+	err = wc.WebhookService.DeleteWebhook(getAuditMetadata(ctx), webhookID)
 	if err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
-
 	}
-	audit.Status = "success"
-	wc.AuditService.CreateAudit(audit)
+
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "webhook deleted successfully"})
 }
 
@@ -254,8 +235,6 @@ func (wc *WebhookController) DeleteWebhook(ctx *gin.Context) {
 //	@Security		Signature
 func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 	webhookID := ctx.Param("id")
-	taskID := ctx.MustGet("task").(uuid.UUID)
-	username := ctx.MustGet("username").(string)
 
 	_, err := uuid.FromString(webhookID)
 	if err != nil {
@@ -263,35 +242,25 @@ func (wc *WebhookController) RunWebhook(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit := wc.AuditService.InitialiseAuditLog(ctx, "run", wc.AuditCategory, webhookID)
-	audit.Status = "success"
-	wc.AuditService.CreateAudit(audit)
 
 	extraVars, err := io.ReadAll(ctx.Request.Body)
 
 	if err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("failure to parse body"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	job, err := wc.TaskService.RunTask(username, taskID, string(extraVars))
-
+	job, err := wc.WebhookService.RunWebhook(getAuditMetadata(ctx), webhookID, string(extraVars))
 	if err != nil {
-		wc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-
 	if (job.Name != "") && (job.Completed != 0) {
-		wc.AuditService.CreateAudit(audit)
 		ctx.JSON(http.StatusOK, job)
 		return
 	}
 
-	wc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, gin.H{"msg": "job created successfully", "id": job.ID})
 }

@@ -14,18 +14,14 @@ import (
 )
 
 type JobController struct {
-	JobService    services.JobService
-	AuthService   services.AuthService
-	AuditService  services.AuditService
-	AuditCategory string
+	JobService  services.JobService
+	AuthService services.AuthService
 }
 
-func NewJobController(js services.JobService, as services.AuthService, als services.AuditService) JobController {
+func NewJobController(js services.JobService, as services.AuthService) JobController {
 	return JobController{
-		JobService:    js,
-		AuthService:   as,
-		AuditService:  als,
-		AuditCategory: "jobs",
+		JobService:  js,
+		AuthService: as,
 	}
 }
 

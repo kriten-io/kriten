@@ -18,13 +18,13 @@ import (
 type RunnerService interface {
 	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, int, error)
 	GetRunner(uuid.UUID) (*models.Runner, error)
-	CreateRunner(models.Runner) (*models.Runner, error)
-	UpdateRunner(uuid.UUID, models.Runner) (*models.Runner, error)
-	DeleteRunner(uuid.UUID) error
+	CreateRunner(models.AuditMetadata, models.Runner) (*models.Runner, error)
+	UpdateRunner(models.AuditMetadata, uuid.UUID, models.Runner) (*models.Runner, error)
+	DeleteRunner(models.AuditMetadata, uuid.UUID) error
 	ListAllJobs() ([]models.Job, error)
 	GetSecret(uuid.UUID) (map[string]string, error)
-	UpdateSecret(uuid.UUID, map[string]string) (map[string]string, error)
-	DeleteSecret(uuid.UUID) error
+	UpdateSecret(models.AuditMetadata, uuid.UUID, map[string]string) (map[string]string, error)
+	DeleteSecret(models.AuditMetadata, uuid.UUID) error
 	// GetRunnerForExecution returns a runner with the git token and custom
 	// secrets decrypted. It must only be used internally to launch jobs and
 	// never returned to an API client.
@@ -32,14 +32,16 @@ type RunnerService interface {
 }
 
 type RunnerServiceImpl struct {
-	db     *gorm.DB
-	config config.Config
+	db           *gorm.DB
+	config       config.Config
+	auditService AuditService
 }
 
-func NewRunnerService(database *gorm.DB, config config.Config) RunnerService {
+func NewRunnerService(database *gorm.DB, config config.Config, als AuditService) RunnerService {
 	return &RunnerServiceImpl{
-		db:     database,
-		config: config,
+		db:           database,
+		config:       config,
+		auditService: als,
 	}
 }
 
@@ -159,7 +161,10 @@ func (r *RunnerServiceImpl) GetRunnerForExecution(id uuid.UUID) (*models.Runner,
 	return runner, nil
 }
 
-func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
+func (r *RunnerServiceImpl) CreateRunner(meta models.AuditMetadata, runner models.Runner) (*models.Runner, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "runners", runner.Name)
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	err := helpers.ValidateK8sObjName(runner.Name)
 	if err != nil {
 		return nil, fmt.Errorf("runner '%s': %w",
@@ -195,15 +200,24 @@ func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, 
 	}
 
 	if runner.Secret != nil {
-		if _, err := r.UpdateSecret(newRunner.ID, runner.Secret); err != nil {
+		if _, err := r.updateSecret(newRunner.ID, runner.Secret); err != nil {
 			return nil, fmt.Errorf("runner '%s' secrets update: %w", runner.Name, err)
 		}
 	}
 
-	return r.GetRunner(newRunner.ID)
+	result, err := r.GetRunner(newRunner.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	audit.Status = "success"
+	return result, nil
 }
 
-func (r *RunnerServiceImpl) UpdateRunner(id uuid.UUID, runner models.Runner) (*models.Runner, error) {
+func (r *RunnerServiceImpl) UpdateRunner(meta models.AuditMetadata, id uuid.UUID, runner models.Runner) (*models.Runner, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "runners", id.String())
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	current, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
@@ -239,15 +253,25 @@ func (r *RunnerServiceImpl) UpdateRunner(id uuid.UUID, runner models.Runner) (*m
 	}
 
 	if runner.Secret != nil {
-		if _, err := r.UpdateSecret(id, runner.Secret); err != nil {
+		if _, err := r.updateSecret(id, runner.Secret); err != nil {
 			return nil, fmt.Errorf("runner '%s' update secrets: %w", id, err)
 		}
 	}
 
-	return r.GetRunner(id)
+	result, err := r.GetRunner(id)
+	if err != nil {
+		return nil, err
+	}
+
+	audit.EventTarget = result.Name
+	audit.Status = "success"
+	return result, nil
 }
 
-func (r *RunnerServiceImpl) DeleteRunner(id uuid.UUID) error {
+func (r *RunnerServiceImpl) DeleteRunner(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "runners", id.String())
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return err
@@ -270,6 +294,7 @@ func (r *RunnerServiceImpl) DeleteRunner(id uuid.UUID) error {
 		return fmt.Errorf("runner '%s': %w", id, res.Error)
 	}
 
+	audit.Status = "success"
 	return nil
 }
 
@@ -316,7 +341,20 @@ func (r *RunnerServiceImpl) GetSecret(id uuid.UUID) (map[string]string, error) {
 	return secretCleaned, nil
 }
 
-func (r *RunnerServiceImpl) UpdateSecret(id uuid.UUID, secret map[string]string) (map[string]string, error) {
+func (r *RunnerServiceImpl) UpdateSecret(meta models.AuditMetadata, id uuid.UUID, secret map[string]string) (map[string]string, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update_secret", "runners", id.String())
+	defer func() { r.auditService.CreateAudit(audit) }()
+
+	updatedSecret, err := r.updateSecret(id, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	audit.Status = "success"
+	return updatedSecret, nil
+}
+
+func (r *RunnerServiceImpl) updateSecret(id uuid.UUID, secret map[string]string) (map[string]string, error) {
 	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return nil, err
@@ -371,7 +409,19 @@ func (r *RunnerServiceImpl) UpdateSecret(id uuid.UUID, secret map[string]string)
 	return r.GetSecret(id)
 }
 
-func (r *RunnerServiceImpl) DeleteSecret(id uuid.UUID) error {
+func (r *RunnerServiceImpl) DeleteSecret(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete_secret", "runners", id.String())
+	defer func() { r.auditService.CreateAudit(audit) }()
+
+	if err := r.deleteSecret(id); err != nil {
+		return err
+	}
+
+	audit.Status = "success"
+	return nil
+}
+
+func (r *RunnerServiceImpl) deleteSecret(id uuid.UUID) error {
 	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return fmt.Errorf("runner %s not found: %w", id, err)

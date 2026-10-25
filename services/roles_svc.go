@@ -17,9 +17,9 @@ import (
 type RoleService interface {
 	ListRoles([]string, models.RoleQueryParams) ([]models.Role, int, error)
 	GetRole(string) (models.Role, error)
-	CreateRole(models.Role) (models.Role, error)
-	UpdateRole(models.Role) (models.Role, error)
-	DeleteRole(string) error
+	CreateRole(models.AuditMetadata, models.Role) (models.Role, error)
+	UpdateRole(models.AuditMetadata, models.Role) (models.Role, error)
+	DeleteRole(models.AuditMetadata, string) error
 	ListRoleGroups(string) ([]models.RoleGroup, error)
 }
 
@@ -27,13 +27,15 @@ type RoleServiceImpl struct {
 	db           *gorm.DB
 	config       config.Config
 	GroupService GroupService
+	auditService AuditService
 }
 
-func NewRoleService(database *gorm.DB, config config.Config, gs GroupService) RoleService {
+func NewRoleService(database *gorm.DB, config config.Config, gs GroupService, als AuditService) RoleService {
 	return &RoleServiceImpl{
 		db:           database,
 		config:       config,
 		GroupService: gs,
+		auditService: als,
 	}
 }
 
@@ -91,7 +93,10 @@ func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {
 	return role, nil
 }
 
-func (r *RoleServiceImpl) CreateRole(role models.Role) (models.Role, error) {
+func (r *RoleServiceImpl) CreateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "roles", role.Name)
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	err := r.CheckRole(role)
 	if err != nil {
 		return models.Role{}, fmt.Errorf("role '%s': %w, %s", role.Name, ErrSvcRoleValidation, err.Error())
@@ -104,10 +109,13 @@ func (r *RoleServiceImpl) CreateRole(role models.Role) (models.Role, error) {
 		return models.Role{}, fmt.Errorf("error creating role '%s': %w", role.Name, res.Error)
 	}
 
+	audit.Status = "success"
 	return role, nil
 }
 
-func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
+func (r *RoleServiceImpl) UpdateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "roles", role.ID.String())
+	defer func() { r.auditService.CreateAudit(audit) }()
 
 	_, err := r.GetRole(role.ID.String())
 	if err != nil {
@@ -128,10 +136,15 @@ func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
 	if err != nil {
 		return models.Role{}, fmt.Errorf("error getting role: %w", err)
 	}
+
+	audit.Status = "success"
 	return newRole, nil
 }
 
-func (r *RoleServiceImpl) DeleteRole(id string) error {
+func (r *RoleServiceImpl) DeleteRole(meta models.AuditMetadata, id string) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "roles", id)
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	var groups []models.Group
 	role, err := r.GetRole(id)
 	if err != nil {
@@ -152,6 +165,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 		return fmt.Errorf("error deleting role '%s': %w", id, res.Error)
 	}
 
+	audit.Status = "success"
 	return nil
 }
 

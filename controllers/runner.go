@@ -16,16 +16,12 @@ import (
 type RunnerController struct {
 	RunnerService services.RunnerService
 	AuthService   services.AuthService
-	AuditService  services.AuditService
-	AuditCategory string
 }
 
-func NewRunnerController(rs services.RunnerService, as services.AuthService, als services.AuditService) RunnerController {
+func NewRunnerController(rs services.RunnerService, as services.AuthService) RunnerController {
 	return RunnerController{
 		RunnerService: rs,
 		AuthService:   as,
-		AuditService:  als,
-		AuditCategory: "runners",
 	}
 }
 
@@ -144,27 +140,20 @@ func (rc *RunnerController) GetRunner(ctx *gin.Context) {
 //	@Router			/runners [post]
 //	@Security		Bearer
 func (rc *RunnerController) CreateRunner(ctx *gin.Context) {
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "create", rc.AuditCategory, "*")
 	var runner models.Runner
 
 	if err := ctx.ShouldBindJSON(&runner); err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid runner payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	audit.EventTarget = runner.Name
-
-	runnerData, err := rc.RunnerService.CreateRunner(runner)
+	runnerData, err := rc.RunnerService.CreateRunner(getAuditMetadata(ctx), runner)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, runnerData)
 }
 
@@ -189,26 +178,20 @@ func (rc *RunnerController) UpdateRunner(ctx *gin.Context) {
 		return
 	}
 
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "update", rc.AuditCategory, runnerID.String())
 	var runner models.Runner
 
 	if err := ctx.ShouldBindJSON(&runner); err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(fmt.Errorf("runner '%s': invalid runner payload", runnerID))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	runnerData, err := rc.RunnerService.UpdateRunner(runnerID, runner)
+	runnerData, err := rc.RunnerService.UpdateRunner(getAuditMetadata(ctx), runnerID, runner)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.EventTarget = runnerData.Name
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, runnerData)
 }
 
@@ -232,17 +215,12 @@ func (rc *RunnerController) DeleteRunner(ctx *gin.Context) {
 		return
 	}
 
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete", rc.AuditCategory, runnerID.String())
-
-	err := rc.RunnerService.DeleteRunner(runnerID)
+	err := rc.RunnerService.DeleteRunner(getAuditMetadata(ctx), runnerID)
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "runner deleted successfully"})
 }
 
@@ -295,26 +273,21 @@ func (rc *RunnerController) UpdateSecret(ctx *gin.Context) {
 		return
 	}
 
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "update_secret", rc.AuditCategory, runnerID.String())
 	var secret map[string]string
 
 	if err := ctx.BindJSON(&secret); err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid secrets payload"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	secretStored, err := rc.RunnerService.UpdateSecret(runnerID, secret)
+	secretStored, err := rc.RunnerService.UpdateSecret(getAuditMetadata(ctx), runnerID, secret)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, secretStored)
 }
 
@@ -337,17 +310,12 @@ func (rc *RunnerController) DeleteSecret(ctx *gin.Context) {
 		return
 	}
 
-	audit := rc.AuditService.InitialiseAuditLog(ctx, "delete_secret", rc.AuditCategory, runnerID.String())
-
-	err := rc.RunnerService.DeleteSecret(runnerID)
+	err := rc.RunnerService.DeleteSecret(getAuditMetadata(ctx), runnerID)
 
 	if err != nil {
-		rc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	rc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "secret deleted successfully"})
 }
