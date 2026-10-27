@@ -37,6 +37,7 @@ var (
 	us         services.UserService
 	ats        services.ApiTokenService
 	ws         services.WebhookService
+	ss         services.SchedulerService
 	gs         services.GroupService
 	als        services.AuditService
 	rls        services.RoleService
@@ -48,6 +49,7 @@ var (
 	uc         controllers.UserController
 	atc        controllers.ApiTokenController
 	wc         controllers.WebhookController
+	sc         controllers.SchedulerController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
 	conf       config.Config
@@ -134,10 +136,12 @@ func init() {
 	js = services.NewJobService(db, conf)
 	ts = services.NewTaskService(db, conf, js, rs, als)
 	ws = services.NewWebhookService(db, conf, als, ts)
+	ss = services.NewSchedulerService(db, conf, als, as, ts)
 
 	// Controllers
 	uc = controllers.NewUserController(us, gs, as, authProviders)
 	wc = controllers.NewWebhookController(ws, ts, as, authProviders)
+	sc = controllers.NewSchedulerController(ss, as)
 	atc = controllers.NewApiTokenController(ats, as, authProviders)
 	gc = controllers.NewGroupController(gs, as, authProviders)
 	rlc = controllers.NewRoleController(rls, as)
@@ -198,6 +202,7 @@ func main() {
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
 		webhooks := basepath.Group("/webhooks")
+		schedulers := basepath.Group("/schedulers")
 		{
 			alc.SetAuditRoutes(audit, conf)
 			rc.SetRunnerRoutes(runners, conf)
@@ -206,12 +211,14 @@ func main() {
 			uc.SetUserRoutes(users, conf)
 			atc.SetApiTokenRoutes(tokens, conf)
 			wc.SetWebhookRoutes(webhooks, conf)
+			sc.SetSchedulerRoutes(schedulers, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 		}
 	}
 
 	js.StartWorkers()
+	ss.StartScheduler()
 
 	log.Fatal(router.Run())
 

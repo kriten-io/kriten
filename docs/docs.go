@@ -514,7 +514,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by group name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -1184,7 +1184,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by task/job name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -1297,7 +1297,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Job log",
                         "schema": {
                             "type": "string"
                         }
@@ -1457,7 +1457,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by role name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -1809,7 +1809,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by runner name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -1857,7 +1857,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "New runner",
-                        "name": "runner_id",
+                        "name": "runner",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -2020,14 +2020,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner ID",
-                        "name": "id",
+                        "description": "Runner name",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
                     {
                         "description": "Update runner",
-                        "name": "runner_id",
+                        "name": "runner",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -2169,6 +2169,446 @@ const docTemplate = `{
                 }
             }
         },
+        "/schedulers": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "List own schedulers, or all schedulers for users with schedulers read access",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "List schedulers",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of schedulers to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of schedulers to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by name (case insensitive substring)",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Scheduler"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Schedule a task with a cron expression. Requires execute access on the task. Extra vars are validated against the task schema.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Create a scheduler",
+                "parameters": [
+                    {
+                        "description": "New scheduler",
+                        "name": "scheduler",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get information about a specific scheduler",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Get a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update a scheduler. Name is immutable. Re-validates the cron expression and extra vars.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Update a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated scheduler",
+                        "name": "scheduler",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete by scheduler ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Delete a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ResponseMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}/disable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Disable a scheduler so it no longer fires",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Disable a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}/enable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Enable a scheduler and compute its next run. Re-validates the schedule against the current task schema.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Enable a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks": {
             "get": {
                 "security": [
@@ -2203,7 +2643,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by task name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -2420,8 +2860,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task ID",
-                        "name": "id",
+                        "description": "Task name",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     },
@@ -2734,7 +3174,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Filter by user name",
-                        "name": "id",
+                        "name": "name",
                         "in": "query"
                     }
                 ],
@@ -3683,12 +4123,64 @@ const docTemplate = `{
                 }
             }
         },
+        "models.Scheduler": {
+            "type": "object",
+            "required": [
+                "cron_expr",
+                "name",
+                "task_id"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "cron_expr": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "extra_vars": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_run_at": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Task": {
             "type": "object",
             "required": [
                 "command",
-                "name",
-                "runner_id"
+                "name"
             ],
             "properties": {
                 "command": {

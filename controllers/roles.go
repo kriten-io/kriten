@@ -16,7 +16,7 @@ import (
 )
 
 // TODO: This is currently hardcoded but needs to be fetched from somewhere else
-var resources = []string{"runners", "tasks", "jobs"}
+var resources = []string{"runners", "tasks", "jobs", "schedulers"}
 var access = []string{"read", "write", "execute"}
 
 type RoleController struct {

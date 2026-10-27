@@ -33,6 +33,10 @@ func ErrorHandler() gin.HandlerFunc {
 				helpers.BadRequestError(ctx, err)
 			case errors.Is(err, services.ErrSvcDeleteBuiltin):
 				helpers.BadRequestError(ctx, err)
+			case errors.Is(err, services.ErrSvcForbidden):
+				helpers.ForbiddenError(ctx, err)
+			case errors.Is(err, services.ErrSvcSchedulerCron):
+				helpers.BadRequestError(ctx, err)
 			case errors.Is(err, services.ErrSvcObjNotFound):
 				helpers.NotFoundError(ctx, err.Error())
 			case errors.Is(err, services.ErrSvcTaskNoRunner):

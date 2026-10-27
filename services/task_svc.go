@@ -240,6 +240,14 @@ func (t *TaskServiceImpl) DeleteTask(meta models.AuditMetadata, id uuid.UUID) er
 		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", task.Name, ErrSvcObjInUse)
 	}
 
+	var schedulerCount int64
+	if err := t.db.Model(&models.Scheduler{}).Where("task_id = ?", task.ID).Count(&schedulerCount).Error; err != nil {
+		return fmt.Errorf("task '%s' schedulers: %w", task.Name, err)
+	}
+	if schedulerCount != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated schedulers first: %w", task.Name, ErrSvcObjInUse)
+	}
+
 	if err := t.db.Delete(task).Error; err != nil {
 		return fmt.Errorf("task '%s': %w", task.Name, err)
 	}
@@ -328,6 +336,31 @@ func ValidateSchema(schema []byte) error {
 	return nil
 }
 
+// ValidateExtraVars checks a JSON object string against a task schema.
+// A nil schema accepts any input. The returned error is the raw validation
+// error; callers wrap it with ErrSvcTaskSchemaValidation.
+func ValidateExtraVars(schema map[string]interface{}, extraVars string) error {
+	if schema == nil {
+		return nil
+	}
+
+	schemaData, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+
+	s := new(spec.Schema)
+	_ = json.Unmarshal(schemaData, s)
+
+	input := map[string]interface{}{}
+
+	// JSON data to validate
+	_ = json.Unmarshal([]byte(extraVars), &input)
+
+	// strfmt.Default is the registry of recognized formats
+	return validate.AgainstSchema(s, input, strfmt.Default)
+}
+
 func (t *TaskServiceImpl) RunTask(meta models.AuditMetadata, username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
 	audit := t.auditService.InitialiseAuditLog(meta, "run", "tasks", taskID.String())
 	defer func() { t.auditService.CreateAudit(audit) }()
@@ -355,25 +388,8 @@ func (t *TaskServiceImpl) executeTask(username string, taskID uuid.UUID, extraVa
 	}
 	taskName := task.Name
 
-	if task.Schema != nil {
-		schemaData, err := json.Marshal(task.Schema)
-		if err != nil {
-			return jobStatus, fmt.Errorf("task '%s' schema: %w", taskName, err)
-		}
-
-		schema := new(spec.Schema)
-		_ = json.Unmarshal(schemaData, schema)
-
-		input := map[string]interface{}{}
-
-		// JSON data to validate
-		_ = json.Unmarshal([]byte(extraVars), &input)
-
-		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, input, strfmt.Default)
-		if err != nil {
-			return models.Job{}, fmt.Errorf("task '%s' schema: %w, %s", taskName, ErrSvcTaskSchemaValidation, err)
-		}
+	if err := ValidateExtraVars(task.Schema, extraVars); err != nil {
+		return models.Job{}, fmt.Errorf("task '%s' schema: %w, %s", taskName, ErrSvcTaskSchemaValidation, err)
 	}
 
 	runner, err := t.RunnerService.GetRunnerForExecution(task.RunnerID)

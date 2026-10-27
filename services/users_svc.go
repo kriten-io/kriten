@@ -200,6 +200,22 @@ func (u *UserServiceImpl) deleteUser(userID string) error {
 		return fmt.Errorf("found user owned API tokens, delete those first: %w", ErrSvcObjInUse)
 	}
 
+	var webhookCount int64
+	if err := u.db.Model(&models.Webhook{}).Where("owner = ?", userID).Count(&webhookCount).Error; err != nil {
+		return fmt.Errorf("failed to get API webhooks for user: %w", err)
+	}
+	if webhookCount != 0 {
+		return fmt.Errorf("found user owned webhooks, delete those first: %w", ErrSvcObjInUse)
+	}
+
+	var schedulerCount int64
+	if err := u.db.Model(&models.Scheduler{}).Where("owner = ?", userID).Count(&schedulerCount).Error; err != nil {
+		return fmt.Errorf("failed to get schedulers for user: %w", err)
+	}
+	if schedulerCount != 0 {
+		return fmt.Errorf("found user owned schedulers, delete those first: %w", ErrSvcObjInUse)
+	}
+
 	res = u.db.Unscoped().Delete(&user)
 	if res.Error != nil {
 		return fmt.Errorf("failed to delete user '%s': %w", userID, res.Error)

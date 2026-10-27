@@ -235,6 +235,42 @@ definitions:
     - image
     - name
     type: object
+  models.Scheduler:
+    properties:
+      created_at:
+        type: string
+      cron_expr:
+        type: string
+      description:
+        type: string
+      enabled:
+        type: boolean
+      extra_vars:
+        additionalProperties: {}
+        type: object
+      id:
+        type: string
+      last_error:
+        type: string
+      last_run_at:
+        type: string
+      name:
+        type: string
+      next_run_at:
+        type: string
+      owner:
+        type: string
+      task_id:
+        type: string
+      task_name:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - cron_expr
+    - name
+    - task_id
+    type: object
   models.Task:
     properties:
       command:
@@ -257,7 +293,6 @@ definitions:
     required:
     - command
     - name
-    - runner_id
     type: object
   models.User:
     properties:
@@ -1128,7 +1163,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Job log
           schema:
             type: string
         "400":
@@ -1586,9 +1621,9 @@ paths:
       - application/json
       description: Update a runner in the cluster
       parameters:
-      - description: Runner ID
+      - description: Runner name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       - description: Update runner
@@ -1689,6 +1724,292 @@ paths:
       summary: Update secret
       tags:
       - runners
+  /schedulers:
+    get:
+      consumes:
+      - application/json
+      description: List own schedulers, or all schedulers for users with schedulers
+        read access
+      parameters:
+      - description: Maximum number of schedulers to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of schedulers to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by name (case insensitive substring)
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Scheduler'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List schedulers
+      tags:
+      - schedulers
+    post:
+      consumes:
+      - application/json
+      description: Schedule a task with a cron expression. Requires execute access
+        on the task. Extra vars are validated against the task schema.
+      parameters:
+      - description: New scheduler
+        in: body
+        name: scheduler
+        required: true
+        schema:
+          $ref: '#/definitions/models.Scheduler'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by scheduler ID
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResponseMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a scheduler
+      tags:
+      - schedulers
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific scheduler
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a scheduler
+      tags:
+      - schedulers
+    put:
+      consumes:
+      - application/json
+      description: Update a scheduler. Name is immutable. Re-validates the cron expression
+        and extra vars.
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated scheduler
+        in: body
+        name: scheduler
+        required: true
+        schema:
+          $ref: '#/definitions/models.Scheduler'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}/disable:
+    post:
+      consumes:
+      - application/json
+      description: Disable a scheduler so it no longer fires
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Disable a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}/enable:
+    post:
+      consumes:
+      - application/json
+      description: Enable a scheduler and compute its next run. Re-validates the schedule
+        against the current task schema.
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Enable a scheduler
+      tags:
+      - schedulers
   /tasks:
     get:
       consumes:
@@ -1842,9 +2163,9 @@ paths:
       - application/json
       description: Update a task in the cluster
       parameters:
-      - description: Task ID
+      - description: Task name
         in: path
-        name: id
+        name: name
         required: true
         type: string
       - description: Update task

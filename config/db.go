@@ -23,6 +23,7 @@ func InitDB(db *gorm.DB, rp string) {
 		&models.RunnerSecret{},
 		&models.Task{},
 		&models.Job{},
+		&models.Scheduler{},
 	)
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")
@@ -81,6 +82,26 @@ func InitDB(db *gorm.DB, rp string) {
 		{Name: "WriteAllRoles", Resource: "roles", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
 	}
 	db.Create(&builtinRoles)
+
+	// Created separately: the batch above fails on existing databases because
+	// role names are unique, which would stop newer builtin roles being added.
+	var writeAllSchedulers = models.Role{
+		Name: "WriteAllSchedulers", Resource: "schedulers",
+		Resource_Names: pq.StringArray{"*"},
+		Access:         "write",
+		Builtin:        true,
+	}
+	db.Where(models.Role{Name: writeAllSchedulers.Name}).FirstOrCreate(&writeAllSchedulers)
+
+	// Attach to the builtin Admin group. Idempotent, and also covers databases
+	// where the Admin group was created before this role existed.
+	if err := db.Exec(
+		"UPDATE groups SET roles = array_append(roles, ?) WHERE name = 'Admin' AND builtin AND NOT (? = ANY(roles))",
+		writeAllSchedulers.ID.String(), writeAllSchedulers.ID.String(),
+	).Error; err != nil {
+		log.Println("Error attaching WriteAllSchedulers to Admin group")
+		log.Println(err)
+	}
 
 	// rules to preveng builtin deletion or update
 	db.Exec("CREATE RULE builtin_del_users AS ON DELETE TO users WHERE builtin DO INSTEAD nothing;")

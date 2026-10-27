@@ -17,4 +17,6 @@ var (
 	ErrSvcRoleBindingValidation = errors.New("role binding validation error")
 	ErrSvcDBDuplicatedKey       = errors.New("object name clashes with existing object")
 	ErrSvcDeleteBuiltin         = errors.New("cannot delete builtin objects")
+	ErrSvcForbidden             = errors.New("unauthorized - user cannot access resource")
+	ErrSvcSchedulerCron         = errors.New("invalid cron expression")
 )

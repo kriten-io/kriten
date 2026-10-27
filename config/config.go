@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	JobsTTLDefault          = 3600
-	JobsWorkerCountDefault  = 2
-	JobsPollIntervalDefault = 5
-	JWTExpirySecondsDefault = 3600
+	JobsTTLDefault               = 3600
+	JobsWorkerCountDefault       = 2
+	JobsPollIntervalDefault      = 5
+	SchedulerPollIntervalDefault = 10
+	JWTExpirySecondsDefault      = 3600
 )
 
 type LDAPConfig struct {
@@ -47,6 +48,10 @@ type JobsConfig struct {
 	PollInterval int
 }
 
+type SchedulerConfig struct {
+	PollInterval int
+}
+
 type Config struct {
 	Environment  string
 	RootPassword string
@@ -57,6 +62,7 @@ type Config struct {
 	JWT          JWTConfig
 	DB           DBConfig
 	Jobs         JobsConfig
+	Scheduler    SchedulerConfig
 	DebugMode    bool
 }
 
@@ -97,6 +103,9 @@ func NewConfig(gitBranch string) Config {
 		Jobs: JobsConfig{
 			WorkerCount:  getEnvAsInt("JOBS_WORKER_COUNT", JobsWorkerCountDefault),
 			PollInterval: getEnvAsInt("JOBS_POLL_INTERVAL", JobsPollIntervalDefault),
+		},
+		Scheduler: SchedulerConfig{
+			PollInterval: getEnvAsInt("SCHEDULER_POLL_INTERVAL", SchedulerPollIntervalDefault),
 		},
 		// ElasticSearch: ESConfig{
 		// 	CloudID: getEnv("ES_CLOUD_ID", ""),

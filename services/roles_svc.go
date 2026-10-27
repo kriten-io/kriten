@@ -204,6 +204,18 @@ func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 				}
 				return err
 			}
+		case "schedulers":
+			id, err := uuid.FromString(c)
+			if err != nil {
+				return fmt.Errorf("scheduler %s not found", c)
+			}
+			var scheduler models.Scheduler
+			if err := r.db.Where("id = ?", id).First(&scheduler).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("scheduler %s not found", c)
+				}
+				return err
+			}
 		case "jobs":
 			// jobs are ephemeral, their resource names reference the owning task
 			id, err := uuid.FromString(c)
