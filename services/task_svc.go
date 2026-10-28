@@ -162,6 +162,7 @@ func (t *TaskServiceImpl) CreateTask(meta models.AuditMetadata, task models.Task
 	newTask := models.Task{
 		Schema:      task.Schema,
 		Name:        task.Name,
+		Description: task.Description,
 		RunnerID:    task.RunnerID,
 		Command:     task.Command,
 		Synchronous: task.Synchronous,
@@ -210,6 +211,7 @@ func (t *TaskServiceImpl) UpdateTask(meta models.AuditMetadata, id uuid.UUID, ta
 	}
 
 	existing.Schema = task.Schema
+	existing.Description = task.Description
 	existing.RunnerID = task.RunnerID
 	existing.Command = task.Command
 	existing.Synchronous = task.Synchronous

@@ -19,4 +19,5 @@ var (
 	ErrSvcDeleteBuiltin         = errors.New("cannot delete builtin objects")
 	ErrSvcForbidden             = errors.New("unauthorized - user cannot access resource")
 	ErrSvcSchedulerCron         = errors.New("invalid cron expression")
+	ErrSvcTaskNoSchema          = errors.New("task has no schema, agents can only use tasks with a schema")
 )

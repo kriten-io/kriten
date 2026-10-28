@@ -113,6 +113,20 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 	}
 }
 
+// HeaderAuthOnlyMiddleware rejects requests that do not carry a Bearer token or
+// API Token header, so cookie authentication cannot be used on the route.
+func HeaderAuthOnlyMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		bearer := strings.TrimPrefix(ctx.GetHeader("Authorization"), "Bearer ")
+		hasBearer := strings.HasPrefix(ctx.GetHeader("Authorization"), "Bearer ") && bearer != ""
+		if ctx.GetHeader("Token") == "" && !hasBearer {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authenticate with an Authorization Bearer token or a Token header."})
+			return
+		}
+		ctx.Next()
+	}
+}
+
 func AuthorizationMiddleware(as services.AuthService, resource string, access string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)

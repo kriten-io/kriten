@@ -10,6 +10,7 @@ type Task struct {
 	ID          uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid()" json:"id"`
 	Schema      map[string]any `gorm:"serializer:json;type:jsonb" json:"schema,omitempty"`
 	Name        string         `gorm:"uniqueIndex;<-:create" json:"name" binding:"required"`
+	Description string         `gorm:"type:text" json:"description,omitempty"`
 	RunnerID    uuid.UUID      `gorm:"type:uuid;index;not null;default:'00000000-0000-0000-0000-000000000000'" json:"runner_id"`
 	Command     string         `json:"command" binding:"required"`
 	Synchronous bool           `json:"synchronous"`
