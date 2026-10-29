@@ -835,14 +835,14 @@ const docTemplate = `{
                 "summary": "Add roles",
                 "parameters": [
                     {
-                        "description": "Roles to be added",
+                        "description": "Role IDs to be added",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupRole"
+                                "type": "string"
                             }
                         }
                     },
@@ -900,14 +900,14 @@ const docTemplate = `{
                 "summary": "Remove roles",
                 "parameters": [
                     {
-                        "description": "Roles to be removed",
+                        "description": "Role IDs to be removed",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupRole"
+                                "type": "string"
                             }
                         }
                     },
@@ -1026,14 +1026,14 @@ const docTemplate = `{
                 "summary": "Add users",
                 "parameters": [
                     {
-                        "description": "Users to be added",
+                        "description": "User IDs to be added",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupUser"
+                                "type": "string"
                             }
                         }
                     },
@@ -1091,14 +1091,14 @@ const docTemplate = `{
                 "summary": "Remove users",
                 "parameters": [
                     {
-                        "description": "Users to be removed",
+                        "description": "User IDs to be removed",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupUser"
+                                "type": "string"
                             }
                         }
                     },
@@ -3930,7 +3930,7 @@ const docTemplate = `{
                 "resource": {
                     "type": "string"
                 },
-                "resource_names": {
+                "resource_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -4040,7 +4040,7 @@ const docTemplate = `{
                 "access",
                 "name",
                 "resource",
-                "resource_names"
+                "resource_ids"
             ],
             "properties": {
                 "access": {
@@ -4058,7 +4058,7 @@ const docTemplate = `{
                 "resource": {
                     "type": "string"
                 },
-                "resource_names": {
+                "resource_ids": {
                     "type": "array",
                     "uniqueItems": true,
                     "items": {

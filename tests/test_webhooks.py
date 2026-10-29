@@ -3,7 +3,7 @@ import pytest
 
 pytestmark = pytest.mark.crud
 
-MISSING_ID = "00000000-0000-0000-0000-000000000000"
+MISSING_ID = "00000000-0000-0000-0000-00000000abfe"
 
 
 class TestWebhooks:

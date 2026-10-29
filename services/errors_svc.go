@@ -20,4 +20,5 @@ var (
 	ErrSvcForbidden             = errors.New("unauthorized - user cannot access resource")
 	ErrSvcSchedulerCron         = errors.New("invalid cron expression")
 	ErrSvcTaskNoSchema          = errors.New("task has no schema, agents can only use tasks with a schema")
+	ErrSvcSchedulerValidation   = errors.New("scheduler validation error")
 )

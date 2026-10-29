@@ -173,7 +173,7 @@ func (r *RoleServiceImpl) DeleteRole(meta models.AuditMetadata, id string) error
 // might need a refactor in the future.
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 
-	for _, c := range role.Resource_Names {
+	for _, c := range role.Resource_IDs {
 		if c == "*" {
 			continue
 		}

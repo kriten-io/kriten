@@ -265,6 +265,18 @@ func (gc *GroupController) DeleteGroup(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "group deleted successfully"})
 }
 
+// parseUUIDList rejects the request when any entry is not a valid UUID.
+func parseUUIDList(ctx *gin.Context, ids []string, resource string) bool {
+	for _, id := range ids {
+		if _, err := uuid.FromString(id); err != nil {
+			ctx.Error(fmt.Errorf("invalid %s id format: %s", resource, id))
+			ctx.Status(http.StatusBadRequest)
+			return false
+		}
+	}
+	return true
+}
+
 // ListUsersInGroup godoc
 //
 //	@Summary		List users
@@ -319,7 +331,7 @@ func (gc *GroupController) ListGroupUsers(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupUser	true	"Users to be added"
+//	@Param			group	body		[]string	true	"User IDs to be added"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -329,7 +341,7 @@ func (gc *GroupController) ListGroupUsers(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) AddUsersToGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	var users []models.GroupUser
+	var userIDs []string
 	var err error
 
 	_, err = uuid.FromString(groupID)
@@ -345,13 +357,17 @@ func (gc *GroupController) AddUsersToGroup(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.ShouldBindJSON(&users); err != nil {
+	if err := ctx.ShouldBindJSON(&userIDs); err != nil {
 		ctx.Error(errors.New("invalid payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	group, err := gc.GroupService.AddUsersToGroup(getAuditMetadata(ctx), groupID, users)
+	if !parseUUIDList(ctx, userIDs, "user") {
+		return
+	}
+
+	group, err := gc.GroupService.AddUsersToGroup(getAuditMetadata(ctx), groupID, userIDs)
 	if err != nil {
 		ctx.Error(err)
 		return
@@ -367,7 +383,7 @@ func (gc *GroupController) AddUsersToGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupUser	true	"Users to be removed"
+//	@Param			group	body		[]string	true	"User IDs to be removed"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -377,7 +393,7 @@ func (gc *GroupController) AddUsersToGroup(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) RemoveUsersFromGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	var users []models.GroupUser
+	var userIDs []string
 	var err error
 
 	_, err = uuid.FromString(groupID)
@@ -393,13 +409,17 @@ func (gc *GroupController) RemoveUsersFromGroup(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.ShouldBindJSON(&users); err != nil {
+	if err := ctx.ShouldBindJSON(&userIDs); err != nil {
 		ctx.Error(errors.New("invalid payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	group, err := gc.GroupService.RemoveUsersFromGroup(getAuditMetadata(ctx), groupID, users)
+	if !parseUUIDList(ctx, userIDs, "user") {
+		return
+	}
+
+	group, err := gc.GroupService.RemoveUsersFromGroup(getAuditMetadata(ctx), groupID, userIDs)
 	if err != nil {
 		ctx.Error(err)
 		return
@@ -415,7 +435,7 @@ func (gc *GroupController) RemoveUsersFromGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupRole	true	"Roles to be added"
+//	@Param			group	body		[]string	true	"Role IDs to be added"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -425,7 +445,7 @@ func (gc *GroupController) RemoveUsersFromGroup(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) AddRolesToGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	var roles []models.GroupRole
+	var roleIDs []string
 	var err error
 
 	_, err = uuid.FromString(groupID)
@@ -441,13 +461,17 @@ func (gc *GroupController) AddRolesToGroup(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.ShouldBindJSON(&roles); err != nil {
+	if err := ctx.ShouldBindJSON(&roleIDs); err != nil {
 		ctx.Error(errors.New("invalid payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	group, err := gc.GroupService.AddRolesToGroup(getAuditMetadata(ctx), groupID, roles)
+	if !parseUUIDList(ctx, roleIDs, "role") {
+		return
+	}
+
+	group, err := gc.GroupService.AddRolesToGroup(getAuditMetadata(ctx), groupID, roleIDs)
 	if err != nil {
 		ctx.Error(err)
 		return
@@ -463,7 +487,7 @@ func (gc *GroupController) AddRolesToGroup(ctx *gin.Context) {
 //	@Tags			groups
 //	@Accept			json
 //	@Produce		json
-//	@Param			group	body		[]models.GroupRole	true	"Roles to be removed"
+//	@Param			group	body		[]string	true	"Role IDs to be removed"
 //	@Param			id		path		string				true	"Group ID"
 //	@Success		200		{object}	models.Group
 //	@Failure		400		{object}	helpers.HTTPError
@@ -473,7 +497,7 @@ func (gc *GroupController) AddRolesToGroup(ctx *gin.Context) {
 //	@Security		Bearer
 func (gc *GroupController) RemoveRolesFromGroup(ctx *gin.Context) {
 	groupID := ctx.Param("id")
-	var roles []models.GroupRole
+	var roleIDs []string
 	var err error
 
 	_, err = uuid.FromString(groupID)
@@ -489,13 +513,17 @@ func (gc *GroupController) RemoveRolesFromGroup(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.ShouldBindJSON(&roles); err != nil {
+	if err := ctx.ShouldBindJSON(&roleIDs); err != nil {
 		ctx.Error(errors.New("invalid payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
 
-	group, err := gc.GroupService.RemoveRolesFromGroup(getAuditMetadata(ctx), groupID, roles)
+	if !parseUUIDList(ctx, roleIDs, "role") {
+		return
+	}
+
+	group, err := gc.GroupService.RemoveRolesFromGroup(getAuditMetadata(ctx), groupID, roleIDs)
 	if err != nil {
 		ctx.Error(err)
 		return

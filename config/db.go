@@ -12,6 +12,7 @@ import (
 )
 
 func InitDB(db *gorm.DB, rp string) {
+
 	err := db.AutoMigrate(
 		&models.AuditLog{},
 		&models.Group{},
@@ -27,16 +28,6 @@ func InitDB(db *gorm.DB, rp string) {
 	)
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")
-		log.Println(err)
-	}
-
-	// Legacy name based references replaced by UUIDs.
-	if err := db.Exec("ALTER TABLE tasks DROP COLUMN IF EXISTS runner;").Error; err != nil {
-		log.Println("Error dropping legacy tasks.runner column")
-		log.Println(err)
-	}
-	if err := db.Exec("ALTER TABLE webhooks DROP COLUMN IF EXISTS task;").Error; err != nil {
-		log.Println("Error dropping legacy webhooks.task column")
 		log.Println(err)
 	}
 
@@ -57,9 +48,9 @@ func InitDB(db *gorm.DB, rp string) {
 
 	var adminRole = models.Role{
 		Name: "Admin", Resource: "*",
-		Resource_Names: pq.StringArray{"*"},
-		Access:         "write",
-		Builtin:        true,
+		Resource_IDs: pq.StringArray{"*"},
+		Access:       "write",
+		Builtin:      true,
 	}
 	db.FirstOrCreate(&adminRole)
 
@@ -75,11 +66,11 @@ func InitDB(db *gorm.DB, rp string) {
 	db.Updates(&root)
 
 	var builtinRoles = []models.Role{
-		{Name: "WriteAllRunners", Resource: "runners", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllTasks", Resource: "tasks", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "ExecuteAllTasks", Resource: "tasks", Resource_Names: pq.StringArray{"*"}, Access: "execute", Builtin: true},
-		{Name: "WriteAllUsers", Resource: "users", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllRoles", Resource: "roles", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRunners", Resource: "runners", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllTasks", Resource: "tasks", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "ExecuteAllTasks", Resource: "tasks", Resource_IDs: pq.StringArray{"*"}, Access: "execute", Builtin: true},
+		{Name: "WriteAllUsers", Resource: "users", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRoles", Resource: "roles", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
 	}
 	db.Create(&builtinRoles)
 
@@ -87,9 +78,9 @@ func InitDB(db *gorm.DB, rp string) {
 	// role names are unique, which would stop newer builtin roles being added.
 	var writeAllSchedulers = models.Role{
 		Name: "WriteAllSchedulers", Resource: "schedulers",
-		Resource_Names: pq.StringArray{"*"},
-		Access:         "write",
-		Builtin:        true,
+		Resource_IDs: pq.StringArray{"*"},
+		Access:       "write",
+		Builtin:      true,
 	}
 	db.Where(models.Role{Name: writeAllSchedulers.Name}).FirstOrCreate(&writeAllSchedulers)
 

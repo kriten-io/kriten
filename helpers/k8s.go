@@ -358,7 +358,7 @@ func JobObject(taskID uuid.UUID,
 	}
 
 	envFrom := []corev1.EnvFromSource{}
-	fmt.Println("EnvSecret: ", envSecret)
+
 	// Custom runner secrets are injected as a batch through the per-job secret.
 	if envSecret != "" {
 		volumes = append(volumes, corev1.Volume{

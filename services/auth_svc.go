@@ -281,14 +281,14 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 	for i := range roles {
 		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource &&
-			(len(role.Resource_Names) > 0 && slices.Contains(role.Resource_Names, "*") ||
-				slices.Contains(role.Resource_Names, auth.ResourceName)) &&
+			(len(role.Resource_IDs) > 0 && slices.Contains(role.Resource_IDs, "*") ||
+				slices.Contains(role.Resource_IDs, auth.ResourceName)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
 		}
 		// permission to run tasks gives also permissions to read associated jobs and tasks
 		if (auth.Resource == "jobs" || auth.Resource == "tasks") && auth.Access == "read" &&
-			(slices.Contains(role.Resource_Names, auth.ResourceName) || slices.Contains(role.Resource_Names, "*")) &&
+			(slices.Contains(role.Resource_IDs, auth.ResourceName) || slices.Contains(role.Resource_IDs, "*")) &&
 			role.Resource == "tasks" && role.Access == "execute" {
 			return true, nil
 		}
@@ -308,14 +308,14 @@ func (a *AuthServiceImpl) GetAuthorizationList(auth *models.Authorization) ([]st
 	for i := range roles {
 		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource {
-			if slices.Contains(role.Resource_Names, "*") {
+			if slices.Contains(role.Resource_IDs, "*") {
 				return []string{"*"}, nil
 			}
-			authList = append(authList, role.Resource_Names...)
+			authList = append(authList, role.Resource_IDs...)
 		}
 		if auth.Resource == "jobs" {
 			if role.Resource == "tasks" && role.Access == "execute" {
-				authList = append(authList, role.Resource_Names...)
+				authList = append(authList, role.Resource_IDs...)
 			}
 		}
 	}

@@ -107,7 +107,7 @@ definitions:
         type: string
       resource:
         type: string
-      resource_names:
+      resource_ids:
         items:
           type: string
         type: array
@@ -187,7 +187,7 @@ definitions:
         type: string
       resource:
         type: string
-      resource_names:
+      resource_ids:
         items:
           type: string
         type: array
@@ -198,7 +198,7 @@ definitions:
     - access
     - name
     - resource
-    - resource_names
+    - resource_ids
     type: object
   models.RoleGroup:
     properties:
@@ -827,13 +827,13 @@ paths:
       - application/json
       description: Remove roles from group
       parameters:
-      - description: Roles to be removed
+      - description: Role IDs to be removed
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupRole'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -907,13 +907,13 @@ paths:
       - application/json
       description: Add roles to group
       parameters:
-      - description: Roles to be added
+      - description: Role IDs to be added
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupRole'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -950,13 +950,13 @@ paths:
       - application/json
       description: Remove users from group
       parameters:
-      - description: Users to be removed
+      - description: User IDs to be removed
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupUser'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -1030,13 +1030,13 @@ paths:
       - application/json
       description: Add users to group
       parameters:
-      - description: Users to be added
+      - description: User IDs to be added
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupUser'
+            type: string
           type: array
       - description: Group ID
         in: path
