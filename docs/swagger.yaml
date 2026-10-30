@@ -103,6 +103,8 @@ definitions:
     properties:
       access:
         type: string
+      id:
+        type: string
       name:
         type: string
       resource:
@@ -2596,7 +2598,7 @@ paths:
       - Bearer: []
       summary: List own webHooks
       tags:
-      - api_tokens
+      - webhooks
     post:
       consumes:
       - application/json

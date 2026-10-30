@@ -3495,7 +3495,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "webhooks"
                 ],
                 "summary": "List own webHooks",
                 "responses": {
@@ -3922,6 +3922,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "access": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "name": {

@@ -61,7 +61,7 @@ func (wc *WebhookController) SetWebhookRoutes(rg *gin.RouterGroup, config config
 //
 //	@Summary		List own webHooks
 //	@Description	List own webHooks available on the cluster
-//	@Tags			api_tokens
+//	@Tags			webhooks
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{array}		models.Webhook

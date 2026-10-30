@@ -3488,7 +3488,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "webhooks"
                 ],
                 "summary": "List own webHooks",
                 "responses": {
@@ -3915,6 +3915,9 @@
             "type": "object",
             "properties": {
                 "access": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "name": {
