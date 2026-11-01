@@ -9,16 +9,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	uuid "github.com/satori/go.uuid"
-)
-
-const (
-	mcpStdoutLimit    = 64 * 1024
-	mcpMaxWaitSeconds = 30
-	mcpPollInterval   = 2 * time.Second
 )
 
 type callerContextKey struct{}
@@ -42,6 +37,7 @@ type McpServiceImpl struct {
 	taskService TaskService
 	jobService  JobService
 	authService AuthService
+	config      config.MCPConfig
 	handler     http.Handler
 }
 
@@ -70,7 +66,7 @@ type AgentRunTaskInput struct {
 
 type AgentGetJobInput struct {
 	ID          string `json:"id" jsonschema:"the job id returned by run_task"`
-	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"seconds to wait for a running job to finish, between 0 and 30 (default 0)"`
+	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"seconds to wait for a running job to finish, up to the server's configured maximum (default 0)"`
 }
 
 type AgentJobResult struct {
@@ -90,11 +86,12 @@ type AgentJobResult struct {
 
 const mcpServerName = "kriten"
 
-func NewMcpService(ts TaskService, js JobService, as AuthService) McpService {
+func NewMcpService(ts TaskService, js JobService, as AuthService, cfg config.MCPConfig) McpService {
 	s := &McpServiceImpl{
 		taskService: ts,
 		jobService:  js,
 		authService: as,
+		config:      cfg,
 	}
 
 	s.handler = mcp.NewStreamableHTTPHandler(
@@ -163,7 +160,7 @@ func (m *McpServiceImpl) newServer(ctx context.Context) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_job",
-		Description: "Get the status and result of a job started by run_task: status, completed and failed counts, failure reason, stdout and json_data. Pass wait_seconds (up to 30) to wait for a running job to finish.",
+		Description: fmt.Sprintf("Get the status and result of a job started by run_task: status, completed and failed counts, failure reason, stdout and json_data. Pass wait_seconds (up to %d) to wait for a running job to finish.", m.config.MaxWaitSeconds),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in AgentGetJobInput) (*mcp.CallToolResult, AgentJobResult, error) {
 		if !authenticated {
 			return nil, AgentJobResult{}, ErrSvcForbidden
@@ -257,7 +254,7 @@ func (m *McpServiceImpl) runTask(caller models.AuditMetadata, rawID string, extr
 		return AgentJobResult{}, err
 	}
 
-	return toAgentJobResult(job), nil
+	return toAgentJobResult(job, m.config.StdoutLimit), nil
 }
 
 // getJob returns a job's current state. Running jobs are refreshed from the
@@ -265,8 +262,8 @@ func (m *McpServiceImpl) runTask(caller models.AuditMetadata, rawID string, extr
 // the wait expires. Read access follows GET /jobs/:id: read or execute on the
 // job's task.
 func (m *McpServiceImpl) getJob(ctx context.Context, caller models.AuditMetadata, rawID string, waitSeconds int) (AgentJobResult, error) {
-	if waitSeconds < 0 || waitSeconds > mcpMaxWaitSeconds {
-		return AgentJobResult{}, fmt.Errorf("wait_seconds must be between 0 and %d", mcpMaxWaitSeconds)
+	if waitSeconds < 0 || waitSeconds > m.config.MaxWaitSeconds {
+		return AgentJobResult{}, fmt.Errorf("wait_seconds must be between 0 and %d", m.config.MaxWaitSeconds)
 	}
 
 	id, err := uuid.FromString(rawID)
@@ -308,12 +305,12 @@ func (m *McpServiceImpl) getJob(ctx context.Context, caller models.AuditMetadata
 
 		select {
 		case <-ctx.Done():
-			return toAgentJobResult(job), nil
-		case <-time.After(min(mcpPollInterval, time.Until(deadline))):
+			return toAgentJobResult(job, m.config.StdoutLimit), nil
+		case <-time.After(min(time.Duration(m.config.PollIntervalMs)*time.Millisecond, time.Until(deadline))):
 		}
 	}
 
-	return toAgentJobResult(job), nil
+	return toAgentJobResult(job, m.config.StdoutLimit), nil
 }
 
 // authorise mirrors the REST route checks for a single task.
@@ -344,8 +341,8 @@ func toAgentTask(task *models.Task) AgentTask {
 	}
 }
 
-func toAgentJobResult(job models.Job) AgentJobResult {
-	stdout, truncated := capStdout(job.Stdout)
+func toAgentJobResult(job models.Job, stdoutLimit int) AgentJobResult {
+	stdout, truncated := capStdout(job.Stdout, stdoutLimit)
 	return AgentJobResult{
 		ID:              job.ID.String(),
 		Name:            job.Name,
@@ -362,13 +359,12 @@ func toAgentJobResult(job models.Job) AgentJobResult {
 	}
 }
 
-// capStdout trims output to mcpStdoutLimit bytes without splitting a UTF-8
-// character.
-func capStdout(s string) (string, bool) {
-	if len(s) <= mcpStdoutLimit {
+// capStdout trims output to limit bytes without splitting a UTF-8 character.
+func capStdout(s string, limit int) (string, bool) {
+	if len(s) <= limit {
 		return s, false
 	}
-	cut := mcpStdoutLimit
+	cut := limit
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}

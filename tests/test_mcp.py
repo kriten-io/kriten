@@ -18,7 +18,17 @@ SCHEMA = {
 }
 
 
+def mcp_status(noauth_client, mcp_url):
+    resp = noauth_client.post(mcp_url, json={"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers=MCP_HEADERS)
+    return resp.status_code
+
+
 class TestMcp:
+    @pytest.fixture(autouse=True)
+    def require_mcp_enabled(self, noauth_client, api_base):
+        if mcp_status(noauth_client, f"{api_base}/mcp") == 404:
+            pytest.skip("MCP is disabled (MCP_ENABLED is not true)")
+
     def create_runner(self, api_client, api_base, random_name):
         resp = api_client.post(f"{api_base}/runners", json={
             "name": f"runner-{random_name}",
@@ -181,3 +191,14 @@ class TestMcp:
         assert result["id"] == job_id
         assert result["status"] in {"running", "completed", "failed"}
         assert "stdout" in result or result["status"] == "running"
+
+
+class TestMcpDisabled:
+    @pytest.fixture(autouse=True)
+    def require_mcp_disabled(self, noauth_client, api_base):
+        if mcp_status(noauth_client, f"{api_base}/mcp") != 404:
+            pytest.skip("MCP is enabled (MCP_ENABLED is true)")
+
+    @pytest.mark.negative
+    def test_mcp_endpoint_not_found_when_disabled(self, noauth_client, api_base):
+        assert mcp_status(noauth_client, f"{api_base}/mcp") == 404

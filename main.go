@@ -139,13 +139,17 @@ func init() {
 	ts = services.NewTaskService(db, conf, js, rs, als)
 	ws = services.NewWebhookService(db, conf, als, ts)
 	ss = services.NewSchedulerService(db, conf, als, as, ts)
-	ms = services.NewMcpService(ts, js, as)
+	if conf.MCP.Enabled {
+		ms = services.NewMcpService(ts, js, as, conf.MCP)
+	}
 
 	// Controllers
 	uc = controllers.NewUserController(us, gs, as, authProviders)
 	wc = controllers.NewWebhookController(ws, ts, as, authProviders)
 	sc = controllers.NewSchedulerController(ss, as)
-	mc = controllers.NewMcpController(ms, as)
+	if conf.MCP.Enabled {
+		mc = controllers.NewMcpController(ms, as)
+	}
 	atc = controllers.NewApiTokenController(ats, as, authProviders)
 	gc = controllers.NewGroupController(gs, as, authProviders)
 	rlc = controllers.NewRoleController(rls, as)
@@ -207,7 +211,6 @@ func main() {
 		roles := basepath.Group("/roles")
 		webhooks := basepath.Group("/webhooks")
 		schedulers := basepath.Group("/schedulers")
-		mcp := basepath.Group("/mcp")
 		{
 			alc.SetAuditRoutes(audit, conf)
 			rc.SetRunnerRoutes(runners, conf)
@@ -217,10 +220,14 @@ func main() {
 			atc.SetApiTokenRoutes(tokens, conf)
 			wc.SetWebhookRoutes(webhooks, conf)
 			sc.SetSchedulerRoutes(schedulers, conf)
-			mc.SetMcpRoutes(mcp, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 		}
+	}
+
+	if conf.MCP.Enabled {
+		mc.SetMcpRoutes(basepath.Group("/mcp"), conf)
+		log.Println("MCP server enabled at /api/v1/mcp")
 	}
 
 	js.StartWorkers()

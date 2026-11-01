@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 
@@ -13,6 +14,9 @@ const (
 	JobsPollIntervalDefault      = 5
 	SchedulerPollIntervalDefault = 10
 	JWTExpirySecondsDefault      = 3600
+	MCPStdoutLimitDefault        = 65536
+	MCPMaxWaitSecondsDefault     = 30
+	MCPPollIntervalMsDefault     = 2000
 )
 
 type LDAPConfig struct {
@@ -52,6 +56,13 @@ type SchedulerConfig struct {
 	PollInterval int
 }
 
+type MCPConfig struct {
+	Enabled        bool
+	StdoutLimit    int
+	MaxWaitSeconds int
+	PollIntervalMs int
+}
+
 type Config struct {
 	Environment  string
 	RootPassword string
@@ -63,6 +74,7 @@ type Config struct {
 	DB           DBConfig
 	Jobs         JobsConfig
 	Scheduler    SchedulerConfig
+	MCP          MCPConfig
 	DebugMode    bool
 }
 
@@ -107,6 +119,12 @@ func NewConfig(gitBranch string) Config {
 		Scheduler: SchedulerConfig{
 			PollInterval: getEnvAsInt("SCHEDULER_POLL_INTERVAL", SchedulerPollIntervalDefault),
 		},
+		MCP: MCPConfig{
+			Enabled:        getEnvAsBoolWarn("MCP_ENABLED", false),
+			StdoutLimit:    getEnvAsPositiveIntWarn("MCP_STDOUT_LIMIT", MCPStdoutLimitDefault),
+			MaxWaitSeconds: getEnvAsPositiveIntWarn("MCP_MAX_WAIT_SECONDS", MCPMaxWaitSecondsDefault),
+			PollIntervalMs: getEnvAsPositiveIntWarn("MCP_POLL_INTERVAL_MS", MCPPollIntervalMsDefault),
+		},
 		// ElasticSearch: ESConfig{
 		// 	CloudID: getEnv("ES_CLOUD_ID", ""),
 		// 	APIKey:  getEnv("ES_API_KEY", ""),
@@ -142,4 +160,34 @@ func getEnvAsBool(name string, defaultVal bool) bool {
 	}
 
 	return defaultVal
+}
+
+// getEnvAsBoolWarn reads a bool environment variable. An unparseable value is
+// logged and the default is used.
+func getEnvAsBoolWarn(name string, defaultVal bool) bool {
+	valStr := getEnv(name, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := strconv.ParseBool(valStr)
+	if err != nil {
+		log.Printf("config: %s=%q is not a valid bool, using default %t", name, valStr, defaultVal)
+		return defaultVal
+	}
+	return val
+}
+
+// getEnvAsPositiveIntWarn reads a positive integer environment variable. An
+// unparseable or non-positive value is logged and the default is used.
+func getEnvAsPositiveIntWarn(name string, defaultVal int) int {
+	valStr := getEnv(name, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil || val <= 0 {
+		log.Printf("config: %s=%q must be a positive integer, using default %d", name, valStr, defaultVal)
+		return defaultVal
+	}
+	return val
 }
