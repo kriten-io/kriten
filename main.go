@@ -162,7 +162,7 @@ func init() {
 }
 
 //	@title			  Swagger Kriten
-//	@version		  v1.0.0
+//	@version		  v1.1.0
 //	@description	  Automation code execution platform.
 //  @externalDocs.url https://kriten.io
 //	@termsOfService	  http://swagger.io/terms/
