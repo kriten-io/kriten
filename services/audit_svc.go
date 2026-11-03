@@ -2,6 +2,7 @@ package services
 
 import (
 	"log"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
 	"github.com/kriten-io/kriten/models"
@@ -88,4 +89,17 @@ func (a *AuditServiceImpl) InitialiseAuditLog(
 		EventTarget:   target,
 		Status:        "error", // status will be updated later if successful
 	}
+}
+
+// AuditTarget describes an object as "key=value, key=value" for
+// AuditLog.EventTarget. Pairs with an empty value are left out.
+func AuditTarget(kv ...string) string {
+	var parts []string
+	for i := 0; i+1 < len(kv); i += 2 {
+		if kv[i+1] == "" {
+			continue
+		}
+		parts = append(parts, kv[i]+"="+kv[i+1])
+	}
+	return strings.Join(parts, ", ")
 }

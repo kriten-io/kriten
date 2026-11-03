@@ -104,8 +104,20 @@ func (w *WebhookServiceImpl) GetWebhook(id string) (models.Webhook, error) {
 	return webHook, nil
 }
 
+// webhookTarget names a webhook by its description (webhooks have no separate
+// name), its id and the name of the task it runs.
+func (w *WebhookServiceImpl) webhookTarget(hook models.Webhook) string {
+	var names []string
+	w.db.Model(&models.Task{}).Where("id = ?", hook.TaskID).Limit(1).Pluck("name", &names)
+	taskName := ""
+	if len(names) > 0 {
+		taskName = names[0]
+	}
+	return AuditTarget("name", hook.Description, "id", hook.ID.String(), "task", taskName)
+}
+
 func (w *WebhookServiceImpl) CreateWebhook(meta models.AuditMetadata, webHook models.Webhook) (models.Webhook, error) {
-	audit := w.auditService.InitialiseAuditLog(meta, "create", "webHooks", "*")
+	audit := w.auditService.InitialiseAuditLog(meta, "create", "webHooks", AuditTarget("name", webHook.Description))
 	defer func() { w.auditService.CreateAudit(audit) }()
 
 	webHook.Owner = meta.UserID
@@ -115,18 +127,21 @@ func (w *WebhookServiceImpl) CreateWebhook(meta models.AuditMetadata, webHook mo
 		return models.Webhook{}, fmt.Errorf("failed to create webhook: %w", res.Error)
 	}
 
+	audit.EventTarget = w.webhookTarget(webHook)
 	audit.Status = "success"
 	return webHook, nil
 }
 
 func (w *WebhookServiceImpl) DeleteWebhook(meta models.AuditMetadata, id string) error {
-	audit := w.auditService.InitialiseAuditLog(meta, "delete", "webHooks", id)
+	audit := w.auditService.InitialiseAuditLog(meta, "delete", "webHooks", AuditTarget("id", id))
 	defer func() { w.auditService.CreateAudit(audit) }()
 
 	webHook, err := w.GetWebhook(id)
 	if err != nil {
 		return fmt.Errorf("failed to get webhook '%s': %w", id, err)
 	}
+	audit.EventTarget = w.webhookTarget(webHook)
+
 	res := w.db.Unscoped().Delete(&webHook)
 	if res.Error != nil {
 		return fmt.Errorf("failed to delete webhook '%s': %w", id, res.Error)
@@ -137,13 +152,15 @@ func (w *WebhookServiceImpl) DeleteWebhook(meta models.AuditMetadata, id string)
 }
 
 func (w *WebhookServiceImpl) RunWebhook(meta models.AuditMetadata, id string, extraVars string) (models.Job, error) {
-	audit := w.auditService.InitialiseAuditLog(meta, "run", "webHooks", id)
+	audit := w.auditService.InitialiseAuditLog(meta, "run", "webHooks", AuditTarget("id", id))
 	defer func() { w.auditService.CreateAudit(audit) }()
 
 	webHook, err := w.GetWebhook(id)
 	if err != nil {
 		return models.Job{}, fmt.Errorf("failed to get webhook '%s': %w", id, err)
 	}
+
+	audit.EventTarget = w.webhookTarget(webHook)
 
 	job, err := w.taskExecutor.ExecuteTask(meta.UserName, webHook.TaskID, extraVars)
 	if err != nil {

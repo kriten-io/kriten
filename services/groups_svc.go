@@ -46,6 +46,11 @@ func NewGroupService(database *gorm.DB, us UserService, config config.Config, al
 	}
 }
 
+// groupTarget names a group by name, provider and id.
+func groupTarget(group models.Group) string {
+	return AuditTarget("name", group.Name, "provider", group.Provider, "id", group.ID.String())
+}
+
 func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQueryParams) ([]models.Group, int, error) {
 	var groups []models.Group
 	var res *gorm.DB
@@ -118,7 +123,7 @@ func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 }
 
 func (g *GroupServiceImpl) CreateGroup(meta models.AuditMetadata, group models.Group) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "create", "groups", group.Name)
+	audit := g.auditService.InitialiseAuditLog(meta, "create", "groups", AuditTarget("name", group.Name, "provider", group.Provider))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	createdGroup, err := g.createGroup(group)
@@ -126,6 +131,7 @@ func (g *GroupServiceImpl) CreateGroup(meta models.AuditMetadata, group models.G
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(createdGroup)
 	audit.Status = "success"
 	return createdGroup, nil
 }
@@ -143,7 +149,7 @@ func (g *GroupServiceImpl) createGroup(group models.Group) (models.Group, error)
 }
 
 func (g *GroupServiceImpl) UpdateGroup(meta models.AuditMetadata, group models.Group) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "update", "groups", group.ID.String())
+	audit := g.auditService.InitialiseAuditLog(meta, "update", "groups", AuditTarget("id", group.ID.String()))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	updatedGroup, err := g.updateGroup(group)
@@ -151,6 +157,7 @@ func (g *GroupServiceImpl) UpdateGroup(meta models.AuditMetadata, group models.G
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(updatedGroup)
 	audit.Status = "success"
 	return updatedGroup, nil
 }
@@ -227,7 +234,7 @@ func (g *GroupServiceImpl) ListGroupUsers(id string) ([]models.GroupUser, error)
 }
 
 func (g *GroupServiceImpl) AddUsersToGroup(meta models.AuditMetadata, id string, userIDs []string) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "add_users", "groups", id)
+	audit := g.auditService.InitialiseAuditLog(meta, "add_users", "groups", AuditTarget("id", id))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	updatedGroup, err := g.addUsersToGroup(id, userIDs)
@@ -235,6 +242,7 @@ func (g *GroupServiceImpl) AddUsersToGroup(meta models.AuditMetadata, id string,
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(updatedGroup)
 	audit.Status = "success"
 	return updatedGroup, nil
 }
@@ -261,7 +269,7 @@ func (g *GroupServiceImpl) addUsersToGroup(id string, userIDs []string) (models.
 }
 
 func (g *GroupServiceImpl) RemoveUsersFromGroup(meta models.AuditMetadata, id string, userIDs []string) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "remove_users", "groups", id)
+	audit := g.auditService.InitialiseAuditLog(meta, "remove_users", "groups", AuditTarget("id", id))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	updatedGroup, err := g.removeUsersFromGroup(id, userIDs)
@@ -269,6 +277,7 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(meta models.AuditMetadata, id st
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(updatedGroup)
 	audit.Status = "success"
 	return updatedGroup, nil
 }
@@ -295,8 +304,12 @@ func (g *GroupServiceImpl) removeUsersFromGroup(id string, userIDs []string) (mo
 }
 
 func (g *GroupServiceImpl) DeleteGroup(meta models.AuditMetadata, id string) error {
-	audit := g.auditService.InitialiseAuditLog(meta, "delete", "groups", id)
+	audit := g.auditService.InitialiseAuditLog(meta, "delete", "groups", AuditTarget("id", id))
 	defer func() { g.auditService.CreateAudit(audit) }()
+
+	if group, err := g.GetGroupByID(id); err == nil {
+		audit.EventTarget = groupTarget(group)
+	}
 
 	if err := g.deleteGroup(id); err != nil {
 		return err
@@ -406,7 +419,7 @@ func (g *GroupServiceImpl) resolveRoleIDs(roleIDs []string) ([]string, error) {
 }
 
 func (g *GroupServiceImpl) AddRolesToGroup(meta models.AuditMetadata, id string, roleIDs []string) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "add_roles", "groups", id)
+	audit := g.auditService.InitialiseAuditLog(meta, "add_roles", "groups", AuditTarget("id", id))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	updatedGroup, err := g.addRolesToGroup(id, roleIDs)
@@ -414,6 +427,7 @@ func (g *GroupServiceImpl) AddRolesToGroup(meta models.AuditMetadata, id string,
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(updatedGroup)
 	audit.Status = "success"
 	return updatedGroup, nil
 }
@@ -440,7 +454,7 @@ func (g *GroupServiceImpl) addRolesToGroup(id string, roleIDs []string) (models.
 }
 
 func (g *GroupServiceImpl) RemoveRolesFromGroup(meta models.AuditMetadata, id string, roleIDs []string) (models.Group, error) {
-	audit := g.auditService.InitialiseAuditLog(meta, "remove_roles", "groups", id)
+	audit := g.auditService.InitialiseAuditLog(meta, "remove_roles", "groups", AuditTarget("id", id))
 	defer func() { g.auditService.CreateAudit(audit) }()
 
 	updatedGroup, err := g.removeRolesFromGroup(id, roleIDs)
@@ -448,6 +462,7 @@ func (g *GroupServiceImpl) RemoveRolesFromGroup(meta models.AuditMetadata, id st
 		return models.Group{}, err
 	}
 
+	audit.EventTarget = groupTarget(updatedGroup)
 	audit.Status = "success"
 	return updatedGroup, nil
 }

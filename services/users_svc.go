@@ -97,8 +97,13 @@ func (u *UserServiceImpl) GetUser(id string) (models.User, error) {
 	return user, nil
 }
 
+// userTarget names a user by username, provider and id.
+func userTarget(user models.User) string {
+	return AuditTarget("username", user.Username, "provider", user.Provider, "id", user.ID.String())
+}
+
 func (u *UserServiceImpl) CreateUser(meta models.AuditMetadata, user models.User) (models.User, error) {
-	audit := u.auditService.InitialiseAuditLog(meta, "create", "users", user.Username)
+	audit := u.auditService.InitialiseAuditLog(meta, "create", "users", AuditTarget("username", user.Username, "provider", user.Provider))
 	defer func() { u.auditService.CreateAudit(audit) }()
 
 	createdUser, err := u.createUser(user)
@@ -106,6 +111,7 @@ func (u *UserServiceImpl) CreateUser(meta models.AuditMetadata, user models.User
 		return models.User{}, err
 	}
 
+	audit.EventTarget = userTarget(createdUser)
 	audit.Status = "success"
 	return createdUser, nil
 }
@@ -131,7 +137,7 @@ func (u *UserServiceImpl) createUser(user models.User) (models.User, error) {
 }
 
 func (u *UserServiceImpl) UpdateUser(meta models.AuditMetadata, user models.User) (models.User, error) {
-	audit := u.auditService.InitialiseAuditLog(meta, "update", "users", user.ID.String())
+	audit := u.auditService.InitialiseAuditLog(meta, "update", "users", AuditTarget("id", user.ID.String()))
 	defer func() { u.auditService.CreateAudit(audit) }()
 
 	updatedUser, err := u.updateUser(user)
@@ -139,6 +145,7 @@ func (u *UserServiceImpl) UpdateUser(meta models.AuditMetadata, user models.User
 		return models.User{}, err
 	}
 
+	audit.EventTarget = userTarget(updatedUser)
 	audit.Status = "success"
 	return updatedUser, nil
 }
@@ -163,8 +170,12 @@ func (u *UserServiceImpl) updateUser(user models.User) (models.User, error) {
 }
 
 func (u *UserServiceImpl) DeleteUser(meta models.AuditMetadata, userID string) error {
-	audit := u.auditService.InitialiseAuditLog(meta, "delete", "users", userID)
+	audit := u.auditService.InitialiseAuditLog(meta, "delete", "users", AuditTarget("id", userID))
 	defer func() { u.auditService.CreateAudit(audit) }()
+
+	if user, err := u.GetUser(userID); err == nil {
+		audit.EventTarget = userTarget(user)
+	}
 
 	if err := u.deleteUser(userID); err != nil {
 		return err

@@ -162,7 +162,7 @@ func (r *RunnerServiceImpl) GetRunnerForExecution(id uuid.UUID) (*models.Runner,
 }
 
 func (r *RunnerServiceImpl) CreateRunner(meta models.AuditMetadata, runner models.Runner) (*models.Runner, error) {
-	audit := r.auditService.InitialiseAuditLog(meta, "create", "runners", runner.Name)
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "runners", AuditTarget("name", runner.Name))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	err := helpers.ValidateK8sObjName(runner.Name)
@@ -210,12 +210,13 @@ func (r *RunnerServiceImpl) CreateRunner(meta models.AuditMetadata, runner model
 		return nil, err
 	}
 
+	audit.EventTarget = AuditTarget("name", result.Name, "id", result.ID.String())
 	audit.Status = "success"
 	return result, nil
 }
 
 func (r *RunnerServiceImpl) UpdateRunner(meta models.AuditMetadata, id uuid.UUID, runner models.Runner) (*models.Runner, error) {
-	audit := r.auditService.InitialiseAuditLog(meta, "update", "runners", id.String())
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "runners", AuditTarget("id", id.String()))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	current, err := r.getRunnerByID(id)
@@ -263,19 +264,21 @@ func (r *RunnerServiceImpl) UpdateRunner(meta models.AuditMetadata, id uuid.UUID
 		return nil, err
 	}
 
-	audit.EventTarget = result.Name
+	audit.EventTarget = AuditTarget("name", result.Name, "id", id.String())
 	audit.Status = "success"
 	return result, nil
 }
 
 func (r *RunnerServiceImpl) DeleteRunner(meta models.AuditMetadata, id uuid.UUID) error {
-	audit := r.auditService.InitialiseAuditLog(meta, "delete", "runners", id.String())
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "runners", AuditTarget("id", id.String()))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return err
 	}
+
+	audit.EventTarget = AuditTarget("name", runner.Name, "id", runner.ID.String())
 
 	// Tasks live in the database and reference runners by UUID.
 	var boundTask models.Task
@@ -342,8 +345,12 @@ func (r *RunnerServiceImpl) GetSecret(id uuid.UUID) (map[string]string, error) {
 }
 
 func (r *RunnerServiceImpl) UpdateSecret(meta models.AuditMetadata, id uuid.UUID, secret map[string]string) (map[string]string, error) {
-	audit := r.auditService.InitialiseAuditLog(meta, "update_secret", "runners", id.String())
+	audit := r.auditService.InitialiseAuditLog(meta, "update_secret", "runners", AuditTarget("id", id.String()))
 	defer func() { r.auditService.CreateAudit(audit) }()
+
+	if runner, err := r.getRunnerByID(id); err == nil {
+		audit.EventTarget = AuditTarget("name", runner.Name, "id", id.String())
+	}
 
 	updatedSecret, err := r.updateSecret(id, secret)
 	if err != nil {
@@ -410,8 +417,12 @@ func (r *RunnerServiceImpl) updateSecret(id uuid.UUID, secret map[string]string)
 }
 
 func (r *RunnerServiceImpl) DeleteSecret(meta models.AuditMetadata, id uuid.UUID) error {
-	audit := r.auditService.InitialiseAuditLog(meta, "delete_secret", "runners", id.String())
+	audit := r.auditService.InitialiseAuditLog(meta, "delete_secret", "runners", AuditTarget("id", id.String()))
 	defer func() { r.auditService.CreateAudit(audit) }()
+
+	if runner, err := r.getRunnerByID(id); err == nil {
+		audit.EventTarget = AuditTarget("name", runner.Name, "id", id.String())
+	}
 
 	if err := r.deleteSecret(id); err != nil {
 		return err

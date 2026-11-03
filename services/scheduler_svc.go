@@ -199,8 +199,13 @@ func (s *SchedulerServiceImpl) GetScheduler(meta models.AuditMetadata, id string
 	return s.authorise(meta, id, "read")
 }
 
+// schedulerTarget names a schedule by name, id and the task it runs.
+func schedulerTarget(sc models.Scheduler) string {
+	return AuditTarget("name", sc.Name, "id", sc.ID.String(), "task", sc.TaskName)
+}
+
 func (s *SchedulerServiceImpl) CreateScheduler(meta models.AuditMetadata, sc models.Scheduler) (models.Scheduler, error) {
-	audit := s.auditService.InitialiseAuditLog(meta, "create", "schedulers", sc.Name)
+	audit := s.auditService.InitialiseAuditLog(meta, "create", "schedulers", AuditTarget("name", sc.Name))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	schedule, err := s.validateDefinition(meta, &sc)
@@ -222,13 +227,13 @@ func (s *SchedulerServiceImpl) CreateScheduler(meta models.AuditMetadata, sc mod
 		return models.Scheduler{}, fmt.Errorf("failed to create scheduler '%s': %w", sc.Name, res.Error)
 	}
 
-	audit.EventTarget = sc.ID.String()
+	audit.EventTarget = schedulerTarget(sc)
 	audit.Status = "success"
 	return sc, nil
 }
 
 func (s *SchedulerServiceImpl) UpdateScheduler(meta models.AuditMetadata, id string, in models.Scheduler) (models.Scheduler, error) {
-	audit := s.auditService.InitialiseAuditLog(meta, "update", "schedulers", id)
+	audit := s.auditService.InitialiseAuditLog(meta, "update", "schedulers", AuditTarget("id", id))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	existing, err := s.authorise(meta, id, "write")
@@ -262,19 +267,21 @@ func (s *SchedulerServiceImpl) UpdateScheduler(meta models.AuditMetadata, id str
 		return models.Scheduler{}, fmt.Errorf("failed to update scheduler '%s': %w", existing.Name, res.Error)
 	}
 
-	audit.EventTarget = existing.ID.String()
+	audit.EventTarget = schedulerTarget(existing)
 	audit.Status = "success"
 	return existing, nil
 }
 
 func (s *SchedulerServiceImpl) DeleteScheduler(meta models.AuditMetadata, id string) error {
-	audit := s.auditService.InitialiseAuditLog(meta, "delete", "schedulers", id)
+	audit := s.auditService.InitialiseAuditLog(meta, "delete", "schedulers", AuditTarget("id", id))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	sc, err := s.authorise(meta, id, "write")
 	if err != nil {
 		return err
 	}
+
+	audit.EventTarget = schedulerTarget(sc)
 
 	if res := s.db.Delete(&models.Scheduler{}, "id = ?", sc.ID); res.Error != nil {
 		return fmt.Errorf("failed to delete scheduler '%s': %w", id, res.Error)
@@ -285,7 +292,7 @@ func (s *SchedulerServiceImpl) DeleteScheduler(meta models.AuditMetadata, id str
 }
 
 func (s *SchedulerServiceImpl) EnableScheduler(meta models.AuditMetadata, id string) (models.Scheduler, error) {
-	audit := s.auditService.InitialiseAuditLog(meta, "enable", "schedulers", id)
+	audit := s.auditService.InitialiseAuditLog(meta, "enable", "schedulers", AuditTarget("id", id))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	sc, err := s.authorise(meta, id, "write")
@@ -310,12 +317,13 @@ func (s *SchedulerServiceImpl) EnableScheduler(meta models.AuditMetadata, id str
 		return models.Scheduler{}, fmt.Errorf("failed to enable scheduler '%s': %w", id, res.Error)
 	}
 
+	audit.EventTarget = schedulerTarget(sc)
 	audit.Status = "success"
 	return sc, nil
 }
 
 func (s *SchedulerServiceImpl) DisableScheduler(meta models.AuditMetadata, id string) (models.Scheduler, error) {
-	audit := s.auditService.InitialiseAuditLog(meta, "disable", "schedulers", id)
+	audit := s.auditService.InitialiseAuditLog(meta, "disable", "schedulers", AuditTarget("id", id))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	sc, err := s.authorise(meta, id, "write")
@@ -333,6 +341,7 @@ func (s *SchedulerServiceImpl) DisableScheduler(meta models.AuditMetadata, id st
 		return models.Scheduler{}, fmt.Errorf("failed to disable scheduler '%s': %w", id, res.Error)
 	}
 
+	audit.EventTarget = schedulerTarget(sc)
 	audit.Status = "success"
 	return sc, nil
 }
@@ -431,7 +440,7 @@ func (s *SchedulerServiceImpl) fire(sc models.Scheduler, now time.Time) {
 	}
 
 	meta := models.AuditMetadata{UserID: owner.ID, UserName: owner.Username, Provider: owner.Provider}
-	audit := s.auditService.InitialiseAuditLog(meta, "run", "schedulers", sc.ID.String())
+	audit := s.auditService.InitialiseAuditLog(meta, "run", "schedulers", schedulerTarget(sc))
 	defer func() { s.auditService.CreateAudit(audit) }()
 
 	task, err := s.taskService.GetTask(sc.TaskID)
@@ -500,7 +509,7 @@ func (s *SchedulerServiceImpl) disable(sc models.Scheduler, meta models.AuditMet
 		return
 	}
 
-	audit := s.auditService.InitialiseAuditLog(meta, "auto_disable", "schedulers", sc.ID.String())
+	audit := s.auditService.InitialiseAuditLog(meta, "auto_disable", "schedulers", schedulerTarget(sc))
 	audit.Status = "success"
 	s.auditService.CreateAudit(audit)
 }

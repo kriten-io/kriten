@@ -91,8 +91,13 @@ func (u *ApiTokenServiceImpl) GetApiToken(id string) (models.ApiToken, error) {
 	return apiToken, nil
 }
 
+// tokenTarget names an API token by description and id. The key is never recorded.
+func tokenTarget(token models.ApiToken) string {
+	return AuditTarget("description", token.Description, "id", token.ID.String())
+}
+
 func (u *ApiTokenServiceImpl) CreateApiToken(meta models.AuditMetadata, apiToken models.ApiToken) (models.ApiToken, error) {
-	audit := u.auditService.InitialiseAuditLog(meta, "create", "apiTokens", apiToken.Key)
+	audit := u.auditService.InitialiseAuditLog(meta, "create", "apiTokens", AuditTarget("description", apiToken.Description))
 	defer func() { u.auditService.CreateAudit(audit) }()
 
 	apiToken.Owner = meta.UserID
@@ -102,9 +107,7 @@ func (u *ApiTokenServiceImpl) CreateApiToken(meta models.AuditMetadata, apiToken
 		return models.ApiToken{}, err
 	}
 
-	if audit.EventTarget == "" {
-		audit.EventTarget = createdToken.Key
-	}
+	audit.EventTarget = tokenTarget(createdToken)
 	audit.Status = "success"
 	return createdToken, nil
 }
@@ -139,7 +142,7 @@ func (u *ApiTokenServiceImpl) createApiToken(apiToken models.ApiToken) (models.A
 }
 
 func (u *ApiTokenServiceImpl) UpdateApiToken(meta models.AuditMetadata, apiToken models.ApiToken) (models.ApiToken, error) {
-	audit := u.auditService.InitialiseAuditLog(meta, "update", "apiTokens", apiToken.ID.String())
+	audit := u.auditService.InitialiseAuditLog(meta, "update", "apiTokens", AuditTarget("id", apiToken.ID.String()))
 	defer func() { u.auditService.CreateAudit(audit) }()
 
 	updatedToken, err := u.updateApiToken(apiToken)
@@ -147,6 +150,7 @@ func (u *ApiTokenServiceImpl) UpdateApiToken(meta models.AuditMetadata, apiToken
 		return models.ApiToken{}, err
 	}
 
+	audit.EventTarget = tokenTarget(updatedToken)
 	audit.Status = "success"
 	return updatedToken, nil
 }
@@ -180,8 +184,12 @@ func (u *ApiTokenServiceImpl) updateApiToken(apiToken models.ApiToken) (models.A
 }
 
 func (u *ApiTokenServiceImpl) DeleteApiToken(meta models.AuditMetadata, id string) error {
-	audit := u.auditService.InitialiseAuditLog(meta, "delete", "apiTokens", id)
+	audit := u.auditService.InitialiseAuditLog(meta, "delete", "apiTokens", AuditTarget("id", id))
 	defer func() { u.auditService.CreateAudit(audit) }()
+
+	if token, err := u.GetApiToken(id); err == nil {
+		audit.EventTarget = tokenTarget(token)
+	}
 
 	if err := u.deleteApiToken(id); err != nil {
 		return err

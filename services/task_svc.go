@@ -128,8 +128,13 @@ func (t *TaskServiceImpl) GetTask(id uuid.UUID) (*models.Task, error) {
 	return t.getTaskByID(id)
 }
 
+// taskTarget names a task by name and id.
+func taskTarget(task models.Task) string {
+	return AuditTarget("name", task.Name, "id", task.ID.String())
+}
+
 func (t *TaskServiceImpl) CreateTask(meta models.AuditMetadata, task models.Task) (*models.Task, error) {
-	audit := t.auditService.InitialiseAuditLog(meta, "create", "tasks", task.Name)
+	audit := t.auditService.InitialiseAuditLog(meta, "create", "tasks", AuditTarget("name", task.Name))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	err := helpers.ValidateK8sObjName(task.Name)
@@ -176,12 +181,13 @@ func (t *TaskServiceImpl) CreateTask(meta models.AuditMetadata, task models.Task
 		return nil, fmt.Errorf("task '%s': %w", task.Name, res.Error)
 	}
 
+	audit.EventTarget = taskTarget(newTask)
 	audit.Status = "success"
 	return &newTask, nil
 }
 
 func (t *TaskServiceImpl) UpdateTask(meta models.AuditMetadata, id uuid.UUID, task models.Task) (*models.Task, error) {
-	audit := t.auditService.InitialiseAuditLog(meta, "update", "tasks", id.String())
+	audit := t.auditService.InitialiseAuditLog(meta, "update", "tasks", AuditTarget("id", id.String()))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	existing, err := t.getTaskByID(id)
@@ -220,19 +226,21 @@ func (t *TaskServiceImpl) UpdateTask(meta models.AuditMetadata, id uuid.UUID, ta
 		return nil, fmt.Errorf("task '%s': %w", existing.Name, res.Error)
 	}
 
-	audit.EventTarget = existing.Name
+	audit.EventTarget = taskTarget(*existing)
 	audit.Status = "success"
 	return existing, nil
 }
 
 func (t *TaskServiceImpl) DeleteTask(meta models.AuditMetadata, id uuid.UUID) error {
-	audit := t.auditService.InitialiseAuditLog(meta, "delete", "tasks", id.String())
+	audit := t.auditService.InitialiseAuditLog(meta, "delete", "tasks", AuditTarget("id", id.String()))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	task, err := t.getTaskByID(id)
 	if err != nil {
 		return err
 	}
+
+	audit.EventTarget = taskTarget(*task)
 
 	var webhookCount int64
 	if err := t.db.Model(&models.Webhook{}).Where("task_id = ?", task.ID).Count(&webhookCount).Error; err != nil {
@@ -268,13 +276,15 @@ func (t *TaskServiceImpl) GetSchema(id uuid.UUID) (map[string]interface{}, error
 }
 
 func (t *TaskServiceImpl) UpdateSchema(meta models.AuditMetadata, id uuid.UUID, schema map[string]interface{}) (map[string]interface{}, error) {
-	audit := t.auditService.InitialiseAuditLog(meta, "update_schema", "tasks", id.String())
+	audit := t.auditService.InitialiseAuditLog(meta, "update_schema", "tasks", AuditTarget("id", id.String()))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	task, err := t.getTaskByID(id)
 	if err != nil {
 		return nil, err
 	}
+
+	audit.EventTarget = taskTarget(*task)
 
 	data, err := json.Marshal(schema)
 	if err != nil {
@@ -297,13 +307,15 @@ func (t *TaskServiceImpl) UpdateSchema(meta models.AuditMetadata, id uuid.UUID, 
 }
 
 func (t *TaskServiceImpl) DeleteSchema(meta models.AuditMetadata, id uuid.UUID) error {
-	audit := t.auditService.InitialiseAuditLog(meta, "delete_schema", "tasks", id.String())
+	audit := t.auditService.InitialiseAuditLog(meta, "delete_schema", "tasks", AuditTarget("id", id.String()))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	task, err := t.getTaskByID(id)
 	if err != nil {
 		return fmt.Errorf("%w", err)
 	}
+
+	audit.EventTarget = taskTarget(*task)
 
 	if task.Schema != nil {
 		task.Schema = nil
@@ -364,7 +376,7 @@ func ValidateExtraVars(schema map[string]interface{}, extraVars string) error {
 }
 
 func (t *TaskServiceImpl) RunTask(meta models.AuditMetadata, username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
-	audit := t.auditService.InitialiseAuditLog(meta, "run", "tasks", taskID.String())
+	audit := t.auditService.InitialiseAuditLog(meta, "run", "tasks", AuditTarget("id", taskID.String()))
 	defer func() { t.auditService.CreateAudit(audit) }()
 
 	job, err := t.executeTask(username, taskID, extraVars)
@@ -372,6 +384,7 @@ func (t *TaskServiceImpl) RunTask(meta models.AuditMetadata, username string, ta
 		return models.Job{}, err
 	}
 
+	audit.EventTarget = AuditTarget("name", job.TaskName, "id", taskID.String())
 	audit.Status = "success"
 	return job, nil
 }

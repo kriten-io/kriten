@@ -93,8 +93,13 @@ func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {
 	return role, nil
 }
 
+// roleTarget names a role by name, resource and id.
+func roleTarget(role models.Role) string {
+	return AuditTarget("name", role.Name, "resource", role.Resource, "id", role.ID.String())
+}
+
 func (r *RoleServiceImpl) CreateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
-	audit := r.auditService.InitialiseAuditLog(meta, "create", "roles", role.Name)
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "roles", AuditTarget("name", role.Name, "resource", role.Resource))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	err := r.CheckRole(role)
@@ -109,12 +114,13 @@ func (r *RoleServiceImpl) CreateRole(meta models.AuditMetadata, role models.Role
 		return models.Role{}, fmt.Errorf("error creating role '%s': %w", role.Name, res.Error)
 	}
 
+	audit.EventTarget = roleTarget(role)
 	audit.Status = "success"
 	return role, nil
 }
 
 func (r *RoleServiceImpl) UpdateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
-	audit := r.auditService.InitialiseAuditLog(meta, "update", "roles", role.ID.String())
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "roles", AuditTarget("id", role.ID.String()))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	_, err := r.GetRole(role.ID.String())
@@ -137,12 +143,13 @@ func (r *RoleServiceImpl) UpdateRole(meta models.AuditMetadata, role models.Role
 		return models.Role{}, fmt.Errorf("error getting role: %w", err)
 	}
 
+	audit.EventTarget = roleTarget(newRole)
 	audit.Status = "success"
 	return newRole, nil
 }
 
 func (r *RoleServiceImpl) DeleteRole(meta models.AuditMetadata, id string) error {
-	audit := r.auditService.InitialiseAuditLog(meta, "delete", "roles", id)
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "roles", AuditTarget("id", id))
 	defer func() { r.auditService.CreateAudit(audit) }()
 
 	var groups []models.Group
@@ -150,6 +157,8 @@ func (r *RoleServiceImpl) DeleteRole(meta models.AuditMetadata, id string) error
 	if err != nil {
 		return fmt.Errorf("error getting role: %w", err)
 	}
+
+	audit.EventTarget = roleTarget(role)
 
 	if role.Builtin {
 		return fmt.Errorf("error deleting role '%s': %w", id, ErrSvcDeleteBuiltin)

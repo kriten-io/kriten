@@ -62,7 +62,7 @@ func NewAuthService(
 // Login - TODO: This function is getting very crowded
 // might need to be refactored in the future.
 func (a *AuthServiceImpl) Login(meta models.AuditMetadata, credentials *models.Credentials) (string, int, error) {
-	audit := a.auditService.InitialiseAuditLog(meta, "login", "authentication", "*")
+	audit := a.auditService.InitialiseAuditLog(meta, "login", "authentication", AuditTarget("username", credentials.Username, "provider", credentials.Provider))
 	audit.UserName = credentials.Username
 	audit.Provider = credentials.Provider
 	defer func() { a.auditService.CreateAudit(audit) }()
