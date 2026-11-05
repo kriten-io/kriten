@@ -11,8 +11,19 @@ import (
 	"gorm.io/gorm"
 )
 
-func InitDB(db *gorm.DB, rp string) {
+// redactLegacyTokenAudits replaces plaintext API token keys that older builds
+// wrote into the audit log as the event target. Only values in the key format
+// are changed, so the step is safe to run on every startup.
+func redactLegacyTokenAudits(db *gorm.DB) {
+	if err := db.Exec(
+		"UPDATE audit_logs SET event_target = 'redacted' WHERE event_category = 'apiTokens' AND event_target ~ '^kri_[A-Za-z0-9]{36}$'",
+	).Error; err != nil {
+		log.Println("Error redacting legacy API token audit entries")
+		log.Println(err)
+	}
+}
 
+func InitDB(db *gorm.DB, rp string) {
 	err := db.AutoMigrate(
 		&models.AuditLog{},
 		&models.Group{},
@@ -30,6 +41,8 @@ func InitDB(db *gorm.DB, rp string) {
 		log.Println("Error during Postgres AutoMigrate")
 		log.Println(err)
 	}
+
+	redactLegacyTokenAudits(db)
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(rp), bcrypt.DefaultCost)
 	if err != nil {

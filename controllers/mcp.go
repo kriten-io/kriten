@@ -24,8 +24,7 @@ func NewMcpController(ms services.McpService, as services.AuthService) McpContro
 // routed to the same handler.
 func (mc *McpController) SetMcpRoutes(rg *gin.RouterGroup, config config.Config) {
 	r := rg.Group("").Use(
-		middlewares.HeaderAuthOnlyMiddleware(),
-		middlewares.AuthenticationMiddleware(mc.AuthService, config.JWT))
+		middlewares.MCPAuthenticationMiddleware(mc.AuthService, config.JWT))
 
 	r.Any("", mc.Serve)
 }
