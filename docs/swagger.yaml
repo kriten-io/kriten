@@ -356,7 +356,7 @@ info:
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   termsOfService: http://swagger.io/terms/
   title: Swagger Kriten
-  version: v1.0.0
+  version: v1.1.0
 paths:
   /api-tokens:
     get:
