@@ -125,11 +125,6 @@ func NewConfig(gitBranch string) Config {
 			MaxWaitSeconds: getEnvAsPositiveIntWarn("MCP_MAX_WAIT_SECONDS", MCPMaxWaitSecondsDefault),
 			PollIntervalMs: getEnvAsPositiveIntWarn("MCP_POLL_INTERVAL_MS", MCPPollIntervalMsDefault),
 		},
-		// ElasticSearch: ESConfig{
-		// 	CloudID: getEnv("ES_CLOUD_ID", ""),
-		// 	APIKey:  getEnv("ES_API_KEY", ""),
-		// 	Index:   getEnv("ES_INDEX", ""),
-		// },
 	}
 }
 

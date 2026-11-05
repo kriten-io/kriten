@@ -48,65 +48,6 @@ func ListConfigMaps(kube config.KubeConfig) (*corev1.ConfigMapList, error) {
 	return configMaps, nil
 }
 
-// func GetConfigMap(kube config.KubeConfig, name string) (*corev1.ConfigMap, error) {
-// 	configMap, err := kube.Clientset.CoreV1().ConfigMaps(
-// 		kube.Namespace).Get(
-// 		context.TODO(), name, metav1.GetOptions{})
-
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get configmap %s: %w", name, err)
-// 	}
-
-// 	return configMap, nil
-// }
-
-// func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, operation string) (*corev1.ConfigMap, error) {
-// 	configMap := ConfigMap(data, kube.Namespace)
-// 	var ret *corev1.ConfigMap
-// 	var err error
-
-// 	if operation == "create" {
-// 		ret, err = kube.Clientset.CoreV1().ConfigMaps(
-// 			kube.Namespace).Create(
-// 			context.TODO(), configMap, metav1.CreateOptions{})
-// 	} else if operation == "update" {
-// 		ret, err = kube.Clientset.CoreV1().ConfigMaps(
-// 			kube.Namespace).Update(
-// 			context.TODO(), configMap, metav1.UpdateOptions{})
-// 	}
-
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to %s configmap: %w", operation, err)
-// 	}
-
-// 	return ret, nil
-// }
-
-// func DeleteConfigMap(kube config.KubeConfig, name string) error {
-// 	err := kube.Clientset.CoreV1().ConfigMaps(
-// 		kube.Namespace).Delete(
-// 		context.TODO(), name, metav1.DeleteOptions{})
-
-// 	if err != nil {
-// 		return fmt.Errorf("failed to delete configmap %s: %w", name, err)
-// 	}
-
-// 	return nil
-// }
-
-// func ConfigMap(data map[string]string, namespace string) *corev1.ConfigMap {
-// 	name := data["name"]
-
-// 	return &corev1.ConfigMap{
-// 		ObjectMeta: metav1.ObjectMeta{
-// 			Name:      name,
-// 			Namespace: namespace,
-// 		},
-// 		Data: data,
-// 	}
-
-// }
-
 func GetSecret(kube config.KubeConfig, secretName string) (*corev1.Secret, error) {
 	secret, err := kube.Clientset.CoreV1().Secrets(
 		kube.Namespace).Get(
