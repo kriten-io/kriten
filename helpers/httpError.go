@@ -42,3 +42,7 @@ func BadGatewayError(ctx *gin.Context, err error) {
 func UnauthorizedError(ctx *gin.Context, err error) {
 	ctx.JSON(http.StatusUnauthorized, HTTPError{Code: 401, Error: err.Error()})
 }
+
+func ForbiddenError(ctx *gin.Context, err error) {
+	ctx.JSON(http.StatusForbidden, HTTPError{Code: 403, Error: err.Error()})
+}

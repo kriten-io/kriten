@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -83,58 +84,153 @@ func AuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig)
 			ctx.Set("userID", owner.ID)
 			ctx.Set("username", owner.Username)
 			ctx.Set("provider", owner.Provider)
-		} else {
-			// If no API token is provided, checking for Bearer or Cookies
-			bearer := strings.Split(ctx.GetHeader("Authorization"), "Bearer ")
-			if len(bearer) > 1 {
-				token = bearer[1]
-			}
-			cookie, err := ctx.Request.Cookie("token")
-			if token == "" {
-				if err != nil {
-					ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "please authenticate."})
+		} else if bearer := bearerToken(ctx.GetHeader("Authorization")); bearer != "" {
+			// A Bearer value is a JWT or a static API token.
+			if strings.Count(bearer, ".") == 2 {
+				if claims, err := helpers.ValidateJWTToken(bearer, jwtConf); err == nil {
+					setAuthContext(ctx, claims.UserID, claims.Username, claims.Provider)
+					ctx.Next()
 					return
 				}
-				token = cookie.Value
 			}
-
-			claims, err := helpers.ValidateJWTToken(token, jwtConf)
+			owner, err := as.ValidateAPIToken(bearer)
 			if err != nil {
-				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+				return
+			}
+			setAuthContext(ctx, owner.ID, owner.Username, owner.Provider)
+		} else {
+			// Cookies carry a JWT only.
+			cookie, err := ctx.Request.Cookie("token")
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "please authenticate."})
 				return
 			}
 
-			ctx.Set("userID", claims.UserID)
-			ctx.Set("username", claims.Username)
-			ctx.Set("provider", claims.Provider)
+			if strings.Count(cookie.Value, ".") == 2 {
+				if claims, err := helpers.ValidateJWTToken(cookie.Value, jwtConf); err == nil {
+					setAuthContext(ctx, claims.UserID, claims.Username, claims.Provider)
+					ctx.Next()
+					return
+				}
+			}
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token."})
+			return
 		}
 		ctx.Next()
 	}
+}
+
+// MCPAuthenticationMiddleware authenticates MCP requests from headers only
+// (cookies are not accepted). It accepts a static API token in the Token header
+// or in Authorization: Bearer, and a JWT in Authorization: Bearer. No
+// WWW-Authenticate challenge is sent: Kriten does not implement OAuth, and a
+// Bearer challenge makes clients start OAuth discovery.
+func MCPAuthenticationMiddleware(as services.AuthService, jwtConf config.JWTConfig) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		token := strings.TrimSpace(ctx.GetHeader("Token"))
+		bearer := bearerToken(ctx.GetHeader("Authorization"))
+		if token == "" && bearer == "" {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authenticate with a Token header or Authorization: Bearer <api token>."})
+			return
+		}
+
+		if token != "" {
+			owner, err := as.ValidateAPIToken(token)
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+				return
+			}
+			setAuthContext(ctx, owner.ID, owner.Username, owner.Provider)
+			ctx.Next()
+			return
+		}
+
+		// API tokens are opaque keys, not JWTs; only JWT-shaped values are parsed
+		// so that API token requests don't log JWT parse errors.
+		if strings.Count(bearer, ".") == 2 {
+			if claims, err := helpers.ValidateJWTToken(bearer, jwtConf); err == nil {
+				setAuthContext(ctx, claims.UserID, claims.Username, claims.Provider)
+				ctx.Next()
+				return
+			}
+		}
+
+		owner, err := as.ValidateAPIToken(bearer)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		setAuthContext(ctx, owner.ID, owner.Username, owner.Provider)
+		ctx.Next()
+	}
+}
+
+// bearerToken returns the credential from an Authorization header with the
+// "Bearer" scheme. The scheme is matched case-insensitively, as RFC 7235 requires.
+func bearerToken(header string) string {
+	scheme, value, found := strings.Cut(strings.TrimSpace(header), " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func setAuthContext(ctx *gin.Context, userID uuid.UUID, username string, provider string) {
+	ctx.Set("userID", userID)
+	ctx.Set("username", username)
+	ctx.Set("provider", provider)
 }
 
 func AuthorizationMiddleware(as services.AuthService, resource string, access string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		userID := ctx.MustGet("userID").(uuid.UUID)
 		provider := ctx.MustGet("provider").(string)
-		task := ctx.GetString("task")
+
+		var task string
+		if value, ok := ctx.Get("task"); ok {
+			switch t := value.(type) {
+			case string:
+				task = t
+			case uuid.UUID:
+				task = t.String()
+			}
+		}
 
 		resourceName := ""
-		if ctx.Param("name") != "" {
-			resourceName = ctx.Param("name")
-		} else if task != "" {
-			resourceName = task
-		} else if ctx.Param("id") != "" {
-			resourceName = ctx.Param("id")
-		}
-
-		if resourceName == "" {
-			resourceName = "*"
-		}
-
-		// trimming last 6 chars for jobs read because
-		// jobs include random caracters at the end
 		if resource == "jobs" && access == "read" {
-			resourceName = resourceName[:len(resourceName)-6]
+			jobID, err := uuid.FromString(ctx.Param("id"))
+			if err != nil {
+				ctx.Error(errors.New("invalid job id format"))
+				ctx.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+
+			taskID, err := as.GetJobTaskID(jobID)
+			if err != nil {
+				if errors.Is(err, services.ErrSvcObjNotFound) {
+					ctx.Error(err)
+					ctx.AbortWithStatus(http.StatusNotFound)
+					return
+				}
+				log.Println(err)
+				ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error."})
+				return
+			}
+
+			resourceName = taskID.String()
+		} else {
+			if ctx.Param("name") != "" {
+				resourceName = ctx.Param("name")
+			} else if task != "" {
+				resourceName = task
+			} else if ctx.Param("id") != "" {
+				resourceName = ctx.Param("id")
+			}
+
+			if resourceName == "" {
+				resourceName = "*"
+			}
 		}
 
 		isAuthorised, err := as.IsAutorised(

@@ -480,305 +480,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/cronjobs": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "List all Cronjobs",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "List all Cronjobs",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.CronJob"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Add a job to the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Create a new job",
-                "parameters": [
-                    {
-                        "description": "New cronjob",
-                        "name": "cronjob",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/cronjobs/{name}": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get information about a specific job",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Get job info",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob  name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Delete by CronJob ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Delete a CronJob",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "CronJob name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ResponseMessage"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update a cronjob in the cluster",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Update a cronjob",
-                "parameters": [
-                    {
-                        "description": "Update CronJob",
-                        "name": "cronjob",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.CronJob"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
-        "/cronjobs/{name}/schema": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get schema for the job info and input parameters",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "cronjobs"
-                ],
-                "summary": "Get schema",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task  name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.HTTPError"
-                        }
-                    }
-                }
-            }
-        },
         "/groups": {
             "get": {
                 "security": [
@@ -1134,14 +835,14 @@ const docTemplate = `{
                 "summary": "Add roles",
                 "parameters": [
                     {
-                        "description": "Roles to be added",
+                        "description": "Role IDs to be added",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupRole"
+                                "type": "string"
                             }
                         }
                     },
@@ -1199,14 +900,14 @@ const docTemplate = `{
                 "summary": "Remove roles",
                 "parameters": [
                     {
-                        "description": "Roles to be removed",
+                        "description": "Role IDs to be removed",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupRole"
+                                "type": "string"
                             }
                         }
                     },
@@ -1325,14 +1026,14 @@ const docTemplate = `{
                 "summary": "Add users",
                 "parameters": [
                     {
-                        "description": "Users to be added",
+                        "description": "User IDs to be added",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupUser"
+                                "type": "string"
                             }
                         }
                     },
@@ -1390,14 +1091,14 @@ const docTemplate = `{
                 "summary": "Remove users",
                 "parameters": [
                     {
-                        "description": "Users to be removed",
+                        "description": "User IDs to be removed",
                         "name": "group",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.GroupUser"
+                                "type": "string"
                             }
                         }
                     },
@@ -1512,7 +1213,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/jobs/{name}": {
+        "/jobs/{id}": {
             "get": {
                 "security": [
                     {
@@ -1533,8 +1234,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job Name",
-                        "name": "name",
+                        "description": "Job ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1543,7 +1244,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/models.Job"
                         }
                     },
                     "400": {
@@ -1567,7 +1268,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/jobs/{name}/log": {
+        "/jobs/{id}/log": {
             "get": {
                 "security": [
                     {
@@ -1588,17 +1289,17 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Job  name",
-                        "name": "name",
+                        "description": "Job ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Job log",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "type": "string"
                         }
                     },
                     "400": {
@@ -2198,7 +1899,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}": {
+        "/runners/{id}": {
             "get": {
                 "security": [
                     {
@@ -2219,8 +1920,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2266,8 +1967,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2362,7 +2063,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}/schema": {
+        "/runners/{id}/schema": {
             "delete": {
                 "security": [
                     {
@@ -2383,8 +2084,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2412,7 +2113,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/runners/{name}/secret": {
+        "/runners/{id}/secret": {
             "get": {
                 "security": [
                     {
@@ -2433,8 +2134,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Runner name",
-                        "name": "name",
+                        "description": "Runner ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2449,6 +2150,446 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "List own schedulers, or all schedulers for users with schedulers read access",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "List schedulers",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of schedulers to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of schedulers to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by name (case insensitive substring)",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Scheduler"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Schedule a task with a cron expression. Requires execute access on the task. Extra vars are validated against the task schema.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Create a scheduler",
+                "parameters": [
+                    {
+                        "description": "New scheduler",
+                        "name": "scheduler",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get information about a specific scheduler",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Get a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update a scheduler. Name is immutable. Re-validates the cron expression and extra vars.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Update a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated scheduler",
+                        "name": "scheduler",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete by scheduler ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Delete a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ResponseMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}/disable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Disable a scheduler so it no longer fires",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Disable a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    }
+                }
+            }
+        },
+        "/schedulers/{id}/enable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Enable a scheduler and compute its next run. Re-validates the schedule against the current task schema.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedulers"
+                ],
+                "summary": "Enable a scheduler",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduler ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Scheduler"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.HTTPError"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/helpers.HTTPError"
                         }
@@ -2592,7 +2733,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}": {
+        "/tasks/{id}": {
             "get": {
                 "security": [
                     {
@@ -2613,8 +2754,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2666,8 +2807,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2762,7 +2903,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}/run": {
+        "/tasks/{id}/run": {
             "post": {
                 "security": [
                     {
@@ -2783,8 +2924,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task  name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -2825,7 +2966,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{name}/schema": {
+        "/tasks/{id}/schema": {
             "get": {
                 "security": [
                     {
@@ -2846,8 +2987,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -2900,8 +3041,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -2964,8 +3105,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Task name",
-                        "name": "name",
+                        "description": "Task ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -3354,7 +3495,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_tokens"
+                    "webhooks"
                 ],
                 "summary": "List own webHooks",
                 "responses": {
@@ -3739,30 +3880,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CronJob": {
-            "type": "object",
-            "properties": {
-                "disable": {
-                    "type": "boolean"
-                },
-                "extra_vars": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "owner": {
-                    "type": "string"
-                },
-                "schedule": {
-                    "type": "string"
-                },
-                "task": {
-                    "type": "string"
-                }
-            }
-        },
         "models.Group": {
             "type": "object",
             "required": [
@@ -3807,13 +3924,16 @@ const docTemplate = `{
                 "access": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
                 "resource": {
                     "type": "string"
                 },
-                "resource_names": {
+                "resource_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -3844,10 +3964,16 @@ const docTemplate = `{
                 "completion_time": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "failed": {
                     "type": "integer"
                 },
                 "failed_reason": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "json_data": {
@@ -3868,12 +3994,24 @@ const docTemplate = `{
                 },
                 "stdout": {
                     "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
         "models.JobMessage": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
                 },
@@ -3905,7 +4043,7 @@ const docTemplate = `{
                 "access",
                 "name",
                 "resource",
-                "resource_names"
+                "resource_ids"
             ],
             "properties": {
                 "access": {
@@ -3923,7 +4061,7 @@ const docTemplate = `{
                 "resource": {
                     "type": "string"
                 },
-                "resource_names": {
+                "resource_ids": {
                     "type": "array",
                     "uniqueItems": true,
                     "items": {
@@ -3952,7 +4090,6 @@ const docTemplate = `{
         "models.Runner": {
             "type": "object",
             "required": [
-                "gitURL",
                 "image",
                 "name"
             ],
@@ -3960,7 +4097,13 @@ const docTemplate = `{
                 "branch": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "gitURL": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "image": {
@@ -3977,6 +4120,62 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.Scheduler": {
+            "type": "object",
+            "required": [
+                "cron_expr",
+                "name",
+                "task_id"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "cron_expr": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "extra_vars": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_run_at": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "task_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -3984,17 +4183,25 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "command",
-                "name",
-                "runner"
+                "name"
             ],
             "properties": {
                 "command": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
-                "runner": {
+                "runner_id": {
                     "type": "string"
                 },
                 "schema": {
@@ -4003,6 +4210,9 @@ const docTemplate = `{
                 },
                 "synchronous": {
                     "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -4066,7 +4276,7 @@ const docTemplate = `{
                 "secret": {
                     "type": "string"
                 },
-                "task": {
+                "task_id": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -4090,7 +4300,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "v1.0.0",
+	Version:          "v1.1.0",
 	Host:             "",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},

@@ -1,7 +1,7 @@
 package services
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,31 +10,55 @@ import (
 	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"gorm.io/gorm"
 )
 
 type RunnerService interface {
 	ListRunners([]string, models.RunnerQueryParams) ([]models.Runner, int, error)
-	GetRunner(string) (*models.Runner, error)
-	CreateRunner(models.Runner) (*models.Runner, error)
-	UpdateRunner(models.Runner) (*models.Runner, error)
-	DeleteRunner(string) error
-	GetAdminGroups(string) (string, error)
+	GetRunner(uuid.UUID) (*models.Runner, error)
+	CreateRunner(models.AuditMetadata, models.Runner) (*models.Runner, error)
+	UpdateRunner(models.AuditMetadata, uuid.UUID, models.Runner) (*models.Runner, error)
+	DeleteRunner(models.AuditMetadata, uuid.UUID) error
 	ListAllJobs() ([]models.Job, error)
-	GetSecret(string) (map[string]string, error)
-	UpdateSecret(string, map[string]string) (map[string]string, error)
-	DeleteSecret(string) error
+	GetSecret(uuid.UUID) (map[string]string, error)
+	UpdateSecret(models.AuditMetadata, uuid.UUID, map[string]string) (map[string]string, error)
+	DeleteSecret(models.AuditMetadata, uuid.UUID) error
+	// GetRunnerForExecution returns a runner with the git token and custom
+	// secrets decrypted. It must only be used internally to launch jobs and
+	// never returned to an API client.
+	GetRunnerForExecution(uuid.UUID) (*models.Runner, error)
 }
 
 type RunnerServiceImpl struct {
-	config config.Config
+	db           *gorm.DB
+	config       config.Config
+	auditService AuditService
 }
 
-func NewRunnerService(config config.Config) RunnerService {
+func NewRunnerService(database *gorm.DB, config config.Config, als AuditService) RunnerService {
 	return &RunnerServiceImpl{
-		config: config,
+		db:           database,
+		config:       config,
+		auditService: als,
 	}
+}
+
+// getRunnerByID fetches a runner model from the database, translating the
+// not found error into the service level error.
+func (r *RunnerServiceImpl) getRunnerByID(id uuid.UUID) (*models.Runner, error) {
+	var runner models.Runner
+
+	res := r.db.Where("id = ?", id).First(&runner)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("runner '%s': %w", id, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("runner '%s': %w", id, res.Error)
+	}
+
+	return &runner, nil
 }
 
 func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQueryParams) ([]models.Runner, int, error) {
@@ -44,33 +68,24 @@ func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQ
 		return runnersList, 0, nil
 	}
 
-	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to fetch list of runners: %w", err)
+	res := r.db.Find(&runnersList)
+	if res.Error != nil {
+		return nil, 0, fmt.Errorf("failed to fetch list of runners: %w", res.Error)
 	}
 
-	for _, configMap := range configMaps.Items {
-		// TODO: we don't currently have a way to identify what is a Runner configmap so I'm checking if it has an Image field
-		// This will be changed when runners will live in a separate namespace
-		if configMap.Data["image"] != "" {
-			cm := models.Runner{
-				Name:   configMap.Data["name"],
-				Image:  configMap.Data["image"],
-				GitURL: configMap.Data["gitURL"],
-				Branch: configMap.Data["branch"],
+	var authorised []models.Runner
+	if slices.Contains(authList, "*") {
+		authorised = runnersList
+	} else {
+		for _, runner := range runnersList {
+			if slices.Contains(authList, runner.ID.String()) {
+				authorised = append(authorised, runner)
 			}
-			if authList[0] != "*" {
-				if slices.Contains(authList, configMap.Data["name"]) {
-					runnersList = append(runnersList, cm)
-				}
-				continue
-			}
-			runnersList = append(runnersList, cm)
 		}
 	}
 
 	var filtered []models.Runner
-	for _, runner := range runnersList {
+	for _, runner := range authorised {
 		if params.Name != "" && !strings.Contains(strings.ToLower(runner.Name), strings.ToLower(params.Name)) {
 			continue
 		}
@@ -94,213 +109,196 @@ func (r *RunnerServiceImpl) ListRunners(authList []string, params models.RunnerQ
 	return filtered, total, nil
 }
 
-func (r *RunnerServiceImpl) GetRunner(name string) (*models.Runner, error) {
-	configMap, err := helpers.GetConfigMap(r.config.Kube, name)
-
+func (r *RunnerServiceImpl) GetRunner(id uuid.UUID) (*models.Runner, error) {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("runner '%s': %w", name, err)
+		return nil, err
 	}
 
-	if configMap.Data["image"] == "" {
-		return nil, fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
+	// never return the git token value to API clients
+	if runner.TokenEncrypted != "" {
+		runner.Token = "************"
 	}
 
-	var runnerData models.Runner
-	b, _ := json.Marshal(configMap.Data)
-	_ = json.Unmarshal(b, &runnerData)
-
-	tokenObjName := name + "-token"
-	token, err := r.GetSecret(tokenObjName)
+	secret, err := r.GetSecret(id)
 	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("runner '%s' git repo token: %w", name, err)
-		}
-	} else {
-		runnerData.Token = token["token"]
+		return nil, fmt.Errorf("runner '%s' secrets: %w", id, err)
 	}
+	runner.Secret = secret
 
-	secretCleared, err := r.GetSecret(name)
-	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("runner '%s' secrets: %w", name, err)
-		}
-	} else {
-		runnerData.Secret = secretCleared
-	}
-
-	return &runnerData, nil
+	return runner, nil
 }
 
-func (r *RunnerServiceImpl) CreateRunner(runner models.Runner) (*models.Runner, error) {
-	err := helpers.ValidateK8sConfigMapName(runner.Name)
+func (r *RunnerServiceImpl) GetRunnerForExecution(id uuid.UUID) (*models.Runner, error) {
+	runner, err := r.getRunnerByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if runner.TokenEncrypted != "" {
+		token, err := helpers.DecryptSecret(r.config.SecretsKey, runner.TokenEncrypted)
+		if err != nil {
+			return nil, fmt.Errorf("runner '%s' git repo token: %w", id, err)
+		}
+		runner.Token = token
+	}
+
+	var secrets []models.RunnerSecret
+	if err := r.db.Where("runner_id = ?", runner.ID).Find(&secrets).Error; err != nil {
+		return nil, fmt.Errorf("failed to get secrets for runner '%s': %w", id, err)
+	}
+
+	secretMap := make(map[string]string)
+	for _, s := range secrets {
+		value, err := helpers.DecryptSecret(r.config.SecretsKey, s.ValueEncrypted)
+		if err != nil {
+			return nil, fmt.Errorf("runner '%s' secret '%s': %w", id, s.Key, err)
+		}
+		secretMap[s.Key] = value
+	}
+	runner.Secret = secretMap
+
+	return runner, nil
+}
+
+func (r *RunnerServiceImpl) CreateRunner(meta models.AuditMetadata, runner models.Runner) (*models.Runner, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "runners", AuditTarget("name", runner.Name))
+	defer func() { r.auditService.CreateAudit(audit) }()
+
+	err := helpers.ValidateK8sObjName(runner.Name)
 	if err != nil {
 		return nil, fmt.Errorf("runner '%s': %w",
 			runner.Name,
 			ErrSvcObjNameK8sConfMap)
 	}
 
-	b, _ := json.Marshal(runner)
-	var data map[string]string
-	_ = json.Unmarshal(b, &data)
-	delete(data, "token")
-	delete(data, "secret")
-
-	if data["branch"] == "" {
-		data["branch"] = "main"
+	if runner.Branch == "" {
+		runner.Branch = "main"
 	}
 
-	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "create")
-	if err != nil {
-		if k8sErrors.IsAlreadyExists(err) {
-			return nil, fmt.Errorf("runner '%s': %w", runner.Name, ErrSvcObjExists)
-		}
-		return nil, fmt.Errorf("runner '%s': %w", runner.Name, err)
+	newRunner := models.Runner{
+		Name:   runner.Name,
+		Image:  runner.Image,
+		GitURL: runner.GitURL,
+		Branch: runner.Branch,
 	}
 
-	// runner contains two types of secrets: git repo token and custom secrets, to be stored
-	// in separate k8s secrets. token will be stored under runner name + token, secrets as runner name.
 	if runner.Token != "" {
-		tokenObjName := runner.Name + "-token"
-		token := make(map[string]string)
-		token["token"] = runner.Token
-		_, err = helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, "create")
-
+		tokenEncrypted, err := helpers.EncryptSecret(r.config.SecretsKey, runner.Token)
 		if err != nil {
 			return nil, fmt.Errorf("runner '%s' create git repo token: %w", runner.Name, err)
 		}
+		newRunner.TokenEncrypted = tokenEncrypted
+	}
+
+	res := r.db.Create(&newRunner)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
+			return nil, fmt.Errorf("runner '%s': %w", runner.Name, ErrSvcObjExists)
+		}
+		return nil, fmt.Errorf("runner '%s': %w", runner.Name, res.Error)
 	}
 
 	if runner.Secret != nil {
-		_, err = r.UpdateSecret(runner.Name, runner.Secret)
-
-		if err != nil {
+		if _, err := r.updateSecret(newRunner.ID, runner.Secret); err != nil {
 			return nil, fmt.Errorf("runner '%s' secrets update: %w", runner.Name, err)
 		}
 	}
 
-	runnerData, err := r.GetRunner(runner.Name)
+	result, err := r.GetRunner(newRunner.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get runner '%s': %w", runner.Name, err)
+		return nil, err
 	}
-	return runnerData, err
+
+	audit.EventTarget = AuditTarget("name", result.Name, "id", result.ID.String())
+	audit.Status = "success"
+	return result, nil
 }
 
-func (r *RunnerServiceImpl) UpdateRunner(runner models.Runner) (*models.Runner, error) {
-	_, err := helpers.GetConfigMap(r.config.Kube, runner.Name)
+func (r *RunnerServiceImpl) UpdateRunner(meta models.AuditMetadata, id uuid.UUID, runner models.Runner) (*models.Runner, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "runners", AuditTarget("id", id.String()))
+	defer func() { r.auditService.CreateAudit(audit) }()
+
+	current, err := r.getRunnerByID(id)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("runner '%s': %w", runner.Name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("get runner '%s': %w", runner.Name, err)
+		return nil, err
 	}
 
-	b, _ := json.Marshal(runner)
-	var data map[string]string
-	_ = json.Unmarshal(b, &data)
-	delete(data, "token")
-	delete(data, "secret")
-
-	_, err = helpers.CreateOrUpdateConfigMap(r.config.Kube, data, "update")
-	if err != nil {
-		return nil, fmt.Errorf("runner '%s': %w", runner.Name, err)
+	current.Image = runner.Image
+	current.GitURL = runner.GitURL
+	if runner.Branch != "" {
+		current.Branch = runner.Branch
 	}
 
-	tokenObjName := runner.Name + "-token"
-	if runner.Token != "" && runner.Token != "************" {
-		token := make(map[string]string)
-		token["token"] = runner.Token
-		operation := "update"
-		// default operation is 'update', try to get the Secret first: if it's not found we need to create it
-		// e.g. Someone created a Task without a secret and is adding one with update
-		_, err = r.GetSecret(tokenObjName)
+	switch runner.Token {
+	case "************":
+		// unchanged, keep the stored token
+	case "":
+		current.TokenEncrypted = ""
+	default:
+		tokenEncrypted, err := helpers.EncryptSecret(r.config.SecretsKey, runner.Token)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
-				operation = "create"
-			} else {
-				return nil, fmt.Errorf("runner '%s' create git repo token: %w", runner.Name, err)
-			}
+			return nil, fmt.Errorf("runner '%s' update git repo token: %w", current.Name, err)
 		}
-		_, err := helpers.CreateOrUpdateSecret(r.config.Kube, tokenObjName, token, operation)
-		if err != nil {
-			return nil, fmt.Errorf("runner '%s' update git repo token: %w", runner.Name, err)
-		}
-	} else if runner.Token == "" {
-		err = helpers.DeleteSecret(r.config.Kube, tokenObjName)
-		if err != nil && !k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("runner '%s' delete git repo token: %w", runner.Name, err)
-		}
+		current.TokenEncrypted = tokenEncrypted
+	}
+
+	res := r.db.Model(&models.Runner{}).Where("id = ?", current.ID).Updates(map[string]interface{}{
+		"image":           current.Image,
+		"git_url":         current.GitURL,
+		"branch":          current.Branch,
+		"token_encrypted": current.TokenEncrypted,
+	})
+	if res.Error != nil {
+		return nil, fmt.Errorf("runner '%s': %w", runner.Name, res.Error)
 	}
 
 	if runner.Secret != nil {
-		_, err = r.UpdateSecret(runner.Name, runner.Secret)
-
-		if err != nil {
-			return nil, fmt.Errorf("runner '%s' update secrets: %w", runner.Name, err)
+		if _, err := r.updateSecret(id, runner.Secret); err != nil {
+			return nil, fmt.Errorf("runner '%s' update secrets: %w", id, err)
 		}
 	}
 
-	updatedRunner, err := r.GetRunner(runner.Name)
+	result, err := r.GetRunner(id)
 	if err != nil {
-		return nil, fmt.Errorf("get runner '%s': %w", runner.Name, err)
+		return nil, err
 	}
-	return updatedRunner, nil
+
+	audit.EventTarget = AuditTarget("name", result.Name, "id", id.String())
+	audit.Status = "success"
+	return result, nil
 }
 
-func (r *RunnerServiceImpl) DeleteRunner(name string) error {
-	configMap, err := helpers.GetConfigMap(r.config.Kube, name)
+func (r *RunnerServiceImpl) DeleteRunner(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "runners", AuditTarget("id", id.String()))
+	defer func() { r.auditService.CreateAudit(audit) }()
 
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return fmt.Errorf("runner '%s': %w", name, err)
-	}
-
-	if configMap.Data["image"] == "" {
-		return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
-	}
-
-	configMaps, err := helpers.ListConfigMaps(r.config.Kube)
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
 		return err
 	}
 
-	// Cheching for tasks associated to the runner before deleting it.
-	for _, configMap := range configMaps.Items {
-		runnerName := configMap.Data["runner"]
-		if runnerName == name {
-			return fmt.Errorf("runner is bound to task: %s , delete that first: %w", configMap.Data["name"], ErrSvcObjInUse)
-		}
-	}
-	err = helpers.DeleteConfigMap(r.config.Kube, name)
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return fmt.Errorf("runner '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return fmt.Errorf("runner '%s': %w", name, err)
+	audit.EventTarget = AuditTarget("name", runner.Name, "id", runner.ID.String())
+
+	// Tasks live in the database and reference runners by UUID.
+	var boundTask models.Task
+	if err := r.db.Where("runner_id = ?", id).First(&boundTask).Error; err == nil {
+		return fmt.Errorf("runner is bound to task: %s , delete that first: %w", boundTask.Name, ErrSvcObjInUse)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
 	}
 
-	err = helpers.DeleteSecret(r.config.Kube, name)
-	if err != nil && !k8sErrors.IsNotFound(err) {
-		return fmt.Errorf("runner '%s' secrets: %w", name, err)
+	if err := r.db.Where("runner_id = ?", runner.ID).Delete(&models.RunnerSecret{}).Error; err != nil {
+		return fmt.Errorf("runner '%s' secrets: %w", id, err)
 	}
 
+	res := r.db.Delete(&models.Runner{}, "id = ?", runner.ID)
+	if res.Error != nil {
+		return fmt.Errorf("runner '%s': %w", id, res.Error)
+	}
+
+	audit.Status = "success"
 	return nil
-}
-
-func (r *RunnerServiceImpl) GetAdminGroups(secretName string) (string, error) {
-	secret, err := helpers.GetSecret(r.config.Kube, secretName)
-
-	if err != nil {
-		return "", fmt.Errorf("secret '%s': %w", secretName, err)
-	}
-
-	accessGroups := secret.Data["accessGroups"]
-
-	return string(accessGroups), nil
 }
 
 func (r *RunnerServiceImpl) ListAllJobs() ([]models.Job, error) {
@@ -326,83 +324,122 @@ func (r *RunnerServiceImpl) ListAllJobs() ([]models.Job, error) {
 	return jobsRet, nil
 }
 
-func (r *RunnerServiceImpl) GetSecret(name string) (map[string]string, error) {
+func (r *RunnerServiceImpl) GetSecret(id uuid.UUID) (map[string]string, error) {
 	secretCleaned := make(map[string]string)
 
-	secret, err := helpers.GetSecret(r.config.Kube, name)
-
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get secret '%s': %w", name, err)
+		return nil, err
 	}
 
-	for key := range secret.Data {
-		secretCleaned[key] = "************"
+	var secrets []models.RunnerSecret
+	if err := r.db.Where("runner_id = ?", runner.ID).Find(&secrets).Error; err != nil {
+		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", id, err)
 	}
+
+	for _, s := range secrets {
+		secretCleaned[s.Key] = "************"
+	}
+
 	return secretCleaned, nil
 }
 
-func (r *RunnerServiceImpl) UpdateSecret(name string, secret map[string]string) (map[string]string, error) {
-	secretCleaned := make(map[string]string)
-	secretCurrent := make(map[string]string)
-	var operation string
+func (r *RunnerServiceImpl) UpdateSecret(meta models.AuditMetadata, id uuid.UUID, secret map[string]string) (map[string]string, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update_secret", "runners", AuditTarget("id", id.String()))
+	defer func() { r.auditService.CreateAudit(audit) }()
 
-	secretObj, err := helpers.GetSecret(r.config.Kube, name)
-	if err != nil && !k8sErrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get secret '%s': %w", name, err)
-	}
-	// converting k8s secret from v1.Secret into map[string]string
-
-	if secretObj != nil {
-		for k, v := range secretObj.Data {
-			secretCurrent[k] = string(v)
-		}
-
-		operation = "update"
-	} else {
-		operation = "create"
+	if runner, err := r.getRunnerByID(id); err == nil {
+		audit.EventTarget = AuditTarget("name", runner.Name, "id", id.String())
 	}
 
-	for k, v := range secret {
-		v2, ok := secretCurrent[k]
-
-		if v != "" && v != v2 {
-			if v != "************" {
-				secretCurrent[k] = v
-			}
-		} else if v == "" && ok {
-			delete(secretCurrent, k)
-		}
+	updatedSecret, err := r.updateSecret(id, secret)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(secretCurrent) != 0 {
-		secretNew, err := helpers.CreateOrUpdateSecret(r.config.Kube, name, secretCurrent, operation)
-		if err != nil {
-			return secretCleaned, fmt.Errorf("failed to update secret '%s': %w", name, err)
-		}
-
-		for key := range secretNew.Data {
-			secretCleaned[key] = "************"
-		}
-		return secretCleaned, nil
-	} else {
-		err := helpers.DeleteSecret(r.config.Kube, name)
-		if err != nil {
-			return secretCleaned, fmt.Errorf("failed to delete secret '%s': %w", name, err)
-		}
-		return secretCleaned, nil
-	}
+	audit.Status = "success"
+	return updatedSecret, nil
 }
 
-func (r *RunnerServiceImpl) DeleteSecret(name string) error {
-
-	_, err := r.GetRunner(name)
+func (r *RunnerServiceImpl) updateSecret(id uuid.UUID, secret map[string]string) (map[string]string, error) {
+	runner, err := r.getRunnerByID(id)
 	if err != nil {
-		return fmt.Errorf("runner %s not found: %w", name, err)
+		return nil, err
 	}
 
-	err = helpers.DeleteSecret(r.config.Kube, name)
-	if err != nil && !k8sErrors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete secret '%s': %w", name, err)
+	var currentSecrets []models.RunnerSecret
+	if err := r.db.Where("runner_id = ?", runner.ID).Find(&currentSecrets).Error; err != nil {
+		return nil, fmt.Errorf("failed to get secret for runner '%s': %w", id, err)
+	}
+
+	currentMap := make(map[string]models.RunnerSecret, len(currentSecrets))
+	for _, s := range currentSecrets {
+		currentMap[s.Key] = s
+	}
+
+	for key, value := range secret {
+		existing, ok := currentMap[key]
+
+		switch {
+		case value == "************":
+			// unchanged placeholder, keep the stored value
+		case value == "":
+			if ok {
+				if err := r.db.Delete(&existing).Error; err != nil {
+					return nil, fmt.Errorf("failed to delete secret '%s' for runner '%s': %w", key, id, err)
+				}
+			}
+		default:
+			valueEncrypted, err := helpers.EncryptSecret(r.config.SecretsKey, value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encrypt secret '%s' for runner '%s': %w", key, id, err)
+			}
+
+			if ok {
+				existing.ValueEncrypted = valueEncrypted
+				if err := r.db.Save(&existing).Error; err != nil {
+					return nil, fmt.Errorf("failed to update secret '%s' for runner '%s': %w", key, id, err)
+				}
+			} else {
+				newSecret := models.RunnerSecret{
+					RunnerID:       runner.ID,
+					Key:            key,
+					ValueEncrypted: valueEncrypted,
+				}
+				if err := r.db.Create(&newSecret).Error; err != nil {
+					return nil, fmt.Errorf("failed to create secret '%s' for runner '%s': %w", key, id, err)
+				}
+			}
+		}
+	}
+
+	return r.GetSecret(id)
+}
+
+func (r *RunnerServiceImpl) DeleteSecret(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete_secret", "runners", AuditTarget("id", id.String()))
+	defer func() { r.auditService.CreateAudit(audit) }()
+
+	if runner, err := r.getRunnerByID(id); err == nil {
+		audit.EventTarget = AuditTarget("name", runner.Name, "id", id.String())
+	}
+
+	if err := r.deleteSecret(id); err != nil {
+		return err
+	}
+
+	audit.Status = "success"
+	return nil
+}
+
+func (r *RunnerServiceImpl) deleteSecret(id uuid.UUID) error {
+	runner, err := r.getRunnerByID(id)
+	if err != nil {
+		return fmt.Errorf("runner %s not found: %w", id, err)
+	}
+
+	if err := r.db.Where("runner_id = ?", runner.ID).Delete(&models.RunnerSecret{}).Error; err != nil {
+		return fmt.Errorf("failed to delete secret '%s': %w", id, err)
 	}
 
 	return nil

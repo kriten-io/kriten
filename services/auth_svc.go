@@ -17,27 +17,30 @@ import (
 	"github.com/kriten-io/kriten/models"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
 
 type AuthService interface {
-	Login(*models.Credentials) (string, int, error)
+	Login(models.AuditMetadata, *models.Credentials) (string, int, error)
 	Refresh(string) (string, int, error)
 	ChangePassword(string, *models.ChangePassword) error
 	IsAutorised(*models.Authorization) (bool, error)
 	GetAuthorizationList(*models.Authorization) ([]string, error)
+	GetJobTaskID(uuid.UUID) (uuid.UUID, error)
 	ValidateAPIToken(string) (models.User, error)
-	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, string, error)
-	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, string, error)
+	ValidateWebhookSignatureInfraHub(string, string, string, string, []byte) (models.User, uuid.UUID, error)
+	ValidateWebhookSignatureCommon(string, string, []byte) (models.User, uuid.UUID, error)
 }
 
 type AuthServiceImpl struct {
-	db          *gorm.DB
-	UserService UserService
-	RoleService RoleService
-	config      config.Config
+	db           *gorm.DB
+	UserService  UserService
+	RoleService  RoleService
+	config       config.Config
+	auditService AuditService
 }
 
 func NewAuthService(
@@ -45,18 +48,25 @@ func NewAuthService(
 	us UserService,
 	rls RoleService,
 	database *gorm.DB,
+	als AuditService,
 ) AuthService {
 	return &AuthServiceImpl{
-		config:      config,
-		UserService: us,
-		RoleService: rls,
-		db:          database,
+		config:       config,
+		UserService:  us,
+		RoleService:  rls,
+		db:           database,
+		auditService: als,
 	}
 }
 
 // Login - TODO: This function is getting very crowded
 // might need to be refactored in the future.
-func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, error) {
+func (a *AuthServiceImpl) Login(meta models.AuditMetadata, credentials *models.Credentials) (string, int, error) {
+	audit := a.auditService.InitialiseAuditLog(meta, "login", "authentication", AuditTarget("username", credentials.Username, "provider", credentials.Provider))
+	audit.UserName = credentials.Username
+	audit.Provider = credentials.Provider
+	defer func() { a.auditService.CreateAudit(audit) }()
+
 	var user models.User
 	var err error
 
@@ -74,17 +84,10 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		if err != nil {
 			return "", -1, fmt.Errorf("failed to authenticate: %w", err)
 		}
-		_, err = a.UserService.CreateUser(models.User{
-			Username: credentials.Username,
-			Provider: credentials.Provider,
-		})
-		if err != nil && !strings.Contains(err.Error(), "ERROR: duplicate key value violates unique constraint") {
+		user, err = a.UserService.EnsureUser(credentials.Username, credentials.Provider)
+		if err != nil {
 			log.Println(err.Error())
 			return "", -1, fmt.Errorf("failed to create ldap user into local user db: %w", err)
-		}
-		user, err = a.UserService.GetByUsernameAndProvider(credentials.Username, credentials.Provider)
-		if err != nil {
-			return "", -1, fmt.Errorf("failed to get user credentials: %w", err)
 		}
 	} else {
 		err := errors.New("provider does not exist")
@@ -96,7 +99,8 @@ func (a *AuthServiceImpl) Login(credentials *models.Credentials) (string, int, e
 		log.Println(err)
 		return "", -1, fmt.Errorf("failed to create token: %w", err)
 	}
-
+	audit.UserID = user.ID
+	audit.Status = "success"
 	return token, a.config.JWT.ExpirySeconds, nil
 }
 
@@ -139,9 +143,7 @@ func (a *AuthServiceImpl) ChangePassword(tokenStr string, creds *models.ChangePa
 		return errors.New("incorrect current password")
 	}
 
-	user.Password = creds.NewPassword
-
-	_, err = a.UserService.UpdateUser(user)
+	_, err = a.UserService.SetPassword(user, creds.NewPassword)
 	if err != nil {
 		return fmt.Errorf("failed to update user %s password in DB: %w", user.Username, err)
 	}
@@ -186,11 +188,11 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	msgTimestamp string,
 	signature string,
 	body []byte,
-) (models.User, string, error) {
+) (models.User, uuid.UUID, error) {
 	// Splitting the signature to get the to remove prepended "v1," from InfraHub
 	split := strings.Split(signature, ",")
 	if len(split) != 2 {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 	signature = split[1]
 	data := []byte(fmt.Sprintf("%s.%s.", msgID, msgTimestamp))
@@ -199,11 +201,11 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
 	// checking if there's any result
 	if res.RowsAffected == 0 {
-		return models.User{}, "", errors.New("invalid webhook")
+		return models.User{}, uuid.Nil, errors.New("invalid webhook")
 	}
 	// checking if the signature is valid
 	// Validating the signature
@@ -213,30 +215,30 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureInfraHub(
 	expectedSignature := base64.StdEncoding.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 
 	var user models.User
 	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
-	return user, webhook.Task, nil
+	return user, webhook.TaskID, nil
 }
 
 func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 	id string,
 	signature string,
 	body []byte,
-) (models.User, string, error) {
+) (models.User, uuid.UUID, error) {
 	var webhook models.Webhook
 	res := a.db.Where("id = ?", id).Find(&webhook)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
 	// checking if there's any result
 	if res.RowsAffected == 0 {
-		return models.User{}, "", errors.New("invalid webhook")
+		return models.User{}, uuid.Nil, errors.New("invalid webhook")
 	}
 	// checking if the signature is valid
 	// Validating the signature
@@ -246,15 +248,15 @@ func (a *AuthServiceImpl) ValidateWebhookSignatureCommon(
 	expectedSignature := hex.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return models.User{}, "", errors.New("invalid signature")
+		return models.User{}, uuid.Nil, errors.New("invalid signature")
 	}
 
 	var user models.User
 	res = a.db.Where("id = ?", webhook.Owner).Find(&user)
 	if res.Error != nil {
-		return models.User{}, "", res.Error
+		return models.User{}, uuid.Nil, res.Error
 	}
-	return user, webhook.Task, nil
+	return user, webhook.TaskID, nil
 }
 
 func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) {
@@ -279,14 +281,14 @@ func (a *AuthServiceImpl) IsAutorised(auth *models.Authorization) (bool, error) 
 	for i := range roles {
 		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource &&
-			(len(role.Resource_Names) > 0 && slices.Contains(role.Resource_Names, "*") ||
-				slices.Contains(role.Resource_Names, auth.ResourceName)) &&
+			(len(role.Resource_IDs) > 0 && slices.Contains(role.Resource_IDs, "*") ||
+				slices.Contains(role.Resource_IDs, auth.ResourceName)) &&
 			(role.Access == auth.Access || role.Access == "write") {
 			return true, nil
 		}
 		// permission to run tasks gives also permissions to read associated jobs and tasks
 		if (auth.Resource == "jobs" || auth.Resource == "tasks") && auth.Access == "read" &&
-			(slices.Contains(role.Resource_Names, auth.ResourceName) || slices.Contains(role.Resource_Names, "*")) &&
+			(slices.Contains(role.Resource_IDs, auth.ResourceName) || slices.Contains(role.Resource_IDs, "*")) &&
 			role.Resource == "tasks" && role.Access == "execute" {
 			return true, nil
 		}
@@ -306,16 +308,30 @@ func (a *AuthServiceImpl) GetAuthorizationList(auth *models.Authorization) ([]st
 	for i := range roles {
 		role := &roles[i]
 		if role.Resource == "*" || role.Resource == auth.Resource {
-			if slices.Contains(role.Resource_Names, "*") {
+			if slices.Contains(role.Resource_IDs, "*") {
 				return []string{"*"}, nil
 			}
-			authList = append(authList, role.Resource_Names...)
+			authList = append(authList, role.Resource_IDs...)
 		}
 		if auth.Resource == "jobs" {
 			if role.Resource == "tasks" && role.Access == "execute" {
-				authList = append(authList, role.Resource_Names...)
+				authList = append(authList, role.Resource_IDs...)
 			}
 		}
 	}
 	return authList, nil
+}
+
+func (a *AuthServiceImpl) GetJobTaskID(id uuid.UUID) (uuid.UUID, error) {
+	var job models.Job
+
+	res := a.db.Select("task_id").Where("id = ?", id).First(&job)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return uuid.Nil, fmt.Errorf("job '%s': %w", id, ErrSvcObjNotFound)
+		}
+		return uuid.Nil, fmt.Errorf("job '%s': %w", id, res.Error)
+	}
+
+	return job.TaskID, nil
 }

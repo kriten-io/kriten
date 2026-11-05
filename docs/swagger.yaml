@@ -73,22 +73,6 @@ definitions:
     - provider
     - username
     type: object
-  models.CronJob:
-    properties:
-      disable:
-        type: boolean
-      extra_vars:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      owner:
-        type: string
-      schedule:
-        type: string
-      task:
-        type: string
-    type: object
   models.Group:
     properties:
       created_at:
@@ -119,11 +103,13 @@ definitions:
     properties:
       access:
         type: string
+      id:
+        type: string
       name:
         type: string
       resource:
         type: string
-      resource_names:
+      resource_ids:
         items:
           type: string
         type: array
@@ -143,9 +129,13 @@ definitions:
         type: integer
       completion_time:
         type: string
+      created_at:
+        type: string
       failed:
         type: integer
       failed_reason:
+        type: string
+      id:
         type: string
       json_data:
         additionalProperties: true
@@ -160,9 +150,17 @@ definitions:
         type: string
       stdout:
         type: string
+      task_id:
+        type: string
+      task_name:
+        type: string
+      updated_at:
+        type: string
     type: object
   models.JobMessage:
     properties:
+      id:
+        type: string
       message:
         type: string
       name:
@@ -191,7 +189,7 @@ definitions:
         type: string
       resource:
         type: string
-      resource_names:
+      resource_ids:
         items:
           type: string
         type: array
@@ -202,7 +200,7 @@ definitions:
     - access
     - name
     - resource
-    - resource_names
+    - resource_ids
     type: object
   models.RoleGroup:
     properties:
@@ -217,7 +215,11 @@ definitions:
     properties:
       branch:
         type: string
+      created_at:
+        type: string
       gitURL:
+        type: string
+      id:
         type: string
       image:
         type: string
@@ -229,28 +231,72 @@ definitions:
         type: object
       token:
         type: string
+      updated_at:
+        type: string
     required:
-    - gitURL
     - image
     - name
+    type: object
+  models.Scheduler:
+    properties:
+      created_at:
+        type: string
+      cron_expr:
+        type: string
+      description:
+        type: string
+      enabled:
+        type: boolean
+      extra_vars:
+        additionalProperties: {}
+        type: object
+      id:
+        type: string
+      last_error:
+        type: string
+      last_run_at:
+        type: string
+      name:
+        type: string
+      next_run_at:
+        type: string
+      owner:
+        type: string
+      task_id:
+        type: string
+      task_name:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - cron_expr
+    - name
+    - task_id
     type: object
   models.Task:
     properties:
       command:
         type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
       name:
         type: string
-      runner:
+      runner_id:
         type: string
       schema:
         additionalProperties: {}
         type: object
       synchronous:
         type: boolean
+      updated_at:
+        type: string
     required:
     - command
     - name
-    - runner
     type: object
   models.User:
     properties:
@@ -292,7 +338,7 @@ definitions:
         type: string
       secret:
         type: string
-      task:
+      task_id:
         type: string
       updated_at:
         type: string
@@ -310,7 +356,7 @@ info:
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   termsOfService: http://swagger.io/terms/
   title: Swagger Kriten
-  version: v1.0.0
+  version: v1.1.0
 paths:
   /api-tokens:
     get:
@@ -601,196 +647,6 @@ paths:
       summary: Change Local Password
       tags:
       - authenticate
-  /cronjobs:
-    get:
-      consumes:
-      - application/json
-      description: List all Cronjobs
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.CronJob'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: List all Cronjobs
-      tags:
-      - cronjobs
-    post:
-      consumes:
-      - application/json
-      description: Add a job to the cluster
-      parameters:
-      - description: New cronjob
-        in: body
-        name: cronjob
-        required: true
-        schema:
-          $ref: '#/definitions/models.CronJob'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Create a new job
-      tags:
-      - cronjobs
-  /cronjobs/{name}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete by CronJob ID
-      parameters:
-      - description: CronJob name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ResponseMessage'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Delete a CronJob
-      tags:
-      - cronjobs
-    get:
-      consumes:
-      - application/json
-      description: Get information about a specific job
-      parameters:
-      - description: CronJob  name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get job info
-      tags:
-      - cronjobs
-    patch:
-      consumes:
-      - application/json
-      description: Update a cronjob in the cluster
-      parameters:
-      - description: Update CronJob
-        in: body
-        name: cronjob
-        required: true
-        schema:
-          $ref: '#/definitions/models.CronJob'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.CronJob'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Update a cronjob
-      tags:
-      - cronjobs
-  /cronjobs/{name}/schema:
-    get:
-      consumes:
-      - application/json
-      description: Get schema for the job info and input parameters
-      parameters:
-      - description: Task  name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/helpers.HTTPError'
-      security:
-      - Bearer: []
-      summary: Get schema
-      tags:
-      - cronjobs
   /groups:
     get:
       consumes:
@@ -973,13 +829,13 @@ paths:
       - application/json
       description: Remove roles from group
       parameters:
-      - description: Roles to be removed
+      - description: Role IDs to be removed
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupRole'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -1053,13 +909,13 @@ paths:
       - application/json
       description: Add roles to group
       parameters:
-      - description: Roles to be added
+      - description: Role IDs to be added
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupRole'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -1096,13 +952,13 @@ paths:
       - application/json
       description: Remove users from group
       parameters:
-      - description: Users to be removed
+      - description: User IDs to be removed
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupUser'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -1176,13 +1032,13 @@ paths:
       - application/json
       description: Add users to group
       parameters:
-      - description: Users to be added
+      - description: User IDs to be added
         in: body
         name: group
         required: true
         schema:
           items:
-            $ref: '#/definitions/models.GroupUser'
+            type: string
           type: array
       - description: Group ID
         in: path
@@ -1261,15 +1117,15 @@ paths:
       summary: List all jobs
       tags:
       - jobs
-  /jobs/{name}:
+  /jobs/{id}:
     get:
       consumes:
       - application/json
       description: Get information about a specific job
       parameters:
-      - description: Job Name
+      - description: Job ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1278,7 +1134,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Task'
+            $ref: '#/definitions/models.Job'
         "400":
           description: Bad Request
           schema:
@@ -1296,24 +1152,24 @@ paths:
       summary: Get job info
       tags:
       - jobs
-  /jobs/{name}/log:
+  /jobs/{id}/log:
     get:
       consumes:
       - application/json
       description: Get a job log as text
       parameters:
-      - description: Job  name
+      - description: Job ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Job log
           schema:
-            $ref: '#/definitions/models.Task'
+            type: string
         "400":
           description: Bad Request
           schema:
@@ -1699,15 +1555,15 @@ paths:
       summary: Create a new runner
       tags:
       - runners
-  /runners/{name}:
+  /runners/{id}:
     delete:
       consumes:
       - application/json
       description: Delete by runner name
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1739,9 +1595,9 @@ paths:
       - application/json
       description: Get information about a specific runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1804,15 +1660,15 @@ paths:
       summary: Update a runner
       tags:
       - runners
-  /runners/{name}/schema:
+  /runners/{id}/schema:
     delete:
       consumes:
       - application/json
       description: Remove secret associated with runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1836,15 +1692,15 @@ paths:
       summary: Delete secret
       tags:
       - runners
-  /runners/{name}/secret:
+  /runners/{id}/secret:
     get:
       consumes:
       - application/json
       description: Update secret associated with runner
       parameters:
-      - description: Runner name
+      - description: Runner ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1872,6 +1728,292 @@ paths:
       summary: Update secret
       tags:
       - runners
+  /schedulers:
+    get:
+      consumes:
+      - application/json
+      description: List own schedulers, or all schedulers for users with schedulers
+        read access
+      parameters:
+      - description: Maximum number of schedulers to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of schedulers to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by name (case insensitive substring)
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Scheduler'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: List schedulers
+      tags:
+      - schedulers
+    post:
+      consumes:
+      - application/json
+      description: Schedule a task with a cron expression. Requires execute access
+        on the task. Extra vars are validated against the task schema.
+      parameters:
+      - description: New scheduler
+        in: body
+        name: scheduler
+        required: true
+        schema:
+          $ref: '#/definitions/models.Scheduler'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Create a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete by scheduler ID
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResponseMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Delete a scheduler
+      tags:
+      - schedulers
+    get:
+      consumes:
+      - application/json
+      description: Get information about a specific scheduler
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Get a scheduler
+      tags:
+      - schedulers
+    put:
+      consumes:
+      - application/json
+      description: Update a scheduler. Name is immutable. Re-validates the cron expression
+        and extra vars.
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated scheduler
+        in: body
+        name: scheduler
+        required: true
+        schema:
+          $ref: '#/definitions/models.Scheduler'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Update a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}/disable:
+    post:
+      consumes:
+      - application/json
+      description: Disable a scheduler so it no longer fires
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Disable a scheduler
+      tags:
+      - schedulers
+  /schedulers/{id}/enable:
+    post:
+      consumes:
+      - application/json
+      description: Enable a scheduler and compute its next run. Re-validates the schedule
+        against the current task schema.
+      parameters:
+      - description: Scheduler ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Scheduler'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/helpers.HTTPError'
+      security:
+      - Bearer: []
+      summary: Enable a scheduler
+      tags:
+      - schedulers
   /tasks:
     get:
       consumes:
@@ -1951,15 +2093,15 @@ paths:
       summary: Create a new task
       tags:
       - tasks
-  /tasks/{name}:
+  /tasks/{id}:
     delete:
       consumes:
       - application/json
       description: Delete by task name
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -1991,9 +2133,9 @@ paths:
       - application/json
       description: Get information about a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -2060,15 +2202,15 @@ paths:
       summary: Update a task
       tags:
       - tasks
-  /tasks/{name}/run:
+  /tasks/{id}/run:
     post:
       consumes:
       - application/json
       description: Run Task
       parameters:
-      - description: Task  name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: Extra vars
@@ -2100,15 +2242,15 @@ paths:
       summary: Run Task
       tags:
       - tasks
-  /tasks/{name}/schema:
+  /tasks/{id}/schema:
     delete:
       consumes:
       - application/json
       description: Remove validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -2141,9 +2283,9 @@ paths:
       - application/json
       description: Get validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
@@ -2176,9 +2318,9 @@ paths:
       - application/json
       description: Add or Update validation schema associated to a specific task
       parameters:
-      - description: Task name
+      - description: Task ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       - description: New schema
@@ -2456,7 +2598,7 @@ paths:
       - Bearer: []
       summary: List own webHooks
       tags:
-      - api_tokens
+      - webhooks
     post:
       consumes:
       - application/json

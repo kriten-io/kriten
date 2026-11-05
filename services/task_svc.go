@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,37 +18,62 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
-
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"gorm.io/gorm"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type TaskExecutor interface {
+	ExecuteTask(string, uuid.UUID, string) (models.Job, error)
+}
+
 type TaskService interface {
+	TaskExecutor
 	ListTasks([]string, models.TaskQueryParams) ([]*models.Task, int, error)
-	GetTask(string) (*models.Task, error)
-	CreateTask(models.Task) (*models.Task, error)
-	UpdateTask(models.Task) (*models.Task, error)
-	DeleteTask(string) error
-	GetSchema(string) (map[string]interface{}, error)
-	DeleteSchema(string) error
-	UpdateSchema(string, map[string]interface{}) (map[string]interface{}, error)
-	RunTask(string, string, string) (models.Job, error)
+	GetTask(uuid.UUID) (*models.Task, error)
+	CreateTask(models.AuditMetadata, models.Task) (*models.Task, error)
+	UpdateTask(models.AuditMetadata, uuid.UUID, models.Task) (*models.Task, error)
+	DeleteTask(models.AuditMetadata, uuid.UUID) error
+	GetSchema(uuid.UUID) (map[string]interface{}, error)
+	DeleteSchema(models.AuditMetadata, uuid.UUID) error
+	UpdateSchema(models.AuditMetadata, uuid.UUID, map[string]interface{}) (map[string]interface{}, error)
+	RunTask(models.AuditMetadata, string, uuid.UUID, string) (models.Job, error)
 }
 
 type TaskServiceImpl struct {
-	WebhookService WebhookService
-	JobService     JobService
-	config         config.Config
+	db            *gorm.DB
+	JobService    JobService
+	RunnerService RunnerService
+	config        config.Config
+	auditService  AuditService
 }
 
-func NewTaskService(ws WebhookService, config config.Config, js JobService) TaskService {
+func NewTaskService(database *gorm.DB, config config.Config, js JobService, rs RunnerService, als AuditService) TaskService {
 	return &TaskServiceImpl{
-		WebhookService: ws,
-		JobService:     js,
-		config:         config,
+		db:            database,
+		JobService:    js,
+		RunnerService: rs,
+		config:        config,
+		auditService:  als,
 	}
+}
+
+// getTaskByID fetches a task model from the database, translating the
+// not found error into the service level error.
+func (t *TaskServiceImpl) getTaskByID(id uuid.UUID) (*models.Task, error) {
+	var task models.Task
+
+	res := t.db.Where("id = ?", id).First(&task)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("task '%s': %w", id, ErrSvcObjNotFound)
+		}
+		return nil, fmt.Errorf("task '%s': %w", id, res.Error)
+	}
+
+	return &task, nil
 }
 
 func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryParams) ([]*models.Task, int, error) {
@@ -58,35 +83,24 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 		return tasks, 0, nil
 	}
 
-	configMaps, err := helpers.ListConfigMaps(t.config.Kube)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to fetch list of tasks: %w", err)
+	res := t.db.Find(&tasks)
+	if res.Error != nil {
+		return nil, 0, fmt.Errorf("failed to fetch list of tasks: %w", res.Error)
 	}
 
-	for _, configMap := range configMaps.Items {
-		runnerName := configMap.Data["runner"]
-		if runnerName != "" {
-			if authList[0] == "*" || slices.Contains(authList, configMap.Data["name"]) {
-				var taskData *models.Task
-				b, _ := json.Marshal(configMap.Data)
-
-				_ = json.Unmarshal(b, &taskData)
-				taskData.Synchronous, _ = strconv.ParseBool(configMap.Data["synchronous"])
-				if configMap.Data["schema"] != "" {
-					var jsonData map[string]interface{}
-					err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
-					if err != nil {
-						return nil, 0, fmt.Errorf("task '%s' schema: %w", configMap.Data["name"], err)
-					}
-					taskData.Schema = jsonData
-				}
-				tasks = append(tasks, taskData)
+	var authorised []*models.Task
+	if slices.Contains(authList, "*") {
+		authorised = tasks
+	} else {
+		for _, task := range tasks {
+			if slices.Contains(authList, task.ID.String()) {
+				authorised = append(authorised, task)
 			}
 		}
-
 	}
+
 	var filtered []*models.Task
-	for _, task := range tasks {
+	for _, task := range authorised {
 		if params.Name != "" && !strings.Contains(strings.ToLower(task.Name), strings.ToLower(params.Name)) {
 			continue
 		}
@@ -108,61 +122,37 @@ func (t *TaskServiceImpl) ListTasks(authList []string, params models.TaskQueryPa
 	}
 
 	return filtered, total, nil
-
 }
 
-func (t *TaskServiceImpl) GetTask(name string) (*models.Task, error) {
-	var taskData models.Task
-	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("task '%s': %w", name, err)
-	}
-	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-	}
-
-	// TODO: this is a temporary solution to return synchronous as a boolean
-	b, _ := json.Marshal(configMap.Data)
-
-	_ = json.Unmarshal(b, &taskData)
-	taskData.Synchronous, _ = strconv.ParseBool(configMap.Data["synchronous"])
-
-	if configMap.Data["schema"] != "" {
-		var jsonData map[string]interface{}
-		err = json.Unmarshal([]byte(configMap.Data["schema"]), &jsonData)
-		if err != nil {
-			return nil, fmt.Errorf("task '%s' schema: %w", name, err)
-		}
-		taskData.Schema = jsonData
-	}
-
-	return &taskData, nil
+func (t *TaskServiceImpl) GetTask(id uuid.UUID) (*models.Task, error) {
+	return t.getTaskByID(id)
 }
 
-func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
-	var jsonData []byte
-	err := helpers.ValidateK8sConfigMapName(task.Name)
+// taskTarget names a task by name and id.
+func taskTarget(task models.Task) string {
+	return AuditTarget("name", task.Name, "id", task.ID.String())
+}
+
+func (t *TaskServiceImpl) CreateTask(meta models.AuditMetadata, task models.Task) (*models.Task, error) {
+	audit := t.auditService.InitialiseAuditLog(meta, "create", "tasks", AuditTarget("name", task.Name))
+	defer func() { t.auditService.CreateAudit(audit) }()
+
+	err := helpers.ValidateK8sObjName(task.Name)
 	if err != nil {
 		return nil, fmt.Errorf("task '%s': %w",
 			task.Name,
 			ErrSvcObjNameK8sConfMap)
 	}
-	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
+	_, err = t.RunnerService.GetRunner(task.RunnerID)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		if errors.Is(err, ErrSvcObjNotFound) {
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.RunnerID, ErrSvcTaskNoRunner)
 		}
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
-	}
-	if runner.Data["image"] == "" {
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.RunnerID, err)
 	}
 
 	if task.Schema != nil {
-		jsonData, err = json.Marshal(task.Schema)
+		jsonData, err := json.Marshal(task.Schema)
 		if err != nil {
 			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 		}
@@ -174,141 +164,131 @@ func (t *TaskServiceImpl) CreateTask(task models.Task) (*models.Task, error) {
 		}
 	}
 
-	// Parsing a models.Task into a map
-	b, _ := json.Marshal(task)
-	var data map[string]string
-	_ = json.Unmarshal(b, &data)
-	data["synchronous"] = strconv.FormatBool(task.Synchronous)
-	data["schema"] = string(jsonData)
-	delete(data, "secret")
+	newTask := models.Task{
+		Schema:      task.Schema,
+		Name:        task.Name,
+		Description: task.Description,
+		RunnerID:    task.RunnerID,
+		Command:     task.Command,
+		Synchronous: task.Synchronous,
+	}
 
-	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "create")
-	if err != nil {
-		if k8sErrors.IsAlreadyExists(err) {
+	res := t.db.Create(&newTask)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
 			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjExists)
 		}
-		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
+		return nil, fmt.Errorf("task '%s': %w", task.Name, res.Error)
 	}
 
-	configuredTask, err := t.GetTask(task.Name)
-	if err != nil {
-		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
-	}
-	return configuredTask, nil
+	audit.EventTarget = taskTarget(newTask)
+	audit.Status = "success"
+	return &newTask, nil
 }
 
-func (t *TaskServiceImpl) UpdateTask(task models.Task) (*models.Task, error) {
-	var jsonData []byte
+func (t *TaskServiceImpl) UpdateTask(meta models.AuditMetadata, id uuid.UUID, task models.Task) (*models.Task, error) {
+	audit := t.auditService.InitialiseAuditLog(meta, "update", "tasks", AuditTarget("id", id.String()))
+	defer func() { t.auditService.CreateAudit(audit) }()
 
-	_, err := helpers.GetConfigMap(t.config.Kube, task.Name)
+	existing, err := t.getTaskByID(id)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': %w", task.Name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
+		return nil, err
 	}
 
-	runner, err := helpers.GetConfigMap(t.config.Kube, task.Runner)
+	_, err = t.RunnerService.GetRunner(task.RunnerID)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		if errors.Is(err, ErrSvcObjNotFound) {
+			return nil, fmt.Errorf("task '%s': runner '%s': %w", existing.Name, task.RunnerID, ErrSvcTaskNoRunner)
 		}
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, err)
-	}
-
-	if runner.Data["image"] == "" {
-		return nil, fmt.Errorf("task '%s': runner '%s': %w", task.Name, task.Runner, ErrSvcTaskNoRunner)
+		return nil, fmt.Errorf("task '%s': runner '%s': %w", existing.Name, task.RunnerID, err)
 	}
 
 	if task.Schema != nil {
-		jsonData, err = json.Marshal(task.Schema)
+		jsonData, err := json.Marshal(task.Schema)
 		if err != nil {
-			return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
+			return nil, fmt.Errorf("task '%s' schema: %w", existing.Name, err)
 		}
 
 		err = ValidateSchema(jsonData)
 		if err != nil {
 			errString := strings.ReplaceAll(err.Error(), "\"", "'")
-			return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
+			return nil, fmt.Errorf("task '%s' schema: %w, %s", existing.Name, ErrSvcTaskSchemaValidation, errString)
 		}
 	}
 
-	// Parsing a models.Task into a map
-	b, _ := json.Marshal(task)
-	var data map[string]string
-	_ = json.Unmarshal(b, &data)
-	data["synchronous"] = strconv.FormatBool(task.Synchronous)
-	data["schema"] = string(jsonData)
+	existing.Schema = task.Schema
+	existing.Description = task.Description
+	existing.RunnerID = task.RunnerID
+	existing.Command = task.Command
+	existing.Synchronous = task.Synchronous
 
-	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
-	if err != nil {
-		return nil, fmt.Errorf("task '%s': %w", task.Name, err)
+	if res := t.db.Save(existing); res.Error != nil {
+		return nil, fmt.Errorf("task '%s': %w", existing.Name, res.Error)
 	}
 
-	configuredTask, err := t.GetTask(task.Name)
-	if err != nil {
-		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
-	}
-	return configuredTask, nil
+	audit.EventTarget = taskTarget(*existing)
+	audit.Status = "success"
+	return existing, nil
 }
 
-func (t *TaskServiceImpl) DeleteTask(name string) error {
-	res, err := t.WebhookService.ListTaskWebhooks(name)
-	if len(res) != 0 {
-		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", name, ErrSvcObjInUse)
-	}
+func (t *TaskServiceImpl) DeleteTask(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := t.auditService.InitialiseAuditLog(meta, "delete", "tasks", AuditTarget("id", id.String()))
+	defer func() { t.auditService.CreateAudit(audit) }()
 
-	err = helpers.DeleteConfigMap(t.config.Kube, name)
+	task, err := t.getTaskByID(id)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return fmt.Errorf("task '%s': %w", name, err)
+		return err
 	}
 
+	audit.EventTarget = taskTarget(*task)
+
+	var webhookCount int64
+	if err := t.db.Model(&models.Webhook{}).Where("task_id = ?", task.ID).Count(&webhookCount).Error; err != nil {
+		return fmt.Errorf("task '%s' webhooks: %w", task.Name, err)
+	}
+	if webhookCount != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated webhooks first: %w", task.Name, ErrSvcObjInUse)
+	}
+
+	var schedulerCount int64
+	if err := t.db.Model(&models.Scheduler{}).Where("task_id = ?", task.ID).Count(&schedulerCount).Error; err != nil {
+		return fmt.Errorf("task '%s' schedulers: %w", task.Name, err)
+	}
+	if schedulerCount != 0 {
+		return fmt.Errorf("cannot delete task %s, please remove associated schedulers first: %w", task.Name, ErrSvcObjInUse)
+	}
+
+	if err := t.db.Delete(task).Error; err != nil {
+		return fmt.Errorf("task '%s': %w", task.Name, err)
+	}
+
+	audit.Status = "success"
 	return nil
 }
 
-func (t *TaskServiceImpl) GetSchema(name string) (map[string]interface{}, error) {
-	var data map[string]any
-
-	configMap, err := helpers.GetConfigMap(t.config.Kube, name)
+func (t *TaskServiceImpl) GetSchema(id uuid.UUID) (map[string]interface{}, error) {
+	task, err := t.getTaskByID(id)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("task '%s': %w", name, err)
-	}
-	if configMap.Data["runner"] == "" {
-		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
+		return nil, err
 	}
 
-	if configMap.Data["schema"] != "" {
-		err = json.Unmarshal([]byte(configMap.Data["schema"]), &data)
-		if err != nil {
-			return nil, fmt.Errorf("task '%s' schema: %w", name, err)
-		}
-	}
-
-	return data, nil
+	return task.Schema, nil
 }
 
-func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{}) (map[string]interface{}, error) {
-	task, err := helpers.GetConfigMap(t.config.Kube, name)
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-		}
-		return nil, fmt.Errorf("task '%s': %w", name, err)
+func (t *TaskServiceImpl) UpdateSchema(meta models.AuditMetadata, id uuid.UUID, schema map[string]interface{}) (map[string]interface{}, error) {
+	audit := t.auditService.InitialiseAuditLog(meta, "update_schema", "tasks", AuditTarget("id", id.String()))
+	defer func() { t.auditService.CreateAudit(audit) }()
 
+	task, err := t.getTaskByID(id)
+	if err != nil {
+		return nil, err
 	}
-	if task.Data["runner"] == "" {
-		return nil, fmt.Errorf("task '%s': %w", name, ErrSvcObjNotFound)
-	}
+
+	audit.EventTarget = taskTarget(*task)
 
 	data, err := json.Marshal(schema)
 	if err != nil {
-		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
+		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
 
 	err = ValidateSchema(data)
@@ -317,35 +297,34 @@ func (t *TaskServiceImpl) UpdateSchema(name string, schema map[string]interface{
 		return nil, fmt.Errorf("task '%s' schema: %w, %s", task.Name, ErrSvcTaskSchemaValidation, errString)
 	}
 
-	task.Data["schema"] = string(data)
-	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, task.Data, "update")
-	if err != nil {
-		return nil, fmt.Errorf("task '%s' schema: %w", name, err)
+	task.Schema = schema
+	if err := t.db.Save(task).Error; err != nil {
+		return nil, fmt.Errorf("task '%s' schema: %w", task.Name, err)
 	}
 
+	audit.Status = "success"
 	return schema, nil
 }
 
-func (t *TaskServiceImpl) DeleteSchema(name string) error {
-	task, err := t.GetTask(name)
+func (t *TaskServiceImpl) DeleteSchema(meta models.AuditMetadata, id uuid.UUID) error {
+	audit := t.auditService.InitialiseAuditLog(meta, "delete_schema", "tasks", AuditTarget("id", id.String()))
+	defer func() { t.auditService.CreateAudit(audit) }()
+
+	task, err := t.getTaskByID(id)
 	if err != nil {
 		return fmt.Errorf("%w", err)
 	}
 
-	if task.Schema == nil {
-		return nil
+	audit.EventTarget = taskTarget(*task)
+
+	if task.Schema != nil {
+		task.Schema = nil
+		if err := t.db.Save(task).Error; err != nil {
+			return fmt.Errorf("task '%s' schema: %w", task.Name, err)
+		}
 	}
 
-	// Parsing a models.Task into a map
-	b, _ := json.Marshal(task)
-	var data map[string]string
-	_ = json.Unmarshal(b, &data)
-	delete(data, "schema")
-	_, err = helpers.CreateOrUpdateConfigMap(t.config.Kube, data, "update")
-	if err != nil {
-		return fmt.Errorf("task '%s' schema: %w", name, err)
-	}
-
+	audit.Status = "success"
 	return nil
 }
 
@@ -371,76 +350,170 @@ func ValidateSchema(schema []byte) error {
 	return nil
 }
 
-func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars string) (models.Job, error) {
+// ValidateExtraVars checks a JSON object string against a task schema.
+// A nil schema accepts any input. The returned error is the raw validation
+// error; callers wrap it with ErrSvcTaskSchemaValidation.
+func ValidateExtraVars(schema map[string]interface{}, extraVars string) error {
+	if schema == nil {
+		return nil
+	}
+
+	schemaData, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+
+	s := new(spec.Schema)
+	_ = json.Unmarshal(schemaData, s)
+
+	input := map[string]interface{}{}
+
+	// JSON data to validate
+	_ = json.Unmarshal([]byte(extraVars), &input)
+
+	// strfmt.Default is the registry of recognized formats
+	return validate.AgainstSchema(s, input, strfmt.Default)
+}
+
+func (t *TaskServiceImpl) RunTask(meta models.AuditMetadata, username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
+	audit := t.auditService.InitialiseAuditLog(meta, "run", "tasks", AuditTarget("id", taskID.String()))
+	defer func() { t.auditService.CreateAudit(audit) }()
+
+	job, err := t.executeTask(username, taskID, extraVars)
+	if err != nil {
+		return models.Job{}, err
+	}
+
+	audit.EventTarget = AuditTarget("name", job.TaskName, "id", taskID.String())
+	audit.Status = "success"
+	return job, nil
+}
+
+func (t *TaskServiceImpl) ExecuteTask(username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
+	return t.executeTask(username, taskID, extraVars)
+}
+
+func (t *TaskServiceImpl) executeTask(username string, taskID uuid.UUID, extraVars string) (models.Job, error) {
 	ctx := context.Background()
 	var jobStatus models.Job
 
-	task, err := helpers.GetConfigMap(t.config.Kube, taskName)
+	task, err := t.getTaskByID(taskID)
 	if err != nil {
 		return jobStatus, err
 	}
-	runnerName := task.Data["runner"]
+	taskName := task.Name
 
-	if task.Data["schema"] != "" {
-		schema := new(spec.Schema)
-		_ = json.Unmarshal([]byte(task.Data["schema"]), schema)
-
-		input := map[string]interface{}{}
-
-		// JSON data to validate
-		_ = json.Unmarshal([]byte(extraVars), &input)
-
-		// strfmt.Default is the registry of recognized formats
-		err = validate.AgainstSchema(schema, input, strfmt.Default)
-		if err != nil {
-			return models.Job{}, fmt.Errorf("task '%s' schema: %w, %s", taskName, ErrSvcTaskSchemaValidation, err)
-		}
+	if err := ValidateExtraVars(task.Schema, extraVars); err != nil {
+		return models.Job{}, fmt.Errorf("task '%s' schema: %w, %s", taskName, ErrSvcTaskSchemaValidation, err)
 	}
 
-	runner, err := helpers.GetConfigMap(t.config.Kube, runnerName)
+	runner, err := t.RunnerService.GetRunnerForExecution(task.RunnerID)
 	if err != nil {
 		return jobStatus, err
 	}
-	runnerImage := runner.Data["image"]
-	gitURL := runner.Data["gitURL"]
-	gitBranch := runner.Data["branch"]
+	runnerImage := runner.Image
+	gitURL := runner.GitURL
+	gitBranch := runner.Branch
 
 	if gitBranch == "" {
 		gitBranch = "main"
 	}
-	tokenObjName := runnerName + "-token"
-	token, err := helpers.GetSecret(t.config.Kube, tokenObjName)
-	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
+
+	// Custom runner secrets are materialised into a short lived Kubernetes
+	// secret referenced by the job pod; it is garbage collected with the job.
+	envSecret := ""
+	if len(runner.Secret) != 0 {
+		envSecret, err = helpers.GenerateName("kriten-run")
+		if err != nil {
 			return jobStatus, err
 		}
-	} else {
-		gitToken := string(token.Data["token"])
-		if gitToken != "" {
-			gitURL = strings.Replace(gitURL, "://", "://"+gitToken+":@", 1)
+		if _, err = helpers.CreateOrUpdateSecret(t.config.Kube, envSecret, runner.Secret, "create"); err != nil {
+			return jobStatus, fmt.Errorf("task '%s' secrets: %w", taskName, err)
 		}
 	}
 
-	jobName, err := helpers.CreateJob(
+	// The git token is kept in a separate secret only referenced by the init
+	// container so that it is never exposed to the task container.
+	tokenSecret := ""
+	if runner.Token != "" && gitURL != "" {
+		tokenSecret, err = helpers.GenerateName("kriten-token")
+		if err != nil {
+			if envSecret != "" {
+				_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+			}
+			return jobStatus, err
+		}
+		token := map[string]string{"GIT_TOKEN": runner.Token}
+		if _, err = helpers.CreateOrUpdateSecret(t.config.Kube, tokenSecret, token, "create"); err != nil {
+			if envSecret != "" {
+				_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+			}
+			return jobStatus, fmt.Errorf("task '%s' git repo token: %w", taskName, err)
+		}
+	}
+
+	job, err := helpers.CreateJob(
 		t.config.Kube,
-		taskName,
-		runnerName,
+		task.ID,
+		task.Name,
+		envSecret,
+		tokenSecret,
 		runnerImage,
 		username,
 		extraVars,
-		task.Data["command"],
+		task.Command,
 		gitURL,
 		gitBranch,
 	)
 
-	jobStatus.Name = jobName
-
 	if err != nil {
+		if envSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+		}
+		if tokenSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, tokenSecret)
+		}
 		return jobStatus, err
 	}
 
-	if task.Data["synchronous"] == "true" {
-		err = wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 20*time.Second, false,
+	jobName := job.Name
+	jobStatus.Name = jobName
+
+	// Tie the secrets lifetime to the job so they are garbage collected.
+	if envSecret != "" {
+		if err := helpers.SetSecretOwnerReference(t.config.Kube, envSecret, job); err != nil {
+			fmt.Println(err)
+		}
+	}
+	if tokenSecret != "" {
+		if err := helpers.SetSecretOwnerReference(t.config.Kube, tokenSecret, job); err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	storedJob, err := t.JobService.StoreJob(models.Job{
+		Name:      jobName,
+		TaskID:    task.ID,
+		TaskName:  taskName,
+		Owner:     username,
+		Status:    "running",
+		StartTime: job.CreationTimestamp.Format(time.UnixDate),
+	})
+	if err != nil {
+		if delErr := helpers.DeleteJob(t.config.Kube, jobName); delErr != nil {
+			fmt.Println(delErr)
+		}
+		if envSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, envSecret)
+		}
+		if tokenSecret != "" {
+			_ = helpers.DeleteSecret(t.config.Kube, tokenSecret)
+		}
+		return jobStatus, fmt.Errorf("task '%s' store job: %w", taskName, err)
+	}
+
+	if task.Synchronous {
+		waitErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 20*time.Second, false,
 			func(conditionCtx context.Context) (done bool, err error) {
 
 				job, err := helpers.GetJob(t.config.Kube, jobName)
@@ -456,10 +529,16 @@ func (t *TaskServiceImpl) RunTask(username string, taskName string, extraVars st
 
 				return false, nil
 			})
+		if waitErr != nil {
+			fmt.Printf("job '%s' wait: %v\n", jobName, waitErr)
+		}
 
-		ret, err := t.JobService.GetJob(username, jobName)
-		return ret, err
+		if err := t.JobService.RefreshJob(storedJob.ID); err != nil {
+			return jobStatus, err
+		}
+
+		return t.JobService.GetJob(storedJob.ID)
 	}
 
-	return jobStatus, nil
+	return storedJob, nil
 }

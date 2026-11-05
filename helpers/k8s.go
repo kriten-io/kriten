@@ -3,27 +3,30 @@ package helpers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/models"
 
+	uuid "github.com/satori/go.uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	k8sConfigMapRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	k8sObjNameRegexValidation = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 )
 
-func ValidateK8sConfigMapName(name string) error {
+func ValidateK8sObjName(name string) error {
 	// Check if the name matches the regex
-	matched, err := regexp.MatchString(k8sConfigMapRegexValidation, name)
+	matched, err := regexp.MatchString(k8sObjNameRegexValidation, name)
 	if err != nil {
 		return fmt.Errorf("failed to validate object name: %w", err)
 	}
@@ -43,65 +46,6 @@ func ListConfigMaps(kube config.KubeConfig) (*corev1.ConfigMapList, error) {
 	}
 
 	return configMaps, nil
-}
-
-func GetConfigMap(kube config.KubeConfig, name string) (*corev1.ConfigMap, error) {
-	configMap, err := kube.Clientset.CoreV1().ConfigMaps(
-		kube.Namespace).Get(
-		context.TODO(), name, metav1.GetOptions{})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get configmap %s: %w", name, err)
-	}
-
-	return configMap, nil
-}
-
-func CreateOrUpdateConfigMap(kube config.KubeConfig, data map[string]string, operation string) (*corev1.ConfigMap, error) {
-	configMap := ConfigMap(data, kube.Namespace)
-	var ret *corev1.ConfigMap
-	var err error
-
-	if operation == "create" {
-		ret, err = kube.Clientset.CoreV1().ConfigMaps(
-			kube.Namespace).Create(
-			context.TODO(), configMap, metav1.CreateOptions{})
-	} else if operation == "update" {
-		ret, err = kube.Clientset.CoreV1().ConfigMaps(
-			kube.Namespace).Update(
-			context.TODO(), configMap, metav1.UpdateOptions{})
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to %s configmap: %w", operation, err)
-	}
-
-	return ret, nil
-}
-
-func DeleteConfigMap(kube config.KubeConfig, name string) error {
-	err := kube.Clientset.CoreV1().ConfigMaps(
-		kube.Namespace).Delete(
-		context.TODO(), name, metav1.DeleteOptions{})
-
-	if err != nil {
-		return fmt.Errorf("failed to delete configmap %s: %w", name, err)
-	}
-
-	return nil
-}
-
-func ConfigMap(data map[string]string, namespace string) *corev1.ConfigMap {
-	name := data["name"]
-
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Data: data,
-	}
-
 }
 
 func GetSecret(kube config.KubeConfig, secretName string) (*corev1.Secret, error) {
@@ -191,6 +135,19 @@ func ListJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.JobList
 	return jobsList, nil
 }
 
+func DeleteJob(kube config.KubeConfig, name string) error {
+	propagation := metav1.DeletePropagationBackground
+	err := kube.Clientset.BatchV1().Jobs(
+		kube.Namespace).Delete(
+		context.TODO(), name, metav1.DeleteOptions{PropagationPolicy: &propagation})
+
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete job %s: %w", name, err)
+	}
+
+	return nil
+}
+
 func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 	job, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Get(
@@ -203,20 +160,59 @@ func GetJob(kube config.KubeConfig, name string) (*batchv1.Job, error) {
 	return job, nil
 }
 
-// TODO: Too many arguments, will need a rework
-func CreateJob(kube config.KubeConfig, name string, runnerName string, runnerImage string, owner string,
-	extraVars string, command string, gitURL string, gitBranch string) (string, error) {
-	job := JobObject(name, kube, runnerName, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+// GenerateName returns a DNS-1123 compatible name with a random suffix, used
+// for ephemeral per-job secrets.
+func GenerateName(prefix string) (string, error) {
+	suffix := make([]byte, 4)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", fmt.Errorf("failed to generate random name: %w", err)
+	}
 
-	job, err := kube.Clientset.BatchV1().Jobs(
+	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(suffix)), nil
+}
+
+// TODO: Too many arguments, will need a rework
+func CreateJob(kube config.KubeConfig, taskID uuid.UUID, taskName string, envSecret string, tokenSecret string, runnerImage string, owner string,
+	extraVars string, command string, gitURL string, gitBranch string) (*batchv1.Job, error) {
+	job := JobObject(taskID, taskName, kube, envSecret, tokenSecret, runnerImage, owner, extraVars, command, gitURL, gitBranch)
+
+	created, err := kube.Clientset.BatchV1().Jobs(
 		kube.Namespace).Create(
 		context.TODO(), job, metav1.CreateOptions{})
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create job: %w", err)
+		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	return job.Name, nil
+	return created, nil
+}
+
+// SetSecretOwnerReference makes the given job the owner of the secret so that
+// Kubernetes garbage collects the secret when the job (and its TTL) is removed.
+func SetSecretOwnerReference(kube config.KubeConfig, secretName string, job *batchv1.Job) error {
+	secret, err := kube.Clientset.CoreV1().Secrets(
+		kube.Namespace).Get(
+		context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get secret %s: %w", secretName, err)
+	}
+
+	controller := true
+	secret.OwnerReferences = append(secret.OwnerReferences, metav1.OwnerReference{
+		APIVersion: "batch/v1",
+		Kind:       "Job",
+		Name:       job.Name,
+		UID:        job.UID,
+		Controller: &controller,
+	})
+
+	if _, err := kube.Clientset.CoreV1().Secrets(
+		kube.Namespace).Update(
+		context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to set owner reference on secret %s: %w", secretName, err)
+	}
+
+	return nil
 }
 
 func ListPods(kube config.KubeConfig, labelSelector string) (*corev1.PodList, error) {
@@ -256,22 +252,25 @@ func GetLogs(kube config.KubeConfig, podName string, containerName string) (stri
 	return buf.String(), nil
 }
 
-func JobObject(name string,
+func JobObject(taskID uuid.UUID,
+	taskName string,
 	kube config.KubeConfig,
-	runnerName string,
+	envSecret string,
+	tokenSecret string,
 	image string, owner string,
 	extraVars string,
 	command string,
 	gitURL string,
 	gitBranch string) *batchv1.Job {
-
+	var job *batchv1.Job
 	var ttlSeconds = int32(kube.JobsTTL)
 	var backoffLimit int32 = 1
 
 	optionalSecret := true
 
-	// Removing output of remote URL to hide git Token
-	initCmd := fmt.Sprintf("git clone -b %s %s . ; git ls-remote -q", gitBranch, gitURL)
+	// The git token is provided through the token secret as an environment
+	// variable so that it never appears in the pod spec.
+	initCmd := `if [ -n "$GIT_TOKEN" ]; then REPO_URL=$(printf '%s' "$GIT_URL" | sed "s#://#://$GIT_TOKEN@#"); else REPO_URL="$GIT_URL"; fi; git clone -b "$GIT_BRANCH" "$REPO_URL" . ; git ls-remote -q`
 
 	env := []corev1.EnvVar{}
 	// Append extra vars to environment variables only if provided
@@ -282,9 +281,58 @@ func JobObject(name string,
 		})
 	}
 
-	return &batchv1.Job{
+	volumes := []corev1.Volume{
+		{
+			Name: "repo",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "repo",
+			MountPath: "/mnt/repo",
+			ReadOnly:  false,
+		},
+	}
+
+	envFrom := []corev1.EnvFromSource{}
+
+	// Custom runner secrets are injected as a batch through the per-job secret.
+	if envSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: envSecret,
+					Optional:   &optionalSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "secret",
+			MountPath: "/etc/secret/",
+			ReadOnly:  true,
+		})
+		envFrom = append(envFrom, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: envSecret,
+				},
+				Optional: &optionalSecret,
+			},
+		})
+	}
+
+	jobNamePrefix := strings.ReplaceAll(taskName, "_", "-")
+	if jobNamePrefix == "" {
+		jobNamePrefix = taskID.String()
+	}
+	job = &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: name + "-",
+			GenerateName: jobNamePrefix + "-",
 			Namespace:    kube.Namespace,
 		},
 		Spec: batchv1.JobSpec{
@@ -293,32 +341,16 @@ func JobObject(name string,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"owner":     owner,
-						"task-name": name,
+						"owner":   owner,
+						"task-id": taskID.String(),
 					},
 				},
 				Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: "secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: runnerName,
-									Optional:   &optionalSecret,
-								},
-							},
-						},
-						{
-							Name: "repo",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:       volumes,
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
-							Name:            name,
+							Name:            taskName,
 							Image:           image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command: []string{
@@ -326,164 +358,64 @@ func JobObject(name string,
 								"-c",
 								command,
 							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "secret",
-									MountPath: "/etc/secret/",
-									ReadOnly:  true,
-								},
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-									ReadOnly:  false,
-								},
-							},
-							Env: env,
-							EnvFrom: []corev1.EnvFromSource{
-								{
-									SecretRef: &corev1.SecretEnvSource{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: runnerName,
-										},
-										Optional: &optionalSecret,
-									},
-								},
-							},
-						},
-					},
-					InitContainers: []corev1.Container{
-						{
-							Name:            "init-" + name,
-							Image:           "bitnami/git",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command: []string{
-								"sh",
-								"-c",
-								initCmd,
-							},
-							WorkingDir: "/mnt/repo",
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "repo",
-									MountPath: "/mnt/repo",
-								},
-							},
+							WorkingDir:   "/mnt/repo",
+							VolumeMounts: volumeMounts,
+							Env:          env,
+							EnvFrom:      envFrom,
 						},
 					},
 				},
 			},
 		},
 	}
-}
 
-func ListCronJobs(kube config.KubeConfig, labelSelectors []string) (*batchv1.CronJobList, error) {
-	var jobsList *batchv1.CronJobList
-	var err error
-
-	if len(labelSelectors) == 0 {
-		jobsList, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).List(
-			context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list cronjobs: %w", err)
-		}
-	} else {
-		for _, labelSelector := range labelSelectors {
-			job, err := kube.Clientset.BatchV1().CronJobs(
-				kube.Namespace).List(
-				context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
-			if err != nil {
-				return nil, fmt.Errorf("failed to list cronjobs with selector %s: %w", labelSelector, err)
-			}
-			if jobsList == nil {
-				jobsList = job
-			} else {
-				jobsList.Items = append(jobsList.Items, job.Items...)
-			}
-		}
-	}
-
-	return jobsList, nil
-}
-
-func GetCronJob(kube config.KubeConfig, name string) (*batchv1.CronJob, error) {
-	job, err := kube.Clientset.BatchV1().CronJobs(
-		kube.Namespace).Get(
-		context.TODO(), name, metav1.GetOptions{})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cronjob %s: %w", name, err)
-	}
-
-	return job, nil
-}
-
-func CreateOrUpdateCronJob(kube config.KubeConfig, cronjob models.CronJob, runner *corev1.ConfigMap, command string, operation string) (*batchv1.CronJob, error) {
-	var extraVars string
-	var err error
-
-	if len(cronjob.ExtraVars) > 0 {
-		varsParsed, err := json.Marshal(cronjob.ExtraVars)
-		if err != nil {
-			return nil, err
-		}
-		extraVars = string(varsParsed)
-	}
-
-	jobObj := JobObject(cronjob.Task,
-		kube,
-		runner.Data["name"],
-		runner.Data["image"],
-		cronjob.Owner,
-		extraVars,
-		command,
-		runner.Data["gitURL"],
-		runner.Data["branch"],
-	)
-	cron := CronJobObject(kube, cronjob, jobObj.Spec)
-
-	if operation == "create" {
-		cron, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).Create(
-			context.TODO(), cron, metav1.CreateOptions{})
-	} else if operation == "update" {
-		cron, err = kube.Clientset.BatchV1().CronJobs(
-			kube.Namespace).Update(
-			context.TODO(), cron, metav1.UpdateOptions{})
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to %s cronjob: %w", operation, err)
-	}
-
-	return cron, nil
-}
-
-func DeleteCronJob(kube config.KubeConfig, name string) error {
-	err := kube.Clientset.BatchV1().CronJobs(
-		kube.Namespace).Delete(
-		context.TODO(), name, metav1.DeleteOptions{})
-
-	if err != nil {
-		return fmt.Errorf("failed to delete cronjob %s: %w", name, err)
-	}
-
-	return nil
-}
-
-func CronJobObject(kube config.KubeConfig, cronjob models.CronJob, jobSpec batchv1.JobSpec) *batchv1.CronJob {
-	return &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cronjob.Name,
-			Namespace: kube.Namespace,
-		},
-		Spec: batchv1.CronJobSpec{
-			Schedule: cronjob.Schedule,
-			Suspend:  &cronjob.Disable,
-			JobTemplate: batchv1.JobTemplateSpec{
-				Spec: jobSpec,
+	if gitURL != "" {
+		initEnv := []corev1.EnvVar{
+			{
+				Name:  "GIT_URL",
+				Value: gitURL,
 			},
-		},
+			{
+				Name:  "GIT_BRANCH",
+				Value: gitBranch,
+			},
+		}
+
+		if tokenSecret != "" {
+			initEnv = append(initEnv, corev1.EnvVar{
+				Name: "GIT_TOKEN",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: tokenSecret,
+						},
+						Key: "GIT_TOKEN",
+					},
+				},
+			})
+		}
+
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{
+			{
+				Name:            "init-" + taskName,
+				Image:           "bitnami/git",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command: []string{
+					"sh",
+					"-c",
+					initCmd,
+				},
+				WorkingDir: "/mnt/repo",
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "repo",
+						MountPath: "/mnt/repo",
+					},
+				},
+				Env: initEnv,
+			},
+		}
 	}
+
+	return job
 }

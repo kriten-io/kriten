@@ -20,6 +20,12 @@ type AuditLog struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type AuditMetadata struct {
+	UserID   uuid.UUID
+	UserName string
+	Provider string
+}
+
 type AuditQueryParams struct {
 	Limit  int `form:"limit" binding:"omitempty,min=0"`
 	Offset int `form:"offset" binding:"omitempty,min=0"`

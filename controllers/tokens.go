@@ -19,17 +19,13 @@ type ApiTokenController struct {
 	ApiTokenService services.ApiTokenService
 	AuthService     services.AuthService
 	providers       []string
-	AuditService    services.AuditService
-	AuditCategory   string
 }
 
-func NewApiTokenController(apiTokenService services.ApiTokenService, as services.AuthService, als services.AuditService, p []string) ApiTokenController {
+func NewApiTokenController(apiTokenService services.ApiTokenService, as services.AuthService, p []string) ApiTokenController {
 	return ApiTokenController{
 		ApiTokenService: apiTokenService,
 		AuthService:     as,
 		providers:       p,
-		AuditService:    als,
-		AuditCategory:   "apiTokens",
 	}
 }
 
@@ -163,30 +159,20 @@ func (uc *ApiTokenController) GetApiToken(ctx *gin.Context) {
 //	@Router			/api-tokens [post]
 //	@Security		Bearer
 func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
-	userid := ctx.MustGet("userID").(uuid.UUID)
-	audit := atc.AuditService.InitialiseAuditLog(ctx, "create", atc.AuditCategory, "*")
 	var apiToken models.ApiToken
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
-		atc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid api token payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	audit.EventTarget = apiToken.Key
-	apiToken.Owner = userid
 
-	apiToken, err := atc.ApiTokenService.CreateApiToken(apiToken)
+	apiToken, err := atc.ApiTokenService.CreateApiToken(getAuditMetadata(ctx), apiToken)
 	if err != nil {
-		atc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
-	if audit.EventTarget == "" {
-		audit.EventTarget = apiToken.Key
-	}
 
-	audit.Status = "success"
 	ctx.JSON(http.StatusOK, apiToken)
 }
 
@@ -207,12 +193,10 @@ func (atc *ApiTokenController) CreateApiToken(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "update", uc.AuditCategory, apiTokenID)
 	var apiToken models.ApiToken
 	var err error
 
 	if err := ctx.ShouldBindJSON(&apiToken); err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(errors.New("invalid api token payload format"))
 		ctx.Status(http.StatusBadRequest)
 		return
@@ -220,20 +204,16 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 
 	apiToken.ID, err = uuid.FromString(apiTokenID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		helpers.BadRequestError(ctx, err)
 		return
 	}
 
-	apiToken, err = uc.ApiTokenService.UpdateApiToken(apiToken)
+	apiToken, err = uc.ApiTokenService.UpdateApiToken(getAuditMetadata(ctx), apiToken)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, apiToken)
 }
 
@@ -253,7 +233,6 @@ func (uc *ApiTokenController) UpdateApiToken(ctx *gin.Context) {
 //	@Security		Bearer
 func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 	apiTokenID := ctx.Param("id")
-	audit := uc.AuditService.InitialiseAuditLog(ctx, "delete", uc.AuditCategory, apiTokenID)
 
 	_, err := uuid.FromString(apiTokenID)
 	if err != nil {
@@ -261,14 +240,11 @@ func (uc *ApiTokenController) DeleteApiToken(ctx *gin.Context) {
 		ctx.Status(http.StatusBadRequest)
 		return
 	}
-	err = uc.ApiTokenService.DeleteApiToken(apiTokenID)
+	err = uc.ApiTokenService.DeleteApiToken(getAuditMetadata(ctx), apiTokenID)
 	if err != nil {
-		uc.AuditService.CreateAudit(audit)
 		ctx.Error(err)
 		return
 	}
 
-	audit.Status = "success"
-	uc.AuditService.CreateAudit(audit)
 	ctx.JSON(http.StatusOK, models.ResponseMessage{Message: "api token deleted successfully"})
 }

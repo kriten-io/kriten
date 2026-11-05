@@ -18,30 +18,37 @@ type GroupService interface {
 	GetGroup(string) (models.Group, error)
 	GetUserGroups(string) ([]models.UserGroup, error)
 	GetGroupByID(string) (models.Group, error)
-	CreateGroup(models.Group) (models.Group, error)
-	UpdateGroup(models.Group) (models.Group, error)
+	CreateGroup(models.AuditMetadata, models.Group) (models.Group, error)
+	UpdateGroup(models.AuditMetadata, models.Group) (models.Group, error)
 	ListGroupUsers(string) ([]models.GroupUser, error)
-	AddUsersToGroup(string, []models.GroupUser) (models.Group, error)
-	RemoveUsersFromGroup(string, []models.GroupUser) (models.Group, error)
-	DeleteGroup(string) error
+	AddUsersToGroup(models.AuditMetadata, string, []string) (models.Group, error)
+	RemoveUsersFromGroup(models.AuditMetadata, string, []string) (models.Group, error)
+	DeleteGroup(models.AuditMetadata, string) error
 	GetGroupRoles(string) ([]models.Role, error)
-	AddRolesToGroup(string, []models.GroupRole) (models.Group, error)
-	RemoveRolesFromGroup(string, []models.GroupRole) (models.Group, error)
+	AddRolesToGroup(models.AuditMetadata, string, []string) (models.Group, error)
+	RemoveRolesFromGroup(models.AuditMetadata, string, []string) (models.Group, error)
 	ListGroupRoles(string) ([]models.GroupRole, error)
 }
 
 type GroupServiceImpl struct {
-	db          *gorm.DB
-	UserService UserService
-	config      config.Config
+	db           *gorm.DB
+	UserService  UserService
+	config       config.Config
+	auditService AuditService
 }
 
-func NewGroupService(database *gorm.DB, us UserService, config config.Config) GroupService {
+func NewGroupService(database *gorm.DB, us UserService, config config.Config, als AuditService) GroupService {
 	return &GroupServiceImpl{
-		db:          database,
-		UserService: us,
-		config:      config,
+		db:           database,
+		UserService:  us,
+		config:       config,
+		auditService: als,
 	}
+}
+
+// groupTarget names a group by name, provider and id.
+func groupTarget(group models.Group) string {
+	return AuditTarget("name", group.Name, "provider", group.Provider, "id", group.ID.String())
 }
 
 func (g *GroupServiceImpl) ListGroups(authList []string, params models.GroupQueryParams) ([]models.Group, int, error) {
@@ -115,7 +122,21 @@ func (g *GroupServiceImpl) GetGroupByID(id string) (models.Group, error) {
 	return group, nil
 }
 
-func (g *GroupServiceImpl) CreateGroup(group models.Group) (models.Group, error) {
+func (g *GroupServiceImpl) CreateGroup(meta models.AuditMetadata, group models.Group) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "create", "groups", AuditTarget("name", group.Name, "provider", group.Provider))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	createdGroup, err := g.createGroup(group)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(createdGroup)
+	audit.Status = "success"
+	return createdGroup, nil
+}
+
+func (g *GroupServiceImpl) createGroup(group models.Group) (models.Group, error) {
 	res := g.db.Create(&group)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
@@ -127,7 +148,21 @@ func (g *GroupServiceImpl) CreateGroup(group models.Group) (models.Group, error)
 	return group, nil
 }
 
-func (g *GroupServiceImpl) UpdateGroup(group models.Group) (models.Group, error) {
+func (g *GroupServiceImpl) UpdateGroup(meta models.AuditMetadata, group models.Group) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "update", "groups", AuditTarget("id", group.ID.String()))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	updatedGroup, err := g.updateGroup(group)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(updatedGroup)
+	audit.Status = "success"
+	return updatedGroup, nil
+}
+
+func (g *GroupServiceImpl) updateGroup(group models.Group) (models.Group, error) {
 	res := g.db.Updates(group)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -198,37 +233,34 @@ func (g *GroupServiceImpl) ListGroupUsers(id string) ([]models.GroupUser, error)
 	return users, nil
 }
 
-func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) (models.Group, error) {
+func (g *GroupServiceImpl) AddUsersToGroup(meta models.AuditMetadata, id string, userIDs []string) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "add_users", "groups", AuditTarget("id", id))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	updatedGroup, err := g.addUsersToGroup(id, userIDs)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(updatedGroup)
+	audit.Status = "success"
+	return updatedGroup, nil
+}
+
+func (g *GroupServiceImpl) addUsersToGroup(id string, userIDs []string) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
-	groupProvider := group.Provider
-
-	for _, u := range users {
-		if u.Provider != groupProvider {
-			return models.Group{}, fmt.Errorf("group provider '%s', user provider '%s': %w",
-				groupProvider,
-				u.Provider,
-				ErrSvcAuthProviderMismatch,
-			)
-		}
-	}
-
-	var usersID []string
-
-	for _, u := range users {
-		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
-		if err != nil {
-			return models.Group{}, fmt.Errorf("failed to get user: %w", err)
-		}
-		usersID = append(usersID, user.ID.String())
+	usersID, err := g.resolveUserIDs(userIDs, group.Provider)
+	if err != nil {
+		return models.Group{}, err
 	}
 
 	group.User_IDs = RemoveDuplicates(append(group.User_IDs, usersID...))
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("update group: %w", err)
 	}
@@ -236,25 +268,34 @@ func (g *GroupServiceImpl) AddUsersToGroup(id string, users []models.GroupUser) 
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupUser) (models.Group, error) {
+func (g *GroupServiceImpl) RemoveUsersFromGroup(meta models.AuditMetadata, id string, userIDs []string) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "remove_users", "groups", AuditTarget("id", id))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	updatedGroup, err := g.removeUsersFromGroup(id, userIDs)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(updatedGroup)
+	audit.Status = "success"
+	return updatedGroup, nil
+}
+
+func (g *GroupServiceImpl) removeUsersFromGroup(id string, userIDs []string) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
-	var usersID []string
-
-	for _, u := range users {
-		user, err := g.UserService.GetByUsernameAndProvider(u.Username, u.Provider)
-		if err != nil {
-			return models.Group{}, fmt.Errorf("failed to get user: %w", err)
-		}
-		usersID = append(usersID, user.ID.String())
+	usersID, err := g.resolveUserIDs(userIDs, "")
+	if err != nil {
+		return models.Group{}, err
 	}
 
 	group.User_IDs = RemoveFromSlice(group.User_IDs, usersID)
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("update groups: %w", err)
 	}
@@ -262,7 +303,23 @@ func (g *GroupServiceImpl) RemoveUsersFromGroup(id string, users []models.GroupU
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) DeleteGroup(id string) error {
+func (g *GroupServiceImpl) DeleteGroup(meta models.AuditMetadata, id string) error {
+	audit := g.auditService.InitialiseAuditLog(meta, "delete", "groups", AuditTarget("id", id))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	if group, err := g.GetGroupByID(id); err == nil {
+		audit.EventTarget = groupTarget(group)
+	}
+
+	if err := g.deleteGroup(id); err != nil {
+		return err
+	}
+
+	audit.Status = "success"
+	return nil
+}
+
+func (g *GroupServiceImpl) deleteGroup(id string) error {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return fmt.Errorf("failed to get group: %w", err)
@@ -323,28 +380,72 @@ func RemoveFromSlice(current []string, input []string) []string {
 	return current
 }
 
-func (g *GroupServiceImpl) AddRolesToGroup(id string, roles []models.GroupRole) (models.Group, error) {
-	var roleIDs []string
+// resolveUserIDs checks that every user exists. When provider is set, each user
+// must belong to it, since groups are scoped to a single provider.
+func (g *GroupServiceImpl) resolveUserIDs(userIDs []string, provider string) ([]string, error) {
+	resolved := []string{}
+	for _, id := range userIDs {
+		user, err := g.UserService.GetUser(id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user: %w", err)
+		}
+		if provider != "" && user.Provider != provider {
+			return nil, fmt.Errorf("group provider '%s', user provider '%s': %w",
+				provider,
+				user.Provider,
+				ErrSvcAuthProviderMismatch,
+			)
+		}
+		resolved = append(resolved, user.ID.String())
+	}
+	return resolved, nil
+}
+
+// resolveRoleIDs checks that every role exists.
+func (g *GroupServiceImpl) resolveRoleIDs(roleIDs []string) ([]string, error) {
+	resolved := []string{}
+	for _, id := range roleIDs {
+		var role models.Role
+		res := g.db.Where("id = ?", id).Find(&role)
+		if res.Error != nil {
+			return nil, fmt.Errorf("role '%s': %w", id, res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return nil, fmt.Errorf("role '%s': %w", id, ErrSvcObjNotFound)
+		}
+		resolved = append(resolved, role.ID.String())
+	}
+	return resolved, nil
+}
+
+func (g *GroupServiceImpl) AddRolesToGroup(meta models.AuditMetadata, id string, roleIDs []string) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "add_roles", "groups", AuditTarget("id", id))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	updatedGroup, err := g.addRolesToGroup(id, roleIDs)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(updatedGroup)
+	audit.Status = "success"
+	return updatedGroup, nil
+}
+
+func (g *GroupServiceImpl) addRolesToGroup(id string, roleIDs []string) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
-	for _, r := range roles {
-		var role models.Role
-		res := g.db.Model(&models.Role{}).Where("name = ?", r.Name).Find(&role)
-		if res.Error != nil {
-			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, res.Error)
-		}
-		if res.RowsAffected == 0 {
-			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, ErrSvcObjNotFound)
-		}
-		roleIDs = append(roleIDs, role.ID.String())
+	resolved, err := g.resolveRoleIDs(roleIDs)
+	if err != nil {
+		return models.Group{}, err
 	}
 
-	group.Role_IDs = RemoveDuplicates(append(group.Role_IDs, roleIDs...))
+	group.Role_IDs = RemoveDuplicates(append(group.Role_IDs, resolved...))
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("update group: %w", err)
 	}
@@ -352,29 +453,34 @@ func (g *GroupServiceImpl) AddRolesToGroup(id string, roles []models.GroupRole) 
 	return newGroup, nil
 }
 
-func (g *GroupServiceImpl) RemoveRolesFromGroup(id string, roles []models.GroupRole) (models.Group, error) {
+func (g *GroupServiceImpl) RemoveRolesFromGroup(meta models.AuditMetadata, id string, roleIDs []string) (models.Group, error) {
+	audit := g.auditService.InitialiseAuditLog(meta, "remove_roles", "groups", AuditTarget("id", id))
+	defer func() { g.auditService.CreateAudit(audit) }()
+
+	updatedGroup, err := g.removeRolesFromGroup(id, roleIDs)
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	audit.EventTarget = groupTarget(updatedGroup)
+	audit.Status = "success"
+	return updatedGroup, nil
+}
+
+func (g *GroupServiceImpl) removeRolesFromGroup(id string, roleIDs []string) (models.Group, error) {
 	group, err := g.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("failed to get group: %w", err)
 	}
 
-	var roleIDs []string
-
-	for _, r := range roles {
-		var role models.Role
-		res := g.db.Model(&models.Role{}).Where("name = ?", r.Name).Find(&role)
-		if res.Error != nil {
-			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, res.Error)
-		}
-		if res.RowsAffected == 0 {
-			return models.Group{}, fmt.Errorf("role '%s': %w", r.Name, ErrSvcObjNotFound)
-		}
-		roleIDs = append(roleIDs, role.ID.String())
+	resolved, err := g.resolveRoleIDs(roleIDs)
+	if err != nil {
+		return models.Group{}, err
 	}
 
-	group.Role_IDs = RemoveFromSlice(group.Role_IDs, roleIDs)
+	group.Role_IDs = RemoveFromSlice(group.Role_IDs, resolved)
 
-	newGroup, err := g.UpdateGroup(group)
+	newGroup, err := g.updateGroup(group)
 	if err != nil {
 		return models.Group{}, fmt.Errorf("update groups: %w", err)
 	}
@@ -397,10 +503,11 @@ func (g *GroupServiceImpl) ListGroupRoles(id string) ([]models.GroupRole, error)
 	}
 	for _, r := range roles {
 		groupRoles = append(groupRoles, models.GroupRole{
-			Name:           r.Name,
-			Resource:       r.Resource,
-			Resource_Names: r.Resource_Names,
-			Access:         r.Access,
+			ID:           r.ID,
+			Name:         r.Name,
+			Resource:     r.Resource,
+			Resource_IDs: r.Resource_IDs,
+			Access:       r.Access,
 		})
 	}
 

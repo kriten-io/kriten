@@ -17,22 +17,26 @@ import (
 type UserService interface {
 	ListUsers([]string, models.UserQueryParams) ([]models.User, int, error)
 	GetUser(string) (models.User, error)
-	CreateUser(models.User) (models.User, error)
-	UpdateUser(models.User) (models.User, error)
-	DeleteUser(string) error
+	CreateUser(models.AuditMetadata, models.User) (models.User, error)
+	UpdateUser(models.AuditMetadata, models.User) (models.User, error)
+	DeleteUser(models.AuditMetadata, string) error
 	GetByUsernameAndProvider(string, string) (models.User, error)
 	GetUserRoles(string) ([]models.Role, error)
+	EnsureUser(string, string) (models.User, error)
+	SetPassword(models.User, string) (models.User, error)
 }
 
 type UserServiceImpl struct {
-	db     *gorm.DB
-	config config.Config
+	db           *gorm.DB
+	config       config.Config
+	auditService AuditService
 }
 
-func NewUserService(database *gorm.DB, config config.Config) UserService {
+func NewUserService(database *gorm.DB, config config.Config, als AuditService) UserService {
 	return &UserServiceImpl{
-		db:     database,
-		config: config,
+		db:           database,
+		config:       config,
+		auditService: als,
 	}
 }
 
@@ -93,7 +97,26 @@ func (u *UserServiceImpl) GetUser(id string) (models.User, error) {
 	return user, nil
 }
 
-func (u *UserServiceImpl) CreateUser(user models.User) (models.User, error) {
+// userTarget names a user by username, provider and id.
+func userTarget(user models.User) string {
+	return AuditTarget("username", user.Username, "provider", user.Provider, "id", user.ID.String())
+}
+
+func (u *UserServiceImpl) CreateUser(meta models.AuditMetadata, user models.User) (models.User, error) {
+	audit := u.auditService.InitialiseAuditLog(meta, "create", "users", AuditTarget("username", user.Username, "provider", user.Provider))
+	defer func() { u.auditService.CreateAudit(audit) }()
+
+	createdUser, err := u.createUser(user)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	audit.EventTarget = userTarget(createdUser)
+	audit.Status = "success"
+	return createdUser, nil
+}
+
+func (u *UserServiceImpl) createUser(user models.User) (models.User, error) {
 	if user.Provider == "local" {
 		password, err := HashPassword(user.Password)
 		if err != nil {
@@ -113,7 +136,21 @@ func (u *UserServiceImpl) CreateUser(user models.User) (models.User, error) {
 	return user, nil
 }
 
-func (u *UserServiceImpl) UpdateUser(user models.User) (models.User, error) {
+func (u *UserServiceImpl) UpdateUser(meta models.AuditMetadata, user models.User) (models.User, error) {
+	audit := u.auditService.InitialiseAuditLog(meta, "update", "users", AuditTarget("id", user.ID.String()))
+	defer func() { u.auditService.CreateAudit(audit) }()
+
+	updatedUser, err := u.updateUser(user)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	audit.EventTarget = userTarget(updatedUser)
+	audit.Status = "success"
+	return updatedUser, nil
+}
+
+func (u *UserServiceImpl) updateUser(user models.User) (models.User, error) {
 	password, err := HashPassword(user.Password)
 	if err != nil {
 		return models.User{}, fmt.Errorf("failed to generate hash for user password: %w", err)
@@ -132,7 +169,23 @@ func (u *UserServiceImpl) UpdateUser(user models.User) (models.User, error) {
 	return newUser, nil
 }
 
-func (u *UserServiceImpl) DeleteUser(userID string) error {
+func (u *UserServiceImpl) DeleteUser(meta models.AuditMetadata, userID string) error {
+	audit := u.auditService.InitialiseAuditLog(meta, "delete", "users", AuditTarget("id", userID))
+	defer func() { u.auditService.CreateAudit(audit) }()
+
+	if user, err := u.GetUser(userID); err == nil {
+		audit.EventTarget = userTarget(user)
+	}
+
+	if err := u.deleteUser(userID); err != nil {
+		return err
+	}
+
+	audit.Status = "success"
+	return nil
+}
+
+func (u *UserServiceImpl) deleteUser(userID string) error {
 	var userGroups []models.Group
 	user, err := u.GetUser(userID)
 	if err != nil {
@@ -156,6 +209,22 @@ func (u *UserServiceImpl) DeleteUser(userID string) error {
 	}
 	if res.RowsAffected != 0 {
 		return fmt.Errorf("found user owned API tokens, delete those first: %w", ErrSvcObjInUse)
+	}
+
+	var webhookCount int64
+	if err := u.db.Model(&models.Webhook{}).Where("owner = ?", userID).Count(&webhookCount).Error; err != nil {
+		return fmt.Errorf("failed to get API webhooks for user: %w", err)
+	}
+	if webhookCount != 0 {
+		return fmt.Errorf("found user owned webhooks, delete those first: %w", ErrSvcObjInUse)
+	}
+
+	var schedulerCount int64
+	if err := u.db.Model(&models.Scheduler{}).Where("owner = ?", userID).Count(&schedulerCount).Error; err != nil {
+		return fmt.Errorf("failed to get schedulers for user: %w", err)
+	}
+	if schedulerCount != 0 {
+		return fmt.Errorf("found user owned schedulers, delete those first: %w", ErrSvcObjInUse)
 	}
 
 	res = u.db.Unscoped().Delete(&user)
@@ -204,6 +273,31 @@ func (u *UserServiceImpl) GetUserRoles(userID string) ([]models.Role, error) {
 		}
 	}
 	return roles, nil
+}
+
+func (u *UserServiceImpl) EnsureUser(username string, provider string) (models.User, error) {
+	user, err := u.GetByUsernameAndProvider(username, provider)
+	if err == nil {
+		return user, nil
+	}
+	if !errors.Is(err, ErrSvcObjNotFound) {
+		return models.User{}, err
+	}
+
+	if _, err := u.createUser(models.User{Username: username, Provider: provider}); err != nil {
+		user, getErr := u.GetByUsernameAndProvider(username, provider)
+		if getErr == nil {
+			return user, nil
+		}
+		return models.User{}, err
+	}
+
+	return u.GetByUsernameAndProvider(username, provider)
+}
+
+func (u *UserServiceImpl) SetPassword(user models.User, password string) (models.User, error) {
+	user.Password = password
+	return u.updateUser(user)
 }
 
 func HashPassword(password string) (string, error) {

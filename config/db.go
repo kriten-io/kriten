@@ -11,6 +11,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// redactLegacyTokenAudits replaces plaintext API token keys that older builds
+// wrote into the audit log as the event target. Only values in the key format
+// are changed, so the step is safe to run on every startup.
+func redactLegacyTokenAudits(db *gorm.DB) {
+	if err := db.Exec(
+		"UPDATE audit_logs SET event_target = 'redacted' WHERE event_category = 'apiTokens' AND event_target ~ '^kri_[A-Za-z0-9]{36}$'",
+	).Error; err != nil {
+		log.Println("Error redacting legacy API token audit entries")
+		log.Println(err)
+	}
+}
+
 func InitDB(db *gorm.DB, rp string) {
 	err := db.AutoMigrate(
 		&models.AuditLog{},
@@ -19,11 +31,18 @@ func InitDB(db *gorm.DB, rp string) {
 		&models.User{},
 		&models.ApiToken{},
 		&models.Webhook{},
+		&models.Runner{},
+		&models.RunnerSecret{},
+		&models.Task{},
+		&models.Job{},
+		&models.Scheduler{},
 	)
 	if err != nil {
 		log.Println("Error during Postgres AutoMigrate")
 		log.Println(err)
 	}
+
+	redactLegacyTokenAudits(db)
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(rp), bcrypt.DefaultCost)
 	if err != nil {
@@ -42,9 +61,9 @@ func InitDB(db *gorm.DB, rp string) {
 
 	var adminRole = models.Role{
 		Name: "Admin", Resource: "*",
-		Resource_Names: pq.StringArray{"*"},
-		Access:         "write",
-		Builtin:        true,
+		Resource_IDs: pq.StringArray{"*"},
+		Access:       "write",
+		Builtin:      true,
 	}
 	db.FirstOrCreate(&adminRole)
 
@@ -60,13 +79,33 @@ func InitDB(db *gorm.DB, rp string) {
 	db.Updates(&root)
 
 	var builtinRoles = []models.Role{
-		{Name: "WriteAllRunners", Resource: "runners", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllTasks", Resource: "tasks", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "ExecuteAllTasks", Resource: "tasks", Resource_Names: pq.StringArray{"*"}, Access: "execute", Builtin: true},
-		{Name: "WriteAllUsers", Resource: "users", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
-		{Name: "WriteAllRoles", Resource: "roles", Resource_Names: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRunners", Resource: "runners", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllTasks", Resource: "tasks", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "ExecuteAllTasks", Resource: "tasks", Resource_IDs: pq.StringArray{"*"}, Access: "execute", Builtin: true},
+		{Name: "WriteAllUsers", Resource: "users", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
+		{Name: "WriteAllRoles", Resource: "roles", Resource_IDs: pq.StringArray{"*"}, Access: "write", Builtin: true},
 	}
 	db.Create(&builtinRoles)
+
+	// Created separately: the batch above fails on existing databases because
+	// role names are unique, which would stop newer builtin roles being added.
+	var writeAllSchedulers = models.Role{
+		Name: "WriteAllSchedulers", Resource: "schedulers",
+		Resource_IDs: pq.StringArray{"*"},
+		Access:       "write",
+		Builtin:      true,
+	}
+	db.Where(models.Role{Name: writeAllSchedulers.Name}).FirstOrCreate(&writeAllSchedulers)
+
+	// Attach to the builtin Admin group. Idempotent, and also covers databases
+	// where the Admin group was created before this role existed.
+	if err := db.Exec(
+		"UPDATE groups SET roles = array_append(roles, ?) WHERE name = 'Admin' AND builtin AND NOT (? = ANY(roles))",
+		writeAllSchedulers.ID.String(), writeAllSchedulers.ID.String(),
+	).Error; err != nil {
+		log.Println("Error attaching WriteAllSchedulers to Admin group")
+		log.Println(err)
+	}
 
 	// rules to preveng builtin deletion or update
 	db.Exec("CREATE RULE builtin_del_users AS ON DELETE TO users WHERE builtin DO INSTEAD nothing;")

@@ -34,10 +34,11 @@ var (
 	rs         services.RunnerService
 	ts         services.TaskService
 	js         services.JobService
-	cjs        services.CronJobService
 	us         services.UserService
 	ats        services.ApiTokenService
 	ws         services.WebhookService
+	ss         services.SchedulerService
+	ms         services.McpService
 	gs         services.GroupService
 	als        services.AuditService
 	rls        services.RoleService
@@ -46,10 +47,11 @@ var (
 	rc         controllers.RunnerController
 	tc         controllers.TaskController
 	jc         controllers.JobController
-	cjc        controllers.CronJobController
 	uc         controllers.UserController
 	atc        controllers.ApiTokenController
 	wc         controllers.WebhookController
+	sc         controllers.SchedulerController
+	mc         controllers.McpController
 	gc         controllers.GroupController
 	rlc        controllers.RoleController
 	conf       config.Config
@@ -126,36 +128,41 @@ func init() {
 
 func init() {
 	// Services
-	us = services.NewUserService(db, conf)
-	ats = services.NewApiTokenService(db, conf)
-	ws = services.NewWebhookService(db, conf)
-	gs = services.NewGroupService(db, us, conf)
-	rls = services.NewRoleService(db, conf, gs)
-	as = services.NewAuthService(conf, us, rls, db)
 	als = services.NewAuditService(db, conf)
-
-	rs = services.NewRunnerService(conf)
-	js = services.NewJobService(conf)
-	ts = services.NewTaskService(ws, conf, js)
-	cjs = services.NewCronJobService(conf)
+	us = services.NewUserService(db, conf, als)
+	ats = services.NewApiTokenService(db, conf, als)
+	gs = services.NewGroupService(db, us, conf, als)
+	rls = services.NewRoleService(db, conf, gs, als)
+	as = services.NewAuthService(conf, us, rls, db, als)
+	rs = services.NewRunnerService(db, conf, als)
+	js = services.NewJobService(db, conf)
+	ts = services.NewTaskService(db, conf, js, rs, als)
+	ws = services.NewWebhookService(db, conf, als, ts)
+	ss = services.NewSchedulerService(db, conf, als, as, ts)
+	if conf.MCP.Enabled {
+		ms = services.NewMcpService(ts, js, as, conf.MCP)
+	}
 
 	// Controllers
-	uc = controllers.NewUserController(us, gs, as, als, authProviders)
-	wc = controllers.NewWebhookController(ws, ts, as, als, authProviders)
-	atc = controllers.NewApiTokenController(ats, as, als, authProviders)
-	gc = controllers.NewGroupController(gs, as, als, authProviders)
-	rlc = controllers.NewRoleController(rls, as, als)
-	ac = controllers.NewAuthController(as, als, authProviders)
+	uc = controllers.NewUserController(us, gs, as, authProviders)
+	wc = controllers.NewWebhookController(ws, ts, as, authProviders)
+	sc = controllers.NewSchedulerController(ss, as)
+	if conf.MCP.Enabled {
+		mc = controllers.NewMcpController(ms, as)
+	}
+	atc = controllers.NewApiTokenController(ats, as, authProviders)
+	gc = controllers.NewGroupController(gs, as, authProviders)
+	rlc = controllers.NewRoleController(rls, as)
+	ac = controllers.NewAuthController(as, authProviders)
 	alc = controllers.NewAuditController(als, as)
 
-	rc = controllers.NewRunnerController(rs, as, als)
-	tc = controllers.NewTaskController(ts, as, als)
-	jc = controllers.NewJobController(js, as, als)
-	cjc = controllers.NewCronJobController(cjs, as, als)
+	rc = controllers.NewRunnerController(rs, as)
+	tc = controllers.NewTaskController(ts, as)
+	jc = controllers.NewJobController(js, as)
 }
 
 //	@title			  Swagger Kriten
-//	@version		  v1.0.0
+//	@version		  v1.1.0
 //	@description	  Automation code execution platform.
 //  @externalDocs.url https://kriten.io
 //	@termsOfService	  http://swagger.io/terms/
@@ -198,25 +205,33 @@ func main() {
 		runners := basepath.Group("/runners")
 		tasks := basepath.Group("/tasks")
 		jobs := basepath.Group("/jobs")
-		cronjobs := basepath.Group("/cronjobs")
 		users := basepath.Group("/users")
 		tokens := basepath.Group("/api-tokens")
 		groups := basepath.Group("/groups")
 		roles := basepath.Group("/roles")
 		webhooks := basepath.Group("/webhooks")
+		schedulers := basepath.Group("/schedulers")
 		{
 			alc.SetAuditRoutes(audit, conf)
 			rc.SetRunnerRoutes(runners, conf)
 			tc.SetTaskRoutes(tasks, conf)
 			jc.SetJobRoutes(jobs, conf)
-			cjc.SetCronJobRoutes(cronjobs, conf)
 			uc.SetUserRoutes(users, conf)
 			atc.SetApiTokenRoutes(tokens, conf)
 			wc.SetWebhookRoutes(webhooks, conf)
+			sc.SetSchedulerRoutes(schedulers, conf)
 			gc.SetGroupRoutes(groups, conf)
 			rlc.SetRoleRoutes(roles, conf)
 		}
 	}
+
+	if conf.MCP.Enabled {
+		mc.SetMcpRoutes(basepath.Group("/mcp"), conf)
+		log.Println("MCP server enabled at /api/v1/mcp")
+	}
+
+	js.StartWorkers()
+	ss.StartScheduler()
 
 	log.Fatal(router.Run())
 

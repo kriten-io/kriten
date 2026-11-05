@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/kriten-io/kriten/config"
-	"github.com/kriten-io/kriten/helpers"
 	"github.com/kriten-io/kriten/models"
 
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/exp/slices"
 
 	"gorm.io/gorm"
@@ -17,9 +17,9 @@ import (
 type RoleService interface {
 	ListRoles([]string, models.RoleQueryParams) ([]models.Role, int, error)
 	GetRole(string) (models.Role, error)
-	CreateRole(models.Role) (models.Role, error)
-	UpdateRole(models.Role) (models.Role, error)
-	DeleteRole(string) error
+	CreateRole(models.AuditMetadata, models.Role) (models.Role, error)
+	UpdateRole(models.AuditMetadata, models.Role) (models.Role, error)
+	DeleteRole(models.AuditMetadata, string) error
 	ListRoleGroups(string) ([]models.RoleGroup, error)
 }
 
@@ -27,13 +27,15 @@ type RoleServiceImpl struct {
 	db           *gorm.DB
 	config       config.Config
 	GroupService GroupService
+	auditService AuditService
 }
 
-func NewRoleService(database *gorm.DB, config config.Config, gs GroupService) RoleService {
+func NewRoleService(database *gorm.DB, config config.Config, gs GroupService, als AuditService) RoleService {
 	return &RoleServiceImpl{
 		db:           database,
 		config:       config,
 		GroupService: gs,
+		auditService: als,
 	}
 }
 
@@ -91,7 +93,15 @@ func (r *RoleServiceImpl) GetRole(id string) (models.Role, error) {
 	return role, nil
 }
 
-func (r *RoleServiceImpl) CreateRole(role models.Role) (models.Role, error) {
+// roleTarget names a role by name, resource and id.
+func roleTarget(role models.Role) string {
+	return AuditTarget("name", role.Name, "resource", role.Resource, "id", role.ID.String())
+}
+
+func (r *RoleServiceImpl) CreateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "create", "roles", AuditTarget("name", role.Name, "resource", role.Resource))
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	err := r.CheckRole(role)
 	if err != nil {
 		return models.Role{}, fmt.Errorf("role '%s': %w, %s", role.Name, ErrSvcRoleValidation, err.Error())
@@ -104,10 +114,14 @@ func (r *RoleServiceImpl) CreateRole(role models.Role) (models.Role, error) {
 		return models.Role{}, fmt.Errorf("error creating role '%s': %w", role.Name, res.Error)
 	}
 
+	audit.EventTarget = roleTarget(role)
+	audit.Status = "success"
 	return role, nil
 }
 
-func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
+func (r *RoleServiceImpl) UpdateRole(meta models.AuditMetadata, role models.Role) (models.Role, error) {
+	audit := r.auditService.InitialiseAuditLog(meta, "update", "roles", AuditTarget("id", role.ID.String()))
+	defer func() { r.auditService.CreateAudit(audit) }()
 
 	_, err := r.GetRole(role.ID.String())
 	if err != nil {
@@ -128,15 +142,23 @@ func (r *RoleServiceImpl) UpdateRole(role models.Role) (models.Role, error) {
 	if err != nil {
 		return models.Role{}, fmt.Errorf("error getting role: %w", err)
 	}
+
+	audit.EventTarget = roleTarget(newRole)
+	audit.Status = "success"
 	return newRole, nil
 }
 
-func (r *RoleServiceImpl) DeleteRole(id string) error {
+func (r *RoleServiceImpl) DeleteRole(meta models.AuditMetadata, id string) error {
+	audit := r.auditService.InitialiseAuditLog(meta, "delete", "roles", AuditTarget("id", id))
+	defer func() { r.auditService.CreateAudit(audit) }()
+
 	var groups []models.Group
 	role, err := r.GetRole(id)
 	if err != nil {
 		return fmt.Errorf("error getting role: %w", err)
 	}
+
+	audit.EventTarget = roleTarget(role)
 
 	if role.Builtin {
 		return fmt.Errorf("error deleting role '%s': %w", id, ErrSvcDeleteBuiltin)
@@ -152,6 +174,7 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 		return fmt.Errorf("error deleting role '%s': %w", id, res.Error)
 	}
 
+	audit.Status = "success"
 	return nil
 }
 
@@ -159,23 +182,61 @@ func (r *RoleServiceImpl) DeleteRole(id string) error {
 // might need a refactor in the future.
 func (r *RoleServiceImpl) CheckRole(role models.Role) error {
 
-	for _, c := range role.Resource_Names {
-		configMap, err := helpers.GetConfigMap(r.config.Kube, c)
-		if err != nil {
-			return err
+	for _, c := range role.Resource_IDs {
+		if c == "*" {
+			continue
 		}
-		// configmaps are all stored in the same namespace, so we need to identify the resource
-		if role.Resource == "runners" {
-			if configMap.Data["image"] == "" {
+
+		switch role.Resource {
+		// runners, tasks and jobs reference resources by UUID
+		case "runners":
+			id, err := uuid.FromString(c)
+			if err != nil {
 				return fmt.Errorf("runner %s not found", c)
 			}
-		} else if role.Resource == "tasks" {
-			if configMap.Data["runner"] == "" {
+			var runner models.Runner
+			if err := r.db.Where("id = ?", id).First(&runner).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("runner %s not found", c)
+				}
+				return err
+			}
+		case "tasks":
+			id, err := uuid.FromString(c)
+			if err != nil {
 				return fmt.Errorf("task %s not found", c)
 			}
-		} else if role.Resource == "jobs" {
-			if configMap.Data["runner"] == "" {
+			var task models.Task
+			if err := r.db.Where("id = ?", id).First(&task).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("task %s not found", c)
+				}
+				return err
+			}
+		case "schedulers":
+			id, err := uuid.FromString(c)
+			if err != nil {
+				return fmt.Errorf("scheduler %s not found", c)
+			}
+			var scheduler models.Scheduler
+			if err := r.db.Where("id = ?", id).First(&scheduler).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("scheduler %s not found", c)
+				}
+				return err
+			}
+		case "jobs":
+			// jobs are ephemeral, their resource names reference the owning task
+			id, err := uuid.FromString(c)
+			if err != nil {
 				return fmt.Errorf("job %s not found", c)
+			}
+			var task models.Task
+			if err := r.db.Where("id = ?", id).First(&task).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("job %s not found", c)
+				}
+				return err
 			}
 		}
 	}

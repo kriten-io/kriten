@@ -31,9 +31,11 @@ func ErrorHandler() gin.HandlerFunc {
 				helpers.BadRequestError(ctx, err)
 			case errors.Is(err, services.ErrSvcDBDuplicatedKey):
 				helpers.BadRequestError(ctx, err)
-			case errors.Is(err, services.ErrSvcCronJobPrecheck):
-				helpers.BadRequestError(ctx, err)
 			case errors.Is(err, services.ErrSvcDeleteBuiltin):
+				helpers.BadRequestError(ctx, err)
+			case errors.Is(err, services.ErrSvcForbidden):
+				helpers.ForbiddenError(ctx, err)
+			case errors.Is(err, services.ErrSvcSchedulerCron):
 				helpers.BadRequestError(ctx, err)
 			case errors.Is(err, services.ErrSvcObjNotFound):
 				helpers.NotFoundError(ctx, err.Error())

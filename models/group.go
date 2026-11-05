@@ -25,10 +25,11 @@ type GroupUser struct {
 }
 
 type GroupRole struct {
-	Name           string   `json:"name"`
-	Resource       string   `json:"resource,omitempty"`
-	Resource_Names []string `json:"resource_names,omitempty"`
-	Access         string   `json:"access,omitempty"`
+	ID           uuid.UUID `json:"id,omitempty"`
+	Name         string    `json:"name"`
+	Resource     string    `json:"resource,omitempty"`
+	Resource_IDs []string  `json:"resource_ids,omitempty"`
+	Access       string    `json:"access,omitempty"`
 }
 
 type GroupQueryParams struct {
